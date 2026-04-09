@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,7 +20,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.AccountType
@@ -340,7 +344,13 @@ fun AddTransactionScreen(
 
             // Save Button
             Button(
-                onClick = { viewModel.saveTransaction() },
+                onClick = {
+                    if (uiState.accounts.isEmpty() || uiState.selectedAccount == null) {
+                        showNoAccountDialog = true
+                    } else {
+                        viewModel.saveTransaction()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -405,24 +415,6 @@ fun AddTransactionScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 无账户选项
-                    ListItem(
-                        headlineContent = { Text("无账户") },
-                        leadingContent = {
-                            Icon(
-                                imageVector = Icons.Default.RemoveCircleOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            viewModel.selectAccount(null)
-                            showAccountSelector = false
-                        }
-                    )
-                    
-                    HorizontalDivider()
-                    
                     // 账户列表
                     uiState.accounts.forEach { account ->
                         ListItem(
@@ -480,35 +472,99 @@ fun AddTransactionScreen(
         )
     }
 
-    // 未添加账户提示对话框
+    // 未添加账户提示对话框 - 精美卡片样式
     if (showNoAccountDialog) {
-        AlertDialog(
-            onDismissRequest = { showNoAccountDialog = false },
-            title = {
-                Text(
-                    text = "提示",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text("你还没有添加账户，请先添加账户信息，才能记账")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showNoAccountDialog = false
-                        onNavigateToAccounts()
-                    }
+        Dialog(onDismissRequest = { showNoAccountDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    Text("确认")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNoAccountDialog = false }) {
-                    Text("取消")
+                    // 警告图标
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(
+                                MaterialTheme.colorScheme.errorContainer
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // 标题
+                    Text(
+                        text = "账户未建立",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    // 副标题
+                    Text(
+                        text = "请先建立账户",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        fontSize = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 确认按钮
+                    Button(
+                        onClick = {
+                            showNoAccountDialog = false
+                            onNavigateToAccounts()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = "去建立账户",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // 取消按钮
+                    TextButton(
+                        onClick = { showNoAccountDialog = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "返回",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 }
 

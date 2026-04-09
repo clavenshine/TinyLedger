@@ -546,7 +546,7 @@ class TransactionNotificationService : NotificationListenerService() {
         val note = parsed.note
         return if (parsed.type == TransactionType.INCOME) {
             when {
-                note.containsAny("工资", "薪资") -> Category.fromId("salary", TransactionType.INCOME)
+                note.containsAny("工资", "薪资", "薪酬", "代发", "发薪") -> Category.fromId("salary", TransactionType.INCOME)
                 note.containsAny("退款", "退还") -> Category.fromId("redpacket", TransactionType.INCOME)
                 note.containsAny("红包", "转账") -> Category.fromId("redpacket", TransactionType.INCOME)
                 else -> Category.fromId("redpacket", TransactionType.INCOME)
