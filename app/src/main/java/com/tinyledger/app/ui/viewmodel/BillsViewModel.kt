@@ -1,0 +1,202 @@
+package com.tinyledger.app.ui.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.tinyledger.app.domain.model.Transaction
+import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.domain.repository.PreferencesRepository
+import com.tinyledger.app.domain.repository.TransactionRepository
+import com.tinyledger.app.util.DateUtils
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import java.util.*
+import javax.inject.Inject
+
+enum class FilterType {
+    ALL, INCOME, EXPENSE
+}
+
+enum class BillsViewMode {
+    LIST, CALENDAR
+}
+
+data class BillsUiState(
+    val transactions: List<Transaction> = emptyList(),
+    val filteredTransactions: List<Transaction> = emptyList(),
+    val filterType: FilterType = FilterType.ALL,
+    val searchKeyword: String = "",
+    val currencySymbol: String = "¥",
+    val isLoading: Boolean = false,
+    // Calendar/month support
+    val viewMode: BillsViewMode = BillsViewMode.LIST,
+    val selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+    val selectedMonth: Int = Calendar.getInstance().get(Calendar.MONTH) + 1,
+    val selectedDay: Int? = null,
+    val monthlyIncome: Double = 0.0,
+    val monthlyExpense: Double = 0.0,
+    val monthlyBalance: Double = 0.0,
+    // Day -> list of transactions for calendar dots
+    val dailyTransactionMap: Map<Int, List<Transaction>> = emptyMap(),
+    // Transactions for selected day
+    val selectedDayTransactions: List<Transaction> = emptyList()
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@HiltViewModel
+class BillsViewModel @Inject constructor(
+    private val transactionRepository: TransactionRepository,
+    private val preferencesRepository: PreferencesRepository
+) : ViewModel() {
+
+    private val _filterType = MutableStateFlow(FilterType.ALL)
+    private val _searchKeyword = MutableStateFlow("")
+    private val _viewMode = MutableStateFlow(BillsViewMode.LIST)
+    private val _selectedYear = MutableStateFlow(Calendar.getInstance().get(Calendar.YEAR))
+    private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH) + 1)
+    private val _selectedDay = MutableStateFlow<Int?>(null)
+
+    private val _uiState = MutableStateFlow(BillsUiState(isLoading = true))
+    val uiState: StateFlow<BillsUiState> = _uiState.asStateFlow()
+
+    init {
+        loadData()
+    }
+
+    private fun loadData() {
+        viewModelScope.launch {
+            combine(
+                _selectedYear,
+                _selectedMonth,
+                _selectedDay,
+                _viewMode,
+                _filterType
+            ) { year, month, day, viewMode, filterType ->
+                DataParams(year, month, day, viewMode, filterType)
+            }.flatMapLatest { params ->
+                val (startDate, endDate) = DateUtils.getMonthStartEnd(params.year, params.month)
+                combine(
+                    transactionRepository.getTransactionsByDateRange(startDate, endDate),
+                    transactionRepository.getTotalByTypeAndDateRange(TransactionType.INCOME.value, startDate, endDate),
+                    transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
+                    _searchKeyword,
+                    preferencesRepository.getSettings()
+                ) { monthTransactions, income, expense, keyword, settings ->
+                    // Build daily map
+                    val dailyMap = mutableMapOf<Int, MutableList<Transaction>>()
+                    val cal = Calendar.getInstance()
+                    monthTransactions.forEach { tx ->
+                        cal.timeInMillis = tx.date
+                        val day = cal.get(Calendar.DAY_OF_MONTH)
+                        dailyMap.getOrPut(day) { mutableListOf() }.add(tx)
+                    }
+
+                    // Selected day transactions
+                    val dayTx = if (params.day != null) {
+                        dailyMap[params.day] ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
+
+                    // Filtered transactions (for list view)
+                    val filtered = monthTransactions
+                        .filter { transaction ->
+                            when (params.filterType) {
+                                FilterType.ALL -> true
+                                FilterType.INCOME -> transaction.type == TransactionType.INCOME
+                                FilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE
+                            }
+                        }
+                        .filter { transaction ->
+                            if (keyword.isBlank()) true
+                            else transaction.note?.contains(keyword, ignoreCase = true) == true
+                        }
+
+                    BillsUiState(
+                        transactions = monthTransactions,
+                        filteredTransactions = filtered,
+                        filterType = params.filterType,
+                        searchKeyword = keyword,
+                        currencySymbol = settings.currencySymbol,
+                        isLoading = false,
+                        viewMode = params.viewMode,
+                        selectedYear = params.year,
+                        selectedMonth = params.month,
+                        selectedDay = params.day,
+                        monthlyIncome = income,
+                        monthlyExpense = expense,
+                        monthlyBalance = income - expense,
+                        dailyTransactionMap = dailyMap,
+                        selectedDayTransactions = dayTx
+                    )
+                }
+            }.collect { state ->
+                _uiState.value = state
+            }
+        }
+    }
+
+    fun setFilterType(filterType: FilterType) {
+        _filterType.value = filterType
+    }
+
+    fun setSearchKeyword(keyword: String) {
+        _searchKeyword.value = keyword
+    }
+
+    fun setViewMode(mode: BillsViewMode) {
+        _viewMode.value = mode
+        if (mode == BillsViewMode.LIST) {
+            _selectedDay.value = null
+        }
+    }
+
+    fun selectDay(day: Int?) {
+        _selectedDay.value = day
+    }
+
+    fun changeMonth(year: Int, month: Int) {
+        _selectedYear.value = year
+        _selectedMonth.value = month
+        _selectedDay.value = null
+    }
+
+    fun previousMonth() {
+        val currentMonth = _selectedMonth.value
+        val currentYear = _selectedYear.value
+        if (currentMonth == 1) {
+            _selectedYear.value = currentYear - 1
+            _selectedMonth.value = 12
+        } else {
+            _selectedMonth.value = currentMonth - 1
+        }
+        _selectedDay.value = null
+    }
+
+    fun nextMonth() {
+        val currentMonth = _selectedMonth.value
+        val currentYear = _selectedYear.value
+        if (currentMonth == 12) {
+            _selectedYear.value = currentYear + 1
+            _selectedMonth.value = 1
+        } else {
+            _selectedMonth.value = currentMonth + 1
+        }
+        _selectedDay.value = null
+    }
+
+    fun deleteTransaction(id: Long) {
+        viewModelScope.launch {
+            transactionRepository.deleteTransaction(id)
+        }
+    }
+
+    private data class DataParams(
+        val year: Int,
+        val month: Int,
+        val day: Int?,
+        val viewMode: BillsViewMode,
+        val filterType: FilterType
+    )
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors - Dark -->
+    <color name="primary">#34D399</color>
+    <color name="primary_variant">#10B981</color>
+    <color name="on_primary">#1F2937</color>
+
+    <!-- Secondary Colors - Dark -->
+    <color name="secondary">#60A5FA</color>
+    <color name="secondary_variant">#3B82F6</color>
+    <color name="on_secondary">#1F2937</color>
+
+    <!-- Income/Expense Colors - Dark -->
+    <color name="income_green">#4ADE80</color>
+    <color name="expense_red">#F87171</color>
+
+    <!-- Background Colors - Dark -->
+    <color name="background">#111827</color>
+    <color name="surface">#1F2937</color>
+    <color name="on_background">#F9FAFB</color>
+    <color name="on_surface">#F9FAFB</color>
+
+    <!-- Text Colors - Dark -->
+    <color name="text_primary">#F9FAFB</color>
+    <color name="text_secondary">#9CA3AF</color>
+
+    <!-- Other - Dark -->
+    <color name="divider">#374151</color>
+    <color name="card_background">#1F2937</color>
+</resources>

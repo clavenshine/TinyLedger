@@ -1,0 +1,39 @@
+# Built outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Local configuration (contains secrets)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Keystore
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# Python test/debug scripts
+diagnose_*.py
+test_*.py
+
+# OS
+Thumbs.db
+desktop.ini
+
+# WorkBuddy session data
+.workbuddy/
+
+# Claude Code local settings
+.claude/
