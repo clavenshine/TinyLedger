@@ -711,7 +711,7 @@ private fun SmsTransactionItem(
                     }
                 }
                 Text(
-                    text = transaction.body,
+                    text = transaction.body.take(80),
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),

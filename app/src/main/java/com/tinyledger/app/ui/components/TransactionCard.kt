@@ -79,10 +79,10 @@ fun TransactionCard(
                 )
                 if (!transaction.note.isNullOrBlank()) {
                     Text(
-                        text = transaction.note,
+                        text = transaction.note.take(80),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -122,6 +122,37 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "ic_parttime" -> Icons.Default.Work
         "ic_redpacket" -> Icons.Default.Redeem
         "ic_other_income" -> Icons.Default.AttachMoney
+        // 新增分类图标（使用原始icon名作为key，兼容Transaction.kt中的定义）
+        "restaurant" -> Icons.Default.Restaurant
+        "directions_bus" -> Icons.Default.DirectionsBus
+        "shopping_bag" -> Icons.Default.ShoppingBag
+        "local_movies" -> Icons.Default.LocalMovies
+        "home" -> Icons.Default.Home
+        "medical" -> Icons.Default.MedicalServices
+        "education" -> Icons.Default.School
+        "communication" -> Icons.Default.Phone
+        "insurance" -> Icons.Default.Security
+        "travel" -> Icons.Default.Flight
+        "lend" -> Icons.Default.Money
+        "investment_expense" -> Icons.Default.TrendingDown
+        "other" -> Icons.Default.MoreHoriz
+        "salary" -> Icons.Default.Work
+        "bonus" -> Icons.Default.CardGiftcard
+        "investment" -> Icons.Default.TrendingUp
+        "financial" -> Icons.Default.AccountBalance
+        "redpacket" -> Icons.Default.CardGiftcard
+        "utilities" -> Icons.Default.ElectricalServices
+        "credit_card_repay" -> Icons.Default.CreditCard
+        "mortgage" -> Icons.Default.House
+        "repay_loan" -> Icons.Default.Payments
+        "alipay_repay" -> Icons.Default.Payment
+        "douyin_repay" -> Icons.Default.Payment
+        "jd_repay" -> Icons.Default.Payment
+        "account_transfer" -> Icons.Default.SwapHoriz
+        "dividend" -> Icons.Default.Paid
+        "refund" -> Icons.Default.AssignmentReturn
+        "deposit_back" -> Icons.Default.Savings
+        "收回借款" -> Icons.Default.CallReceived
         else -> Icons.Default.Category
     }
 }

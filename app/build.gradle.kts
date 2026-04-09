@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,8 +15,8 @@ android {
         applicationId = "com.tinyledger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 23
-        versionName = "2.1.3"
+        versionCode = 25
+        versionName = "2.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -24,7 +26,7 @@ android {
 
     signingConfigs {
         create("release") {
-            val props = java.util.Properties()
+            val props = Properties()
             val localPropsFile = rootProject.file("local.properties")
             if (localPropsFile.exists()) {
                 props.load(localPropsFile.inputStream())

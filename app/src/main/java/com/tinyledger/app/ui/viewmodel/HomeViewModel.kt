@@ -21,6 +21,7 @@ data class HomeUiState(
     val todayIncome: Double = 0.0,
     val todayExpense: Double = 0.0,
     val dailyAvgExpense: Double = 0.0,
+    val totalNetAssets: Double = 0.0,
     val currencySymbol: String = "¥",
     val isLoading: Boolean = false,
     val hasAccounts: Boolean = true
@@ -60,11 +61,14 @@ class HomeViewModel @Inject constructor(
             ) { monthTransactions, income, expense, todayTx, settings ->
                 arrayOf(monthTransactions, income, expense, todayTx, settings)
             }.combine(accountRepository.getAllAccounts()) { arr, accounts ->
+                arrayOf(*arr, accounts)
+            }.combine(accountRepository.getTotalBalance()) { arr, totalBalance ->
                 val monthTransactions = arr[0] as List<Transaction>
                 val income = arr[1] as Double
                 val expense = arr[2] as Double
                 val todayTx = arr[3] as List<Transaction>
                 val settings = arr[4] as com.tinyledger.app.domain.model.AppSettings
+                val accounts = arr[5] as List<com.tinyledger.app.domain.model.Account>
 
                 val todayInc = todayTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
                 val todayExp = todayTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
@@ -78,6 +82,7 @@ class HomeViewModel @Inject constructor(
                     todayIncome = todayInc,
                     todayExpense = todayExp,
                     dailyAvgExpense = dailyAvg,
+                    totalNetAssets = totalBalance,
                     currencySymbol = settings.currencySymbol,
                     isLoading = false,
                     hasAccounts = accounts.isNotEmpty()

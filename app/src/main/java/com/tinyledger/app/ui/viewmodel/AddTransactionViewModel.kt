@@ -47,6 +47,7 @@ class AddTransactionViewModel @Inject constructor(
     init {
         loadSettings()
         loadAccounts()
+        loadCustomCategories()
     }
 
     private fun loadSettings() {
@@ -62,6 +63,16 @@ class AddTransactionViewModel @Inject constructor(
             accountRepository.getAllAccounts().collect { accounts ->
                 _uiState.update { it.copy(accounts = accounts) }
             }
+        }
+    }
+
+    private fun loadCustomCategories() {
+        viewModelScope.launch {
+            val customCategories = preferencesRepository.getCustomCategories()
+            Category.loadCustomCategories(customCategories)
+            // 刷新当前分类列表
+            val type = _uiState.value.transactionType
+            _uiState.update { it.copy(categories = Category.getCategoriesByType(type)) }
         }
     }
 
@@ -119,10 +130,15 @@ class AddTransactionViewModel @Inject constructor(
     fun addCategory(name: String) {
         val type = _uiState.value.transactionType
         val newCategory = Category.addCustomCategory(name, type)
-        
+
+        // 持久化保存自定义分类
+        viewModelScope.launch {
+            preferencesRepository.saveCustomCategory(newCategory)
+        }
+
         // 重新加载分类列表并选中新增的分类
         val categories = Category.getCategoriesByType(type)
-        _uiState.update { 
+        _uiState.update {
             it.copy(
                 categories = categories,
                 selectedCategory = newCategory
@@ -154,6 +170,16 @@ class AddTransactionViewModel @Inject constructor(
 
         if (state.selectedCategory == null) {
             _uiState.update { it.copy(errorMessage = "请选择分类") }
+            return
+        }
+
+        if (state.accounts.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
+            return
+        }
+
+        if (state.selectedAccount == null) {
+            _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
             return
         }
 

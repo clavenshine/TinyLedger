@@ -789,7 +789,7 @@ class SmsReader @Inject constructor(
             notificationSmsParsed = notifParsed
         )
 
-        return transactions.sortedByDescending { it.confidence }
+        return transactions.sortedByDescending { it.date }
     }
 
     private data class UriReadResult(

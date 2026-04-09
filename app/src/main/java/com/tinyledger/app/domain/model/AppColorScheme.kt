@@ -79,6 +79,15 @@ data class AppColorScheme(
     val textColor: Long = 0xFF212121
 ) {
     companion object {
+        /**
+         * 在深色模式下不适合使用的主题（背景本身就是深色，叠加系统暗色会难以阅读）
+         */
+        val darkModeUnsuitableThemes: Set<ColorTheme> = setOf(
+            ColorTheme.M6_AMBER,    // backgroundColor=0xFF212121 暗黑暖光
+            ColorTheme.Y6_CYBER,    // backgroundColor=0xFF1A1A2E 赛博朋克
+            ColorTheme.M1_BLACKWHITE, // primaryColor=0xFF000000 纸质账本（黑色主色在暗色模式下对比差）
+            ColorTheme.M4_REDBLACK,  // 红黑冲击（暗色模式下红色和黑色难以区分）
+        )
         fun fromTheme(theme: ColorTheme): AppColorScheme = when (theme) {
 
             // ══════════════════════════════════════════════════════════
@@ -404,8 +413,8 @@ data class AppColorScheme(
                 theme = theme,
                 primaryColor      = 0xFFFBC02D, // 姜黄
                 primaryLightColor = 0xFFFDD835, // 亮黄
-                secondaryColor    = 0xFF212121,
-                accentColor       = 0xFFFFFFFF,
+                secondaryColor    = 0xFFFFA000, // 琥珀橙
+                accentColor       = 0xFFFF6E40, // 暖橘
                 backgroundColor   = 0xFF212121, // 深灰（暗黑风格）
                 surfaceColor      = 0xFF2C2C2E,
                 textColor         = 0xFFFFFFFF  // 纯白
@@ -477,12 +486,12 @@ data class AppColorScheme(
             ColorTheme.Y6_CYBER -> AppColorScheme(
                 theme = theme,
                 primaryColor      = 0xFF30CFD0, // 青紫渐变
-                primaryLightColor = 0xFF330867,
+                primaryLightColor = 0xFF9B59B6, // 亮紫
                 secondaryColor    = 0xFF9D50BB,
                 accentColor       = 0xFFE94560,
                 backgroundColor   = 0xFF1A1A2E, // 深蓝黑
                 surfaceColor      = 0xFF16213E,
-                textColor         = 0xFFE0E0E0  // 浅灰白
+                textColor         = 0xFFF5F5F5  // 亮白
             )
             ColorTheme.Y7_ECO -> AppColorScheme(
                 theme = theme,

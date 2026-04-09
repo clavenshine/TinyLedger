@@ -186,12 +186,13 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 自动记账状态
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
@@ -221,7 +222,7 @@ fun HomeScreen(
 
                 // 净资产
                 Card(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
@@ -239,7 +240,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
-                        val balance = uiState.monthlyIncome - uiState.monthlyExpense
+                        val balance = uiState.totalNetAssets
                         Text(
                             text = "${uiState.currencySymbol} ${String.format("%.2f", balance)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

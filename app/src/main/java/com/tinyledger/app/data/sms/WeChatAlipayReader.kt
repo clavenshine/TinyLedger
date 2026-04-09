@@ -293,7 +293,7 @@ class WeChatAlipayReader @Inject constructor(
             cursor?.close()
         }
 
-        return transactions.sortedByDescending { it.confidence }
+        return transactions.sortedByDescending { it.date }
     }
 
     /**

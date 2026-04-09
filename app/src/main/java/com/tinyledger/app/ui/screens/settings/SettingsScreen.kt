@@ -3,6 +3,7 @@ package com.tinyledger.app.ui.screens.settings
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
+import android.content.res.Configuration
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.BuildConfig
 import com.tinyledger.app.data.notification.TransactionNotificationService
+import com.tinyledger.app.domain.model.AppColorScheme
 import com.tinyledger.app.domain.model.ColorTheme
 import com.tinyledger.app.domain.model.ThemeMode
 import com.tinyledger.app.ui.theme.IOSColors
@@ -284,6 +286,7 @@ fun SettingsScreen(
     if (showColorThemeDialog) {
         ColorThemeDialog(
             currentTheme = uiState.settings.colorTheme,
+            themeMode = uiState.settings.themeMode,
             onSelect = { theme ->
                 viewModel.updateColorTheme(theme)
                 showColorThemeDialog = false
@@ -415,9 +418,21 @@ private fun NotificationListenerItem(
 @Composable
 private fun ColorThemeDialog(
     currentTheme: ColorTheme,
+    themeMode: ThemeMode,
     onSelect: (ColorTheme) -> Unit,
     onDismiss: () -> Unit
 ) {
+    // 判断当前是否处于深色模式
+    val isSystemDark = (LocalContext.current.resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val isDarkMode = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemDark
+        ThemeMode.LIGHT -> false
+    }
+
+    // 深色模式下不适合的主题集合
+    val unsuitableThemes = if (isDarkMode) AppColorScheme.darkModeUnsuitableThemes else emptySet()
     // 分组标签与 ColorTheme 枚举的对应映射（顺序与 ThemeColorPreviews.themes 一致）
     val previewToTheme: Map<String, ColorTheme> = mapOf(
         "iOS蓝" to ColorTheme.IOS_BLUE,
@@ -491,7 +506,11 @@ private fun ColorThemeDialog(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 groupOrder.forEach { groupKey ->
-                    val previews = grouped[groupKey] ?: return@forEach
+                    val previews = (grouped[groupKey] ?: return@forEach).filter { preview ->
+                        val mapped = previewToTheme[preview.name]
+                        mapped == null || mapped !in unsuitableThemes
+                    }
+                    if (previews.isEmpty()) return@forEach
                     item {
                         Text(
                             text = groupLabel[groupKey] ?: groupKey,

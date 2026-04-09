@@ -338,7 +338,7 @@ private fun SwipeableAccountCard(
             modifier = Modifier
                 .fillMaxWidth() // 确保覆盖背景
                 .offset { IntOffset(animatedOffset.roundToInt(), 0) }
-                .pointerInput(Unit) {
+                .pointerInput(isExpanded) {
                     // 如果明细已展开，禁用滑动
                     if (isExpanded) return@pointerInput
                     
@@ -1136,6 +1136,18 @@ private fun getCategoryIcon(iconName: String): ImageVector {
         "investment" -> Icons.Default.TrendingUp
         "financial" -> Icons.Default.AccountBalance
         "redpacket" -> Icons.Default.CardGiftcard
+        "utilities" -> Icons.Default.ElectricalServices
+        "credit_card_repay" -> Icons.Default.CreditCard
+        "mortgage" -> Icons.Default.House
+        "repay_loan" -> Icons.Default.Payments
+        "alipay_repay" -> Icons.Default.Payment
+        "douyin_repay" -> Icons.Default.Payment
+        "jd_repay" -> Icons.Default.Payment
+        "account_transfer" -> Icons.Default.SwapHoriz
+        "dividend" -> Icons.Default.Paid
+        "refund" -> Icons.Default.AssignmentReturn
+        "deposit_back" -> Icons.Default.Savings
+        "收回借款" -> Icons.Default.CallReceived
         else -> Icons.Default.Receipt
     }
 }
