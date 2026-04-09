@@ -24,7 +24,8 @@ data class HomeUiState(
     val totalNetAssets: Double = 0.0,
     val currencySymbol: String = "¥",
     val isLoading: Boolean = false,
-    val hasAccounts: Boolean = true
+    val hasAccounts: Boolean = true,
+    val accounts: List<com.tinyledger.app.domain.model.Account> = emptyList()
 )
 
 @HiltViewModel
@@ -85,7 +86,8 @@ class HomeViewModel @Inject constructor(
                     totalNetAssets = totalBalance,
                     currencySymbol = settings.currencySymbol,
                     isLoading = false,
-                    hasAccounts = accounts.isNotEmpty()
+                    hasAccounts = accounts.isNotEmpty(),
+                    accounts = accounts
                 )
             }.collect { state ->
                 _uiState.value = state

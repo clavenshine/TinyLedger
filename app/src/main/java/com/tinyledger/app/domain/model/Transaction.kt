@@ -72,6 +72,9 @@ data class Category(
             Category("account_transfer", "账户转账", "account_transfer", TransactionType.EXPENSE),
             Category("lend", "借出资金", "lend", TransactionType.EXPENSE),
             Category("investment_expense", "支出投资", "investment_expense", TransactionType.EXPENSE),
+            Category("accommodation", "住宿", "accommodation", TransactionType.EXPENSE),
+            Category("charity", "慈善捐赠", "charity", TransactionType.EXPENSE),
+            Category("send_redpacket", "派发红包", "send_redpacket", TransactionType.EXPENSE),
             Category("other", "其他", "other", TransactionType.EXPENSE)
         )
 
@@ -84,7 +87,9 @@ data class Category(
             Category("refund", "收到退款", "refund", TransactionType.INCOME),
             Category("deposit_back", "收回押金", "deposit_back", TransactionType.INCOME),
             Category("redpacket", "红包", "redpacket", TransactionType.INCOME),
-            Category("recover_loan", "收回借款", "收回借款", TransactionType.INCOME)
+            Category("recover_loan", "收回借款", "收回借款", TransactionType.INCOME),
+            Category("income_transfer", "账户转账", "income_transfer", TransactionType.INCOME),
+            Category("reimbursement", "报销款", "reimbursement", TransactionType.INCOME)
         )
 
         // 存储自定义分类

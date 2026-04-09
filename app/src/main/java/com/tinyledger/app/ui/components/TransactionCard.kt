@@ -153,6 +153,11 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "refund" -> Icons.Default.AssignmentReturn
         "deposit_back" -> Icons.Default.Savings
         "收回借款" -> Icons.Default.CallReceived
+        "accommodation" -> Icons.Default.Hotel
+        "charity" -> Icons.Default.VolunteerActivism
+        "send_redpacket" -> Icons.Default.CardGiftcard
+        "income_transfer" -> Icons.Default.SwapHoriz
+        "reimbursement" -> Icons.Default.RequestPage
         else -> Icons.Default.Category
     }
 }

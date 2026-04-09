@@ -324,25 +324,42 @@ class AutoImportViewModel @Inject constructor(
 
     private fun inferCsvCategory(csv: WeChatAlipayCSVParser.CsvTransaction): Category {
         val text = "${csv.description} ${csv.counterpart}"
+
+        // 先尝试从交易对方名称匹配（仅支出类型）
+        if (csv.type == TransactionType.EXPENSE) {
+            val merchantCategory = inferCategoryFromMerchant(csv.counterpart)
+            if (merchantCategory != null) return merchantCategory
+        }
+
         return if (csv.type == TransactionType.INCOME) {
             when {
-                text.containsAny("工资", "薪资", "薪酬", "代发") -> Category.fromId("salary", TransactionType.INCOME)
+                text.containsAny("工资", "薪资", "薪酬", "代发", "发薪") -> Category.fromId("salary", TransactionType.INCOME)
                 text.containsAny("奖金", "绩效", "年终奖") -> Category.fromId("bonus", TransactionType.INCOME)
                 text.containsAny("分红", "股息") -> Category.fromId("dividend", TransactionType.INCOME)
                 text.containsAny("退款", "退还", "返还", "退货") -> Category.fromId("refund", TransactionType.INCOME)
                 text.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
+                text.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
                 text.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
                 text.containsAny("收回借款", "还款", "还钱") -> Category.fromId("recover_loan", TransactionType.INCOME)
                 text.containsAny("投资", "理财", "收益", "利息", "基金", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-                text.containsAny("转账", "汇款", "转入") -> Category.fromId("redpacket", TransactionType.INCOME)
+                text.containsAny("转账", "汇款", "转入") -> Category.fromId("income_transfer", TransactionType.INCOME)
                 else -> Category.fromId("redpacket", TransactionType.INCOME)
             }
         } else {
             when {
+                // 住宿
+                text.containsAny("酒店", "宾馆", "民宿", "旅馆", "客栈", "住宿",
+                    "如家", "汉庭", "全季", "亚朵") -> Category.fromId("accommodation", TransactionType.EXPENSE)
+                // 慈善捐赠
+                text.containsAny("慈善", "捐赠", "捐款", "公益", "红十字",
+                    "希望工程", "壹基金", "天使") -> Category.fromId("charity", TransactionType.EXPENSE)
+                // 派发红包
+                text.containsAny("发红包", "派发红包", "发出红包") -> Category.fromId("send_redpacket", TransactionType.EXPENSE)
                 // 餐饮
                 text.containsAny("餐", "饭", "食", "外卖", "美团", "饿了么", "肯德基", "麦当劳",
                     "海底捞", "奶茶", "咖啡", "瑞幸", "星巴克", "烧烤", "火锅", "小吃",
-                    "食堂", "饮料", "甜品", "蛋糕") -> Category.fromId("food", TransactionType.EXPENSE)
+                    "食堂", "饮料", "甜品", "蛋糕",
+                    "米线", "豆腐", "面馆", "饺子", "包子", "拉面") -> Category.fromId("food", TransactionType.EXPENSE)
                 // 交通
                 text.containsAny("打车", "滴滴", "地铁", "公交", "高铁", "机票", "加油",
                     "停车", "高速", "出租", "曹操", "T3出行", "花小猪",
@@ -350,7 +367,8 @@ class AutoImportViewModel @Inject constructor(
                 // 购物
                 text.containsAny("购物", "京东", "淘宝", "天猫", "超市", "商场", "拼多多",
                     "唯品会", "苏宁", "当当", "沃尔玛", "永辉",
-                    "便利店", "全家", "711", "罗森") -> Category.fromId("shopping", TransactionType.EXPENSE)
+                    "便利店", "全家", "711", "罗森",
+                    "水果", "蔬", "小卖部", "盒马", "零食", "百货") -> Category.fromId("shopping", TransactionType.EXPENSE)
                 // 水电气网
                 text.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
                     "网费", "物业费", "电力", "自来水", "国网") -> Category.fromId("utilities", TransactionType.EXPENSE)
@@ -381,7 +399,7 @@ class AutoImportViewModel @Inject constructor(
                 // 保险
                 text.containsAny("保险", "保费", "社保", "医保") -> Category.fromId("insurance", TransactionType.EXPENSE)
                 // 旅游
-                text.containsAny("酒店", "宾馆", "民宿", "旅游", "景区", "门票",
+                text.containsAny("旅游", "景区", "门票",
                     "携程", "去哪儿", "飞猪") -> Category.fromId("travel", TransactionType.EXPENSE)
                 // 投资
                 text.containsAny("投资", "理财", "基金", "股票", "证券") -> Category.fromId("investment_expense", TransactionType.EXPENSE)
@@ -427,28 +445,98 @@ class AutoImportViewModel @Inject constructor(
         return typeMatched?.id
     }
 
+    /**
+     * 从短信正文中提取商户名（"向某某支付"模式）
+     */
+    private fun extractMerchantName(body: String): String? {
+        val patterns = listOf(
+            Regex("向(.+?)支付"),
+            Regex("在(.+?)消费"),
+            Regex("付款给(.+?)"),
+            Regex("支付给(.+?)[,，。]")
+        )
+        for (pattern in patterns) {
+            val match = pattern.find(body)
+            if (match != null) {
+                return match.groupValues[1].trim()
+            }
+        }
+        return null
+    }
+
+    /**
+     * 根据商户名匹配分类
+     */
+    private fun inferCategoryFromMerchant(merchant: String): Category? {
+        return when {
+            // 住宿类
+            merchant.containsAny("酒店", "宾馆", "民宿", "旅馆", "客栈", "公寓",
+                "如家", "汉庭", "全季", "亚朵", "希尔顿", "万豪", "洲际",
+                "锦江", "华住", "7天", "七天") ->
+                Category.fromId("accommodation", TransactionType.EXPENSE)
+            // 慈善捐赠类
+            merchant.containsAny("基金", "慈善", "天使", "公益", "红十字",
+                "捐赠", "捐款", "希望工程", "壹基金") ->
+                Category.fromId("charity", TransactionType.EXPENSE)
+            // 餐饮类
+            merchant.containsAny("米线", "豆腐", "烧烤", "面馆", "饺子", "包子",
+                "粉丝", "麻辣", "串串", "炸鸡", "鸡排", "牛肉", "羊肉",
+                "拉面", "馄饨", "煲仔", "粥", "寿司", "料理", "火锅",
+                "餐厅", "饭店", "小吃", "快餐", "食堂", "茶餐厅",
+                "肯德基", "麦当劳", "海底捞", "瑞幸", "星巴克") ->
+                Category.fromId("food", TransactionType.EXPENSE)
+            // 购物类
+            merchant.containsAny("水果", "果", "蔬", "小卖部", "盒马", "零食",
+                "百货", "超市", "商店", "便利店", "杂货", "菜市场",
+                "沃尔玛", "永辉", "华润", "大润发", "物美",
+                "全家", "711", "罗森", "美宜佳") ->
+                Category.fromId("shopping", TransactionType.EXPENSE)
+            else -> null
+        }
+    }
+
     private fun inferCategory(sms: SmsTransaction): Category {
         val body = sms.body
         val type = sms.type ?: TransactionType.EXPENSE
+
+        // 先尝试从商户名匹配（仅支出类型）
+        if (type == TransactionType.EXPENSE) {
+            val merchant = extractMerchantName(body)
+            if (merchant != null) {
+                val merchantCategory = inferCategoryFromMerchant(merchant)
+                if (merchantCategory != null) return merchantCategory
+            }
+        }
+
         return if (type == TransactionType.INCOME) {
             when {
-                body.containsAny("工资", "薪资", "薪酬", "代发") -> Category.fromId("salary", TransactionType.INCOME)
+                body.containsAny("工资", "薪资", "薪酬", "代发", "发薪") -> Category.fromId("salary", TransactionType.INCOME)
                 body.containsAny("奖金", "绩效", "年终奖") -> Category.fromId("bonus", TransactionType.INCOME)
                 body.containsAny("分红", "股息") -> Category.fromId("dividend", TransactionType.INCOME)
                 body.containsAny("退款", "退还", "返还", "退货") -> Category.fromId("refund", TransactionType.INCOME)
                 body.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
+                body.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
                 body.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
                 body.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("recover_loan", TransactionType.INCOME)
                 body.containsAny("投资", "理财", "收益", "利息", "基金", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-                body.containsAny("转账", "汇款", "转入") -> Category.fromId("redpacket", TransactionType.INCOME)
+                body.containsAny("转账", "汇款", "转入") -> Category.fromId("income_transfer", TransactionType.INCOME)
                 else -> Category.fromId("redpacket", TransactionType.INCOME)
             }
         } else {
             when {
+                // 住宿
+                body.containsAny("酒店", "宾馆", "民宿", "旅馆", "客栈", "住宿",
+                    "如家", "汉庭", "全季", "亚朵") -> Category.fromId("accommodation", TransactionType.EXPENSE)
+                // 慈善捐赠
+                body.containsAny("慈善", "捐赠", "捐款", "公益", "红十字",
+                    "希望工程", "壹基金", "天使") -> Category.fromId("charity", TransactionType.EXPENSE)
+                // 派发红包
+                body.containsAny("发红包", "派发红包", "发出红包") -> Category.fromId("send_redpacket", TransactionType.EXPENSE)
                 // 餐饮
                 body.containsAny("餐", "饭", "食", "外卖", "美团", "饿了么", "肯德基", "麦当劳",
                     "海底捞", "奶茶", "咖啡", "瑞幸", "星巴克", "烧烤", "火锅", "小吃",
-                    "早餐", "午餐", "晚餐", "食堂", "饮料", "甜品", "蛋糕") -> Category.fromId("food", TransactionType.EXPENSE)
+                    "早餐", "午餐", "晚餐", "食堂", "饮料", "甜品", "蛋糕",
+                    "米线", "豆腐", "面馆", "饺子", "包子", "拉面") -> Category.fromId("food", TransactionType.EXPENSE)
                 // 交通
                 body.containsAny("打车", "滴滴", "地铁", "公交", "高铁", "机票", "加油",
                     "停车", "高速", "出租", "曹操", "首汽", "T3出行", "花小猪",
@@ -456,7 +544,8 @@ class AutoImportViewModel @Inject constructor(
                 // 购物
                 body.containsAny("购物", "京东", "淘宝", "天猫", "超市", "商场", "拼多多",
                     "唯品会", "苏宁", "当当", "亚马逊", "沃尔玛", "永辉",
-                    "便利店", "全家", "711", "罗森") -> Category.fromId("shopping", TransactionType.EXPENSE)
+                    "便利店", "全家", "711", "罗森",
+                    "水果", "蔬", "小卖部", "盒马", "零食", "百货") -> Category.fromId("shopping", TransactionType.EXPENSE)
                 // 水电气网
                 body.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
                     "网费", "物业费", "供暖", "电力", "自来水", "国网", "南方电网") -> Category.fromId("utilities", TransactionType.EXPENSE)
@@ -491,7 +580,7 @@ class AutoImportViewModel @Inject constructor(
                 // 保险
                 body.containsAny("保险", "保费", "社保", "医保", "车险", "人寿") -> Category.fromId("insurance", TransactionType.EXPENSE)
                 // 旅游
-                body.containsAny("酒店", "宾馆", "民宿", "旅游", "景区", "门票",
+                body.containsAny("旅游", "景区", "门票",
                     "携程", "去哪儿", "飞猪", "途牛") -> Category.fromId("travel", TransactionType.EXPENSE)
                 // 投资
                 body.containsAny("投资", "理财", "基金", "股票", "证券", "期货") -> Category.fromId("investment_expense", TransactionType.EXPENSE)
