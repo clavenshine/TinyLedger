@@ -26,10 +26,42 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$GITHUB_REF#refs/tags/" >> $GITHUB_OUTPUT
       
+      - name: Auto-increment versionCode
+        run: |
+          # 解析 versionName (格式: major.minor.patch)
+          VERSION_NAME="${{ steps.version.outputs.version }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          
+          # 计算 versionCode: major × 10000 + minor × 100 + patch
+          # 规则: 每次递增1，满10向前1位进1
+          NEW_VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          
+          echo "📊 版本信息:"
+          echo "  versionName: $VERSION_NAME"
+          echo "  versionCode: $NEW_VERSION_CODE"
+          echo "  计算公式: $MAJOR × 10000 + $MINOR × 100 + $PATCH = $NEW_VERSION_CODE"
+          
+          # 更新 build.gradle.kts 中的 versionCode
+          sed -i "s/versionCode = .*/versionCode = $NEW_VERSION_CODE/" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"$VERSION_NAME\"/" app/build.gradle.kts
+          
+          echo "✅ 已更新 build.gradle.kts:"
+          grep -E "versionCode|versionName" app/build.gradle.kts
+      
       - name: Build Release APK
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
+      
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add app/build.gradle.kts
+          git commit -m "chore: auto-update versionCode to match ${{ steps.version.outputs.version }}" || echo "No changes to commit"
+          git push || echo "Push skipped (protected branch or no changes)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Verify APK exists
         run: |
