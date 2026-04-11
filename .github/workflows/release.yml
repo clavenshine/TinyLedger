@@ -1,0 +1,87 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$GITHUB_REF#refs/tags/" >> $GITHUB_OUTPUT
+      
+      - name: Build Release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+      
+      - name: Verify APK exists
+        run: |
+          if [ -f "app/build/outputs/apk/release/TinyLedger-v${{ steps.version.outputs.version }}-release.apk" ]; then
+            echo "✅ APK built successfully"
+            ls -lh app/build/outputs/apk/release/*.apk
+          else
+            echo "❌ APK not found"
+            exit 1
+          fi
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+      
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./app/build/outputs/apk/release/TinyLedger-v${{ steps.version.outputs.version }}-release.apk
+          asset_name: TinyLedger-v${{ steps.version.outputs.version }}-release.apk
+          asset_content_type: application/vnd.android.package-archive
+      
+      - name: Mark as latest release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            const currentRelease = releases.data.find(r => 
+              r.tag_name === context.ref.replace('refs/tags/', '')
+            );
+            
+            if (currentRelease) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: currentRelease.id,
+                make_latest: true,
+              });
+              
+              console.log(`✅ Release ${currentRelease.tag_name} marked as latest`);
+            }
