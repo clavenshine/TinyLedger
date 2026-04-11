@@ -60,21 +60,8 @@ class HomeViewModel @Inject constructor(
                 transactionRepository.getTotalByTypeAndDateRange(TransactionType.INCOME.value, startDate, endDate),
                 transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
                 transactionRepository.getTransactionsByDateRange(todayStart, todayEnd),
-                preferencesRepository.getSettings(),
-                pendingTransactionRepository.getAllPendingTransactions()
-            ) { monthTransactions, income, expense, todayTx, settings, pendingTx ->
-                arrayOf(monthTransactions, income, expense, todayTx, settings, pendingTx)
-            }.combine(accountRepository.getAllAccounts()) { arr, accounts ->
-                arrayOf(*arr, accounts)
-            }.combine(accountRepository.getTotalBalance()) { arr, totalBalance ->
-                val monthTransactions = arr[0] as List<Transaction>
-                val income = arr[1] as Double
-                val expense = arr[2] as Double
-                val todayTx = arr[3] as List<Transaction>
-                val settings = arr[4] as com.tinyledger.app.domain.model.AppSettings
-                val pendingTx = arr[5] as List<Transaction>
-                val accounts = arr[6] as List<com.tinyledger.app.domain.model.Account>
-
+                preferencesRepository.getSettings()
+            ) { monthTransactions, income, expense, todayTx, settings ->
                 val todayInc = todayTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
                 val todayExp = todayTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
                 val dailyAvg = if (dayOfMonth > 0) expense / dayOfMonth else 0.0
@@ -82,18 +69,23 @@ class HomeViewModel @Inject constructor(
                 HomeUiState(
                     recentTransactions = monthTransactions.take(10),
                     todayTransactions = todayTx,
-                    pendingTransactions = pendingTx,
                     monthlyIncome = income,
                     monthlyExpense = expense,
                     todayIncome = todayInc,
                     todayExpense = todayExp,
                     dailyAvgExpense = dailyAvg,
-                    totalNetAssets = totalBalance,
                     currencySymbol = settings.currencySymbol,
-                    isLoading = false,
+                    isLoading = false
+                )
+            }.combine(pendingTransactionRepository.getAllPendingTransactions()) { state, pendingTx ->
+                state.copy(pendingTransactions = pendingTx)
+            }.combine(accountRepository.getAllAccounts()) { state, accounts ->
+                state.copy(
                     hasAccounts = accounts.isNotEmpty(),
                     accounts = accounts
                 )
+            }.combine(accountRepository.getTotalBalance()) { state, totalBalance ->
+                state.copy(totalNetAssets = totalBalance)
             }.collect { state ->
                 _uiState.value = state
             }
