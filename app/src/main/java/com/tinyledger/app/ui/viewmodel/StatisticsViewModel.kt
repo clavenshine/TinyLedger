@@ -23,7 +23,8 @@ data class StatisticsUiState(
     val balance: Double = 0.0,
     val expenseByCategory: List<CategoryAmount> = emptyList(),
     val currencySymbol: String = "¥",
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isYearlyMode: Boolean = false  // 是否为年累计模式
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,6 +43,8 @@ class StatisticsViewModel @Inject constructor(
             Calendar.getInstance().get(Calendar.MONTH) + 1
         )
     )
+    
+    private val _isYearlyMode = MutableStateFlow(false)  // 控制是否为年累计模式
 
     init {
         loadData()
@@ -51,11 +54,18 @@ class StatisticsViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 _selectedYearMonth,
+                _isYearlyMode,
                 preferencesRepository.getSettings()
-            ) { (year, month), settings ->
+            ) { (year, month), isYearly, settings ->
                 Triple(year, month, settings.currencySymbol)
             }.flatMapLatest { (year, month, currency) ->
-                val (startDate, endDate) = DateUtils.getMonthStartEnd(year, month)
+                val (startDate, endDate) = if (_isYearlyMode.value) {
+                    // 年累计模式：从1月1日到12月31日
+                    DateUtils.getYearStartEnd(year)
+                } else {
+                    // 月度模式：该月第一天到最后一天
+                    DateUtils.getMonthStartEnd(year, month)
+                }
 
                 combine(
                     transactionRepository.getTotalByTypeAndDateRange(
@@ -87,7 +97,8 @@ class StatisticsViewModel @Inject constructor(
                         balance = income - expense,
                         expenseByCategory = categoryAmounts,
                         currencySymbol = currency,
-                        isLoading = false
+                        isLoading = false,
+                        isYearlyMode = _isYearlyMode.value
                     )
                 }
             }.collect { state ->
@@ -100,21 +111,48 @@ class StatisticsViewModel @Inject constructor(
         _selectedYearMonth.value = Pair(year, month)
     }
 
+    // 切换到年累计模式或月度模式
+    fun toggleYearlyMode() {
+        _isYearlyMode.value = !_isYearlyMode.value
+    }
+
+    // 进入年累计模式
+    fun enterYearlyMode() {
+        _isYearlyMode.value = true
+    }
+
+    // 返回月度模式
+    fun exitYearlyMode() {
+        _isYearlyMode.value = false
+    }
+
     fun previousMonth() {
         val (year, month) = _selectedYearMonth.value
-        if (month == 1) {
-            _selectedYearMonth.value = Pair(year - 1, 12)
+        if (_isYearlyMode.value) {
+            // 年度模式：上一年
+            _selectedYearMonth.value = Pair(year - 1, month)
         } else {
-            _selectedYearMonth.value = Pair(year, month - 1)
+            // 月度模式：上一个月
+            if (month == 1) {
+                _selectedYearMonth.value = Pair(year - 1, 12)
+            } else {
+                _selectedYearMonth.value = Pair(year, month - 1)
+            }
         }
     }
 
     fun nextMonth() {
         val (year, month) = _selectedYearMonth.value
-        if (month == 12) {
-            _selectedYearMonth.value = Pair(year + 1, 1)
+        if (_isYearlyMode.value) {
+            // 年度模式：下一年
+            _selectedYearMonth.value = Pair(year + 1, month)
         } else {
-            _selectedYearMonth.value = Pair(year, month + 1)
+            // 月度模式：下一个月
+            if (month == 12) {
+                _selectedYearMonth.value = Pair(year + 1, 1)
+            } else {
+                _selectedYearMonth.value = Pair(year, month + 1)
+            }
         }
     }
 }

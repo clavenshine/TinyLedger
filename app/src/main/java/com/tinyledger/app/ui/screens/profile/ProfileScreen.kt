@@ -401,19 +401,20 @@ fun ProfileScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ProfileSettingsItem(
-                        icon = Icons.Default.DarkMode,
-                        iconTint = IOSColors.SystemIndigo,
-                        title = "深色模式",
-                        subtitle = when (uiState.settings.themeMode) {
-                            ThemeMode.LIGHT -> "关闭"
-                            ThemeMode.DARK -> "开启"
-                            ThemeMode.SYSTEM -> "跟随系统"
-                        },
-                        onClick = { showThemeDialog = true }
-                    )
+                    // 深色模式 - 已隐藏（保留代码以备后用）
+                    // ProfileSettingsItem(
+                    //     icon = Icons.Default.DarkMode,
+                    //     iconTint = IOSColors.SystemIndigo,
+                    //     title = "深色模式",
+                    //     subtitle = when (uiState.settings.themeMode) {
+                    //         ThemeMode.LIGHT -> "关闭"
+                    //         ThemeMode.DARK -> "开启"
+                    //         ThemeMode.SYSTEM -> "跟随系统"
+                    //     },
+                    //     onClick = { showThemeDialog = true }
+                    // )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    // HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                     ProfileSettingsItem(
                         icon = Icons.Default.AttachMoney,

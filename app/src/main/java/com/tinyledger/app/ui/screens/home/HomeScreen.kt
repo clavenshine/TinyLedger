@@ -122,6 +122,20 @@ fun HomeScreen(
             )
         }
 
+        // ── 待确认账单 ──
+        item {
+            PendingTransactionsCard(
+                pendingTransactions = uiState.pendingTransactions,
+                currencySymbol = uiState.currencySymbol,
+                onConfirm = { transaction ->
+                    onEditTransaction(transaction.id)
+                },
+                onDelete = { transactionId ->
+                    viewModel.deletePendingTransaction(transactionId)
+                }
+            )
+        }
+
         // ── 添加资产账户提示卡片（仅在没有账户时显示） ──
         if (!uiState.hasAccounts) {
             item {
@@ -513,4 +527,160 @@ private fun getDaysInMonth(year: Int, month: Int): Int {
     val cal = Calendar.getInstance()
     cal.set(year, month - 1, 1)
     return cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+}
+
+@Composable
+private fun PendingTransactionsCard(
+    pendingTransactions: List<com.tinyledger.app.domain.model.Transaction>,
+    currencySymbol: String,
+    onConfirm: (com.tinyledger.app.domain.model.Transaction) -> Unit,
+    onDelete: (Long) -> Unit
+) {
+    var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 标题
+            Text(
+                text = "待确认账单",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (pendingTransactions.isEmpty()) {
+                // 无待确认账单
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "暂时无待确认交易账单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // 待确认账单列表
+                pendingTransactions.forEach { transaction ->
+                    val isIncome = transaction.type == com.tinyledger.app.domain.model.TransactionType.INCOME
+                    val amountColor = if (isIncome) IOSColors.SystemGreen else IOSColors.SystemRed
+                    val amountPrefix = if (isIncome) "+" else "-"
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 左侧：交易信息
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = transaction.category.name,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                            )
+                            if (!transaction.note.isNullOrBlank()) {
+                                Text(
+                                    text = transaction.note.take(40),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                            Text(
+                                text = DateUtils.formatDisplayDate(transaction.date),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // 中间：金额
+                        Text(
+                            text = "$amountPrefix$currencySymbol ${String.format("%.2f", transaction.amount)}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = amountColor,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        // 右侧：操作按钮
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // 待确认按钮
+                            Button(
+                                onClick = { onConfirm(transaction) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(
+                                    text = "待确认",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 11.sp
+                                )
+                            }
+
+                            // 删除按钮
+                            Button(
+                                onClick = { showDeleteDialog = transaction.id },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(
+                                    text = "删除",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // 分隔线（最后一项不显示）
+                    if (transaction != pendingTransactions.last()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 删除确认对话框
+    showDeleteDialog?.let { transactionId ->
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除这条待确认交易记录吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(transactionId)
+                        showDeleteDialog = null
+                    }
+                ) {
+                    Text("确认", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }

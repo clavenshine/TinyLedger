@@ -11,11 +11,12 @@ import com.tinyledger.app.data.local.entity.AccountEntity
 import com.tinyledger.app.data.local.entity.BudgetCategoryEntity
 import com.tinyledger.app.data.local.entity.BudgetEntity
 import com.tinyledger.app.data.local.entity.NotificationSmsEntity
+import com.tinyledger.app.data.local.entity.PendingTransactionEntity
 import com.tinyledger.app.data.local.entity.TransactionEntity
 
 @Database(
-    entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class],
-    version = 6,
+    entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,4 +25,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun notificationSmsDao(): NotificationSmsDao
     abstract fun budgetDao(): BudgetDao
     abstract fun budgetCategoryDao(): BudgetCategoryDao
+    abstract fun pendingTransactionDao(): PendingTransactionDao
 }

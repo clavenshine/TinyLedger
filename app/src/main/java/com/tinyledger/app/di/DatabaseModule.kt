@@ -9,6 +9,7 @@ import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.BudgetCategoryDao
 import com.tinyledger.app.data.local.dao.BudgetDao
 import com.tinyledger.app.data.local.dao.NotificationSmsDao
+import com.tinyledger.app.data.local.dao.PendingTransactionDao
 import com.tinyledger.app.data.local.dao.TransactionDao
 import dagger.Module
 import dagger.Provides
@@ -99,6 +100,24 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("""
+                CREATE TABLE IF NOT EXISTS pending_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    type INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    note TEXT,
+                    date INTEGER NOT NULL,
+                    accountId INTEGER,
+                    source TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -107,7 +126,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tinyledger_database"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         .build()
     }
 
@@ -139,5 +158,11 @@ object DatabaseModule {
     @Singleton
     fun provideBudgetCategoryDao(database: AppDatabase): BudgetCategoryDao {
         return database.budgetCategoryDao()
+    }
+
+    @Provides
+    @Singleton
+    fun providePendingTransactionDao(database: AppDatabase): PendingTransactionDao {
+        return database.pendingTransactionDao()
     }
 }

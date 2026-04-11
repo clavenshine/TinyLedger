@@ -44,6 +44,20 @@ object DateUtils {
         return Pair(start, end)
     }
 
+    fun getYearStartEnd(year: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+
+        calendar.set(year, 0, 1, 0, 0, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val start = calendar.timeInMillis
+
+        calendar.set(year, 11, 31, 23, 59, 59)
+        calendar.set(Calendar.MILLISECOND, 999)
+        val end = calendar.timeInMillis
+
+        return Pair(start, end)
+    }
+
     fun getCurrentYearMonth(): Pair<Int, Int> {
         val calendar = Calendar.getInstance()
         return Pair(calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1)

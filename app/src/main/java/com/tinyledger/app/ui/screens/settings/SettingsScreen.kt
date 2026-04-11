@@ -114,20 +114,20 @@ fun SettingsScreen(
                     
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     
-                    // 主题模式
-                    IosSettingsItem(
-                        icon = Icons.Default.DarkMode,
-                        iconTint = IOSColors.SystemIndigo,
-                        title = "深色模式",
-                        subtitle = when (uiState.settings.themeMode) {
-                            ThemeMode.LIGHT -> "关闭"
-                            ThemeMode.DARK -> "开启"
-                            ThemeMode.SYSTEM -> "跟随系统"
-                        },
-                        onClick = { showThemeDialog = true }
-                    )
-                    
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    // 深色模式 - 已隐藏（功能代码保留）
+                    // IosSettingsItem(
+                    //     icon = Icons.Default.DarkMode,
+                    //     iconTint = IOSColors.SystemIndigo,
+                    //     title = "深色模式",
+                    //     subtitle = when (uiState.settings.themeMode) {
+                    //         ThemeMode.LIGHT -> "关闭"
+                    //         ThemeMode.DARK -> "开启"
+                    //         ThemeMode.SYSTEM -> "跟随系统"
+                    //     },
+                    //     onClick = { showThemeDialog = true }
+                    // )
+                    // 
+                    // HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     
                     // 货币符号
                     IosSettingsItem(
@@ -512,14 +512,12 @@ private fun ColorThemeDialog(
         "M3 高对比" to ColorTheme.M3_CONTRAST,
         "M4 红黑冲击" to ColorTheme.M4_REDBLACK,
         "M5 冷静克制" to ColorTheme.M5_CYANDARK,
-        "M6 暗黑暖光" to ColorTheme.M6_AMBER,
         "M7 传统会计" to ColorTheme.M7_ACCOUNTING,
         "Y1 科技感" to ColorTheme.Y1_TECH,
         "Y2 少女心" to ColorTheme.Y2_GIRL,
         "Y3 梦想基金" to ColorTheme.Y3_DREAM_FUND,
         "Y4 搞钱" to ColorTheme.Y4_MONEY,
         "Y5 活力运动" to ColorTheme.Y5_SPORT,
-        "Y6 赛博朋克" to ColorTheme.Y6_CYBER,
         "Y7 绿色生活" to ColorTheme.Y7_ECO,
         "Y8 清爽夏季" to ColorTheme.Y8_SUMMER
     )

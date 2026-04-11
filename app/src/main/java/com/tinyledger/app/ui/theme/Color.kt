@@ -179,7 +179,6 @@ object ThemeColorPreviews {
         ThemeColorPreview("高对比度", Color(0xFF1A237E), Color(0xFF3949AB), Color(0xFF000000), Color(0xFFFFFFFF), "极简"),
         ThemeColorPreview("红黑冲击", Color(0xFFD32F2F), Color(0xFFB71C1C), Color(0xFF212121), Color(0xFFFFFFFF), "极简"),
         ThemeColorPreview("冷静克制", Color(0xFF0097A7), Color(0xFF00BCD4), Color(0xFF006064), Color(0xFFFAFAFA), "极简"),
-        ThemeColorPreview("暗黑暖光", Color(0xFFFBC02D), Color(0xFFFDD835), Color(0xFF212121), Color(0xFF212121), "极简"),
         ThemeColorPreview("传统会计", Color(0xFF388E3C), Color(0xFF4CAF50), Color(0xFF1B5E20), Color(0xFFFFFFFF), "极简"),
 
         // 年轻渐变型
@@ -188,7 +187,6 @@ object ThemeColorPreviews {
         ThemeColorPreview("梦想基金", Color(0xFF84FAB0), Color(0xFF8FD3F4), Color(0xFF00B4DB), Color(0xFFE0F7FA), "渐变"),
         ThemeColorPreview("搞钱日记", Color(0xFFFFD200), Color(0xFFF7971E), Color(0xFFFF6F00), Color(0xFFFFFFFF), "渐变"),
         ThemeColorPreview("活力运动", Color(0xFFFA709A), Color(0xFFFEE140), Color(0xFFFF4B1F), Color(0xFFFFFBEB), "渐变"),
-        ThemeColorPreview("赛博朋克", Color(0xFF30CFD0), Color(0xFF330867), Color(0xFF9D50BB), Color(0xFF1A1A2E), "渐变"),
         ThemeColorPreview("绿色生活", Color(0xFFA8E063), Color(0xFF56AB2F), Color(0xFFC8E6C9), Color(0xFFF1F8E9), "渐变"),
         ThemeColorPreview("清爽夏季", Color(0xFF4FACFE), Color(0xFF00F2FE), Color(0xFF4FC3F7), Color(0xFFE1F5FE), "渐变")
     )

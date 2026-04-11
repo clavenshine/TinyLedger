@@ -5,10 +5,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tinyledger.app.data.repository.AccountRepositoryImpl
+import com.tinyledger.app.data.repository.PendingTransactionRepositoryImpl
 import com.tinyledger.app.data.repository.PreferencesRepositoryImpl
 import com.tinyledger.app.data.repository.TransactionRepositoryImpl
 import com.tinyledger.app.data.repository.UpdateCheckRepositoryImpl
 import com.tinyledger.app.domain.repository.AccountRepository
+import com.tinyledger.app.domain.repository.PendingTransactionRepository
 import com.tinyledger.app.domain.repository.PreferencesRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
 import com.tinyledger.app.domain.repository.UpdateCheckRepository
@@ -61,5 +63,14 @@ object AppModule {
     @Singleton
     fun provideUpdateCheckRepository(): UpdateCheckRepository {
         return UpdateCheckRepositoryImpl()
+    }
+
+    @Provides
+    @Singleton
+    fun providePendingTransactionRepository(
+        pendingTransactionDao: com.tinyledger.app.data.local.dao.PendingTransactionDao,
+        transactionRepository: TransactionRepository
+    ): PendingTransactionRepository {
+        return PendingTransactionRepositoryImpl(pendingTransactionDao, transactionRepository)
     }
 }

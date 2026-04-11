@@ -2,6 +2,7 @@ package com.tinyledger.app.ui.screens.statistics
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -90,22 +91,65 @@ fun StatisticsScreen(
                         .padding(20.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Month selector
+                        // 年份栏
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { viewModel.previousMonth() }) {
-                                Icon(Icons.Default.ChevronLeft, "上个月", tint = Color.White)
+                                Icon(
+                                    Icons.Default.ChevronLeft, 
+                                    "上一年", 
+                                    tint = if (uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
+                                )
                             }
                             Text(
-                                text = DateUtils.formatDisplayMonth(uiState.selectedYear, uiState.selectedMonth),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
+                                text = if (uiState.isYearlyMode) "${uiState.selectedYear}年" else "点击此处统计本年累计",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                modifier = Modifier.clickable { 
+                                    if (!uiState.isYearlyMode) viewModel.enterYearlyMode()
+                                }
                             )
                             IconButton(onClick = { viewModel.nextMonth() }) {
-                                Icon(Icons.Default.ChevronRight, "下个月", tint = Color.White)
+                                Icon(
+                                    Icons.Default.ChevronRight, 
+                                    "下一年", 
+                                    tint = if (uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // 月份栏
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { viewModel.previousMonth() }) {
+                                Icon(
+                                    Icons.Default.ChevronLeft, 
+                                    "上个月", 
+                                    tint = if (!uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
+                                )
+                            }
+                            Text(
+                                text = if (!uiState.isYearlyMode) DateUtils.formatDisplayMonth(uiState.selectedYear, uiState.selectedMonth) else "点击此处按月统计",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White,
+                                modifier = Modifier.clickable { 
+                                    if (uiState.isYearlyMode) viewModel.exitYearlyMode()
+                                }
+                            )
+                            IconButton(onClick = { viewModel.nextMonth() }) {
+                                Icon(
+                                    Icons.Default.ChevronRight, 
+                                    "下个月", 
+                                    tint = if (!uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
+                                )
                             }
                         }
 
@@ -284,7 +328,7 @@ fun PieChart(
                 )
                 val total = data.sumOf { it.amount }
                 Text(
-                    text = String.format("%.0f", total),
+                    text = String.format("%.2f", total),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )

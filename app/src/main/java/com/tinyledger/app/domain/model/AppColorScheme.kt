@@ -44,7 +44,7 @@ enum class ColorTheme(val displayName: String) {
     M3_CONTRAST("高对比度"),
     M4_REDBLACK("红黑冲击"),
     M5_CYANDARK("冷静克制"),
-    M6_AMBER("暗黑暖光"),
+    // M6_AMBER 已删除
     M7_ACCOUNTING("传统会计"),
 
     // ── Y系列：年轻渐变型 ──────────────────────────────────────────
@@ -53,7 +53,7 @@ enum class ColorTheme(val displayName: String) {
     Y3_DREAM_FUND("梦想基金"),
     Y4_MONEY("搞钱日记"),
     Y5_SPORT("活力运动"),
-    Y6_CYBER("赛博朋克"),
+    // Y6_CYBER 已删除
     Y7_ECO("绿色生活"),
     Y8_SUMMER("清爽夏季")
 }
@@ -83,8 +83,6 @@ data class AppColorScheme(
          * 在深色模式下不适合使用的主题（背景本身就是深色，叠加系统暗色会难以阅读）
          */
         val darkModeUnsuitableThemes: Set<ColorTheme> = setOf(
-            ColorTheme.M6_AMBER,    // backgroundColor=0xFF212121 暗黑暖光
-            ColorTheme.Y6_CYBER,    // backgroundColor=0xFF1A1A2E 赛博朋克
             ColorTheme.M1_BLACKWHITE, // primaryColor=0xFF000000 纸质账本（黑色主色在暗色模式下对比差）
             ColorTheme.M4_REDBLACK,  // 红黑冲击（暗色模式下红色和黑色难以区分）
         )
@@ -409,16 +407,6 @@ data class AppColorScheme(
                 surfaceColor      = 0xFFFFFFFF,
                 textColor         = 0xFF006064  // 深青黑
             )
-            ColorTheme.M6_AMBER -> AppColorScheme(
-                theme = theme,
-                primaryColor      = 0xFFFBC02D, // 姜黄
-                primaryLightColor = 0xFFFDD835, // 亮黄
-                secondaryColor    = 0xFFFFA000, // 琥珀橙
-                accentColor       = 0xFFFF6E40, // 暖橘
-                backgroundColor   = 0xFF212121, // 深灰（暗黑风格）
-                surfaceColor      = 0xFF2C2C2E,
-                textColor         = 0xFFFFFFFF  // 纯白
-            )
             ColorTheme.M7_ACCOUNTING -> AppColorScheme(
                 theme = theme,
                 primaryColor      = 0xFF388E3C, // 正绿
@@ -482,16 +470,6 @@ data class AppColorScheme(
                 backgroundColor   = 0xFFFFFBEB, // 暖白
                 surfaceColor      = 0xFFFFFFFF,
                 textColor         = 0xFF4A192C  // 深紫红
-            )
-            ColorTheme.Y6_CYBER -> AppColorScheme(
-                theme = theme,
-                primaryColor      = 0xFF30CFD0, // 青紫渐变
-                primaryLightColor = 0xFF9B59B6, // 亮紫
-                secondaryColor    = 0xFF9D50BB,
-                accentColor       = 0xFFE94560,
-                backgroundColor   = 0xFF1A1A2E, // 深蓝黑
-                surfaceColor      = 0xFF16213E,
-                textColor         = 0xFFF5F5F5  // 亮白
             )
             ColorTheme.Y7_ECO -> AppColorScheme(
                 theme = theme,
