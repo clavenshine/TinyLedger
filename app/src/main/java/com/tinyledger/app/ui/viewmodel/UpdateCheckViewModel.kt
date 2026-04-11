@@ -89,6 +89,36 @@ class UpdateCheckViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 静默检查更新，只更新红点提示状态，不自动弹出更新对话框
+     */
+    fun silentCheckForUpdate() {
+        viewModelScope.launch {
+            try {
+                val releaseInfo = updateCheckRepository.getLatestReleaseInfo()
+                
+                if (releaseInfo != null) {
+                    val hasNewVersion = updateCheckRepository.compareVersion(
+                        BuildConfig.VERSION_NAME,
+                        releaseInfo.versionName
+                    )
+                    
+                    _uiState.update {
+                        it.copy(
+                            latestRelease = releaseInfo,
+                            hasNewVersion = hasNewVersion,
+                            isChecking = false
+                        )
+                    }
+                    
+                    Log.d(TAG, "Silent check - Local: ${BuildConfig.VERSION_NAME}, Remote: ${releaseInfo.versionName}, HasNew: $hasNewVersion")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Silent check failed", e)
+            }
+        }
+    }
+
     fun downloadAndInstall(context: Context) {
         val releaseInfo = _uiState.value.latestRelease ?: return
         

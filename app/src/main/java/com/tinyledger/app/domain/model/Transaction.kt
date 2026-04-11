@@ -75,6 +75,7 @@ data class Category(
             Category("accommodation", "住宿", "accommodation", TransactionType.EXPENSE),
             Category("charity", "慈善捐赠", "charity", TransactionType.EXPENSE),
             Category("send_redpacket", "派发红包", "send_redpacket", TransactionType.EXPENSE),
+            Category("family_living", "家庭生活费", "family_living", TransactionType.EXPENSE),
             Category("other", "其他", "other", TransactionType.EXPENSE)
         )
 

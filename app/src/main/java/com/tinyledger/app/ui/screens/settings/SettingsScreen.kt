@@ -67,6 +67,11 @@ fun SettingsScreen(
         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
     }
 
+    // 自动检查版本更新（静默，只显示红点提示）
+    LaunchedEffect(Unit) {
+        updateCheckViewModel.silentCheckForUpdate()
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
