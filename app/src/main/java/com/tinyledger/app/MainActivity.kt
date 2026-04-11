@@ -29,6 +29,7 @@ import com.tinyledger.app.ui.navigation.Screen
 import com.tinyledger.app.ui.navigation.bottomNavItems
 import com.tinyledger.app.ui.theme.TinyLedgerTheme
 import com.tinyledger.app.ui.viewmodel.SettingsViewModel
+import com.tinyledger.app.ui.viewmodel.UpdateCheckViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -46,6 +47,12 @@ class MainActivity : ComponentActivity() {
 fun TinyLedgerAppContent() {
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val settingsState by settingsViewModel.uiState.collectAsState()
+    val updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
+    
+    // 应用启动时自动检查更新
+    LaunchedEffect(Unit) {
+        updateCheckViewModel.checkForUpdate()
+    }
 
     TinyLedgerTheme(
         themeMode = settingsState.settings.themeMode,

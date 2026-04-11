@@ -31,20 +31,25 @@ import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.AppColorScheme
 import com.tinyledger.app.domain.model.ColorTheme
 import com.tinyledger.app.domain.model.ThemeMode
+import com.tinyledger.app.ui.components.UpdateCheckDialog
+import com.tinyledger.app.ui.components.UpdateCheckingDialog
 import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.theme.ThemeColorPreview
 import com.tinyledger.app.ui.theme.ThemeColorPreviews
 import com.tinyledger.app.ui.viewmodel.SettingsViewModel
+import com.tinyledger.app.ui.viewmodel.UpdateCheckViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToAutoImport: (ImportType) -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val updateCheckState by updateCheckViewModel.uiState.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showColorThemeDialog by remember { mutableStateOf(false) }
@@ -244,14 +249,34 @@ fun SettingsScreen(
                     
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     
-                    IosSettingsItem(
-                        icon = Icons.Default.Numbers,
-                        iconTint = IOSColors.TextSecondary,
-                        title = "版本号",
-                        subtitle = "v${BuildConfig.VERSION_NAME}",
-                        showArrow = false,
-                        onClick = {}
-                    )
+                    // 版本号项 - 支持点击检查更新
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IosSettingsItem(
+                            icon = Icons.Default.Numbers,
+                            iconTint = IOSColors.TextSecondary,
+                            title = "版本号",
+                            subtitle = "v${BuildConfig.VERSION_NAME}",
+                            showArrow = updateCheckState.hasNewVersion,
+                            onClick = {
+                                // 点击版本号检查更新
+                                updateCheckViewModel.checkForUpdate()
+                            }
+                        )
+                        
+                        // 版本更新提示标记
+                        if (updateCheckState.hasNewVersion) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 16.dp)
+                                    .clip(CircleShape)
+                                    .size(10.dp)
+                                    .background(Color.Red)
+                            )
+                        }
+                    }
                 }
             }
             
@@ -322,6 +347,28 @@ fun SettingsScreen(
                 showCurrencyDialog = false
             },
             onDismiss = { showCurrencyDialog = false }
+        )
+    }
+
+    // 版本检查 - 检查中
+    if (updateCheckState.isChecking) {
+        UpdateCheckingDialog(
+            onDismiss = { updateCheckViewModel.dismissDialog() },
+            message = "检查更新中..."
+        )
+    }
+
+    // 版本检查 - 发现新版本
+    if (updateCheckState.showDialog && updateCheckState.latestRelease != null) {
+        UpdateCheckDialog(
+            releaseInfo = updateCheckState.latestRelease!!,
+            onInstall = {
+                updateCheckViewModel.downloadAndInstall(context)
+            },
+            onCancel = {
+                updateCheckViewModel.dismissDialog()
+            },
+            isDownloading = updateCheckState.isDownloading
         )
     }
 }

@@ -7,9 +7,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.tinyledger.app.data.repository.AccountRepositoryImpl
 import com.tinyledger.app.data.repository.PreferencesRepositoryImpl
 import com.tinyledger.app.data.repository.TransactionRepositoryImpl
+import com.tinyledger.app.data.repository.UpdateCheckRepositoryImpl
 import com.tinyledger.app.domain.repository.AccountRepository
 import com.tinyledger.app.domain.repository.PreferencesRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
+import com.tinyledger.app.domain.repository.UpdateCheckRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -53,5 +55,11 @@ object AppModule {
         dataStore: DataStore<Preferences>
     ): PreferencesRepository {
         return PreferencesRepositoryImpl(dataStore)
+    }
+
+    @Provides
+    @Singleton
+    fun provideUpdateCheckRepository(): UpdateCheckRepository {
+        return UpdateCheckRepositoryImpl()
     }
 }
