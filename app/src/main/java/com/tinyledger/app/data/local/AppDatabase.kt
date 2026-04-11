@@ -6,6 +6,7 @@ import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.BudgetCategoryDao
 import com.tinyledger.app.data.local.dao.BudgetDao
 import com.tinyledger.app.data.local.dao.NotificationSmsDao
+import com.tinyledger.app.data.local.dao.PendingTransactionDao
 import com.tinyledger.app.data.local.dao.TransactionDao
 import com.tinyledger.app.data.local.entity.AccountEntity
 import com.tinyledger.app.data.local.entity.BudgetCategoryEntity
