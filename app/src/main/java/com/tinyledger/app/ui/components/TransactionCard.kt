@@ -160,6 +160,7 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "accommodation" -> Icons.Default.Hotel
         "charity" -> Icons.Default.VolunteerActivism
         "send_redpacket" -> Icons.Default.CardGiftcard
+        "family_living" -> Icons.Default.FamilyRestroom
         "income_transfer" -> Icons.Default.SwapHoriz
         "reimbursement" -> Icons.Default.RequestPage
         else -> Icons.Default.Category
