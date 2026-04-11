@@ -27,29 +27,53 @@ data class VersionInfo(
 
 object VersionCheckUtil {
     private const val TAG = "VersionCheck"
-    private const val VERSION_URL = "https://www.clawlab.org.cn/download/version.json"
+    private const val GITHUB_API_URL = "https://api.github.com/repos/clavenshine/TinyLedger/releases/latest"
 
     suspend fun checkUpdate(): VersionInfo? = withContext(Dispatchers.IO) {
         try {
-            val url = URL(VERSION_URL)
+            val url = URL(GITHUB_API_URL)
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
             connection.requestMethod = "GET"
+            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val response = connection.inputStream.bufferedReader().readText()
                 val json = JSONObject(response)
 
-                val serverVersionCode = json.optInt("versionCode", 0)
-                val serverVersionName = json.optString("versionName", "")
-                val downloadUrl = json.optString("downloadUrl", "")
-                val updateLog = json.optString("updateLog", "")
+                // Extract version from tag_name (e.g., "v2.2.1" -> "2.2.1")
+                val tagName = json.optString("tag_name", "")
+                val versionName = tagName.removePrefix("v")
+                
+                // Extract APK download URL from assets
+                val assets = json.optJSONArray("assets") ?: return@withContext null
+                var downloadUrl = ""
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    val name = asset.optString("name", "")
+                    if (name.endsWith(".apk")) {
+                        downloadUrl = asset.optString("browser_download_url", "")
+                        break
+                    }
+                }
 
-                Log.d(TAG, "Server version: $serverVersionCode, Local: ${BuildConfig.VERSION_CODE}")
+                if (downloadUrl.isBlank()) {
+                    Log.e(TAG, "No APK asset found in release")
+                    return@withContext null
+                }
 
-                if (serverVersionCode > BuildConfig.VERSION_CODE && downloadUrl.isNotBlank()) {
-                    VersionInfo(serverVersionCode, serverVersionName, downloadUrl, updateLog)
+                // Extract release notes
+                val updateLog = json.optString("body", "")
+
+                // Compare versions: use version code or semantic versioning
+                val serverVersionCode = versionStringToCode(versionName)
+                val localVersionCode = BuildConfig.VERSION_CODE
+
+                Log.d(TAG, "GitHub version: $versionName (code: $serverVersionCode), Local: ${BuildConfig.VERSION_NAME} (code: $localVersionCode)")
+
+                if (serverVersionCode > localVersionCode && downloadUrl.isNotBlank()) {
+                    VersionInfo(serverVersionCode, versionName, downloadUrl, updateLog)
                 } else {
                     null
                 }
@@ -60,6 +84,23 @@ object VersionCheckUtil {
         } catch (e: Exception) {
             Log.e(TAG, "Version check failed", e)
             null
+        }
+    }
+
+    /**
+     * Convert version string (e.g., "2.2.1") to version code (e.g., 30)
+     * Format: major * 10000 + minor * 100 + patch
+     */
+    private fun versionStringToCode(versionString: String): Int {
+        return try {
+            val parts = versionString.split(".").map { it.toIntOrNull() ?: 0 }
+            val major = parts.getOrNull(0) ?: 0
+            val minor = parts.getOrNull(1) ?: 0
+            val patch = parts.getOrNull(2) ?: 0
+            major * 10000 + minor * 100 + patch
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse version string: $versionString", e)
+            0
         }
     }
 
