@@ -39,11 +39,32 @@ Write-Info "步骤 1/5: 更新版本号"
 $buildGradleFile = "app/build.gradle.kts"
 $gradleContent = Get-Content $buildGradleFile -Raw
 
+# 计算版本代码：versionCode = major × 10000 + minor × 100 + patch
+function Get-VersionCode {
+    param([string]$versionName)
+    if ($versionName -match '^(\d+)\.(\d+)\.(\d+)$') {
+        $major = [int]$matches[1]
+        $minor = [int]$matches[2]
+        $patch = [int]$matches[3]
+        return $major * 10000 + $minor * 100 + $patch
+    } else {
+        Write-Error "版本格式无效: $versionName (应为: major.minor.patch)"
+        exit 1
+    }
+}
+
+# 计算新的版本代码
+$newCode = Get-VersionCode -versionName $version
+Write-Info "版本号 $version 对应的代码: $newCode"
+
 # 提取当前版本
 if ($gradleContent -match 'versionCode = (\d+)') {
     $currentCode = [int]$matches[1]
-    $newCode = $currentCode + 1
     Write-Info "当前版本代码: $currentCode → 新版本代码: $newCode"
+    if ($newCode -le $currentCode) {
+        Write-Error "新版本代码 ($newCode) 必须大于当前版本代码 ($currentCode)"
+        exit 1
+    }
 } else {
     Write-Error "无法解析 versionCode"
     exit 1

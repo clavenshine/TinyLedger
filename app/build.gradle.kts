@@ -15,7 +15,7 @@ android {
         applicationId = "com.tinyledger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 30
+        versionCode = 20201  // = 2*10000 + 2*100 + 1 (for v2.2.1)
         versionName = "2.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
