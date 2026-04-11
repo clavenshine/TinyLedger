@@ -155,31 +155,41 @@ fun StatisticsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Summary row
-                        Row(
+                        // Summary row - floating card with shadow
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                                .padding(horizontal = 2.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFF5F5F5) // Light gray consistent across all themes
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
-                            SummaryColumn(
-                                label = "收入",
-                                value = CurrencyUtils.format(uiState.totalIncome, uiState.currencySymbol),
-                                valueColor = Color(0xFF66FF99)
-                            )
-                            Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.2f)))
-                            SummaryColumn(
-                                label = "支出",
-                                value = CurrencyUtils.format(uiState.totalExpense, uiState.currencySymbol),
-                                valueColor = Color(0xFFFF8A80)
-                            )
-                            Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.White.copy(alpha = 0.2f)))
-                            SummaryColumn(
-                                label = "结余",
-                                value = CurrencyUtils.format(uiState.balance, uiState.currencySymbol),
-                                valueColor = Color.White
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                SummaryColumn(
+                                    label = "收入",
+                                    value = CurrencyUtils.format(uiState.totalIncome, uiState.currencySymbol),
+                                    valueColor = Color(0xFF2E7D32)
+                                )
+                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE0E0E0)))
+                                SummaryColumn(
+                                    label = "支出",
+                                    value = CurrencyUtils.format(uiState.totalExpense, uiState.currencySymbol),
+                                    valueColor = Color(0xFFC62828)
+                                )
+                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE0E0E0)))
+                                SummaryColumn(
+                                    label = "结余",
+                                    value = CurrencyUtils.format(uiState.balance, uiState.currencySymbol),
+                                    valueColor = if (uiState.balance >= 0) Color(0xFF1B5E20) else Color(0xFFB71C1C)
+                                )
+                            }
                         }
                     }
                 }
@@ -268,7 +278,7 @@ private fun SummaryColumn(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.7f)
+            color = Color(0xFF757575)
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(

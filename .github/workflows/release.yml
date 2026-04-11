@@ -48,6 +48,21 @@ jobs:
           echo "✅ 已更新 build.gradle.kts:"
           grep -E "versionCode|versionName" app/build.gradle.kts
       
+      # Decode keystore from GitHub Secrets and create local.properties
+      # Required Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      - name: Setup signing keystore
+        run: |
+          # Decode the base64-encoded keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release-key.jks
+          
+          # Create local.properties with signing config
+          echo "RELEASE_STORE_FILE=release-key.jks" >> local.properties
+          echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> local.properties
+          echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> local.properties
+          echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> local.properties
+          
+          echo "✅ Keystore and signing config configured"
+      
       - name: Build Release APK
         run: |
           chmod +x gradlew
@@ -80,7 +95,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.version }}
+          release_name: TinyLedger v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
       
