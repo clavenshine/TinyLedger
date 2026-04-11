@@ -99,7 +99,8 @@ fun BillsScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White
+                    color = Color.White,
+                    shadowElevation = 3.dp
                 ) {
                     Row(modifier = Modifier.padding(4.dp)) {
                         val modes = listOf(
@@ -257,6 +258,19 @@ fun BillsScreen(
                     }
                 }
             } else {
+                // Swipe hint text
+                item {
+                    Text(
+                        text = "向左滑动明细记录删除，向右滑动明细记录编辑",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 4.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
                 itemsIndexed(
                     items = uiState.filteredTransactions,
                     key = { _, transaction -> transaction.id }
@@ -327,7 +341,8 @@ private fun MonthSummaryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Box(
             modifier = Modifier
