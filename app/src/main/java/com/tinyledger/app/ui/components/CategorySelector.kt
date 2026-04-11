@@ -363,6 +363,7 @@ private fun getIconFromName(iconName: String): ImageVector {
         "financial" -> Icons.Default.AccountBalance
         "redpacket" -> Icons.Default.Mail
         "recover_loan" -> Icons.Default.CallReceived
+        "family_living" -> Icons.Default.FamilyRestroom
         "ic_other" -> Icons.Default.MoreHoriz
         "ic_restaurant" -> Icons.Default.Restaurant
         "ic_directions_bus" -> Icons.Default.DirectionsBus
