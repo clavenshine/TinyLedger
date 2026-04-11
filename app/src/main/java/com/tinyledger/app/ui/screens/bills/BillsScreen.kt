@@ -3,6 +3,7 @@ package com.tinyledger.app.ui.screens.bills
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -547,9 +549,11 @@ private fun CalendarView(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .shadow(elevation = 6.dp, shape = RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Weekday headers
@@ -602,16 +606,34 @@ private fun CalendarView(
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(
                                         when {
-                                            isSelected -> MaterialTheme.colorScheme.primary
                                             isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                                             else -> Color.Transparent
                                         }
                                     )
+                                    .let {
+                                        if (isSelected) {
+                                            it.border(
+                                                width = 2.dp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                        } else {
+                                            it
+                                        }
+                                    }
                                     .clickable { onDayClick(day) },
                                 contentAlignment = Alignment.Center
                             ) {
+                                val dayExpense = dayTransactions.filter { it.type == TransactionType.EXPENSE }
+                                    .sumOf { it.amount }
+                                val dayIncome = dayTransactions.filter { it.type == TransactionType.INCOME }
+                                    .sumOf { it.amount }
+                                val netAmount = dayIncome - dayExpense
+
                                 Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.Center
                                 ) {
                                     Text(
                                         text = "$day",
@@ -619,38 +641,22 @@ private fun CalendarView(
                                             fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal
                                         ),
                                         color = when {
-                                            isSelected -> Color.White
+                                            isSelected -> MaterialTheme.colorScheme.primary
                                             isToday -> MaterialTheme.colorScheme.primary
                                             else -> MaterialTheme.colorScheme.onSurface
                                         }
                                     )
                                     if (hasTransactions) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            if (hasExpense) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(4.dp)
-                                                        .clip(CircleShape)
-                                                        .background(
-                                                            if (isSelected) Color.White.copy(alpha = 0.8f)
-                                                            else IOSColors.SystemRed
-                                                        )
-                                                )
-                                            }
-                                            if (hasIncome) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(4.dp)
-                                                        .clip(CircleShape)
-                                                        .background(
-                                                            if (isSelected) Color.White.copy(alpha = 0.8f)
-                                                            else IOSColors.SystemGreen
-                                                        )
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            text = String.format("%.2f", kotlin.math.abs(netAmount)),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = when {
+                                                netAmount > 0 -> IOSColors.SystemGreen
+                                                netAmount < 0 -> IOSColors.SystemRed
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+                                        )
                                     }
                                 }
                             }
