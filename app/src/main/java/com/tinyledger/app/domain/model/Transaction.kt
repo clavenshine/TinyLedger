@@ -12,11 +12,19 @@ data class Transaction(
 
 enum class TransactionType(val value: Int) {
     EXPENSE(0),
-    INCOME(1);
+    INCOME(1),
+    TRANSFER(2),
+    LENDING(3);
 
     companion object {
         fun fromInt(value: Int): TransactionType {
-            return entries.find { it.value == value } ?: EXPENSE
+            return when (value) {
+                0 -> EXPENSE
+                1 -> INCOME
+                2 -> TRANSFER
+                3 -> LENDING
+                else -> EXPENSE
+            }
         }
     }
 }
@@ -93,17 +101,34 @@ data class Category(
             Category("reimbursement", "报销款", "reimbursement", TransactionType.INCOME)
         )
 
+        val defaultTransferCategories = listOf(
+            Category("transfer", "转账", "account_transfer", TransactionType.TRANSFER)
+        )
+
+        val defaultLendingCategories = listOf(
+            Category("borrow_in", "借入", "lend", TransactionType.LENDING),
+            Category("borrow_out", "借出", "lend", TransactionType.LENDING),
+            Category("repay", "还款", "credit_card_repay", TransactionType.LENDING),
+            Category("collect", "收款", "redpacket", TransactionType.LENDING)
+        )
+
         // 存储自定义分类
         private val customExpenseCategories = mutableListOf<Category>()
         private val customIncomeCategories = mutableListOf<Category>()
+        private val customTransferCategories = mutableListOf<Category>()
+        private val customLendingCategories = mutableListOf<Category>()
 
         fun loadCustomCategories(categories: List<Category>) {
             customExpenseCategories.clear()
             customIncomeCategories.clear()
+            customTransferCategories.clear()
+            customLendingCategories.clear()
             categories.forEach { cat ->
                 when (cat.type) {
                     TransactionType.EXPENSE -> customExpenseCategories.add(cat)
                     TransactionType.INCOME -> customIncomeCategories.add(cat)
+                    TransactionType.TRANSFER -> customTransferCategories.add(cat)
+                    TransactionType.LENDING -> customLendingCategories.add(cat)
                 }
             }
         }
@@ -112,17 +137,26 @@ data class Category(
             return when (type) {
                 TransactionType.EXPENSE -> defaultExpenseCategories + customExpenseCategories
                 TransactionType.INCOME -> defaultIncomeCategories + customIncomeCategories
+                TransactionType.TRANSFER -> defaultTransferCategories + customTransferCategories
+                TransactionType.LENDING -> defaultLendingCategories + customLendingCategories
             }
         }
 
         fun addCustomCategory(name: String, type: TransactionType): Category {
             val id = "custom_${System.currentTimeMillis()}"
-            val icon = if (type == TransactionType.EXPENSE) "other" else "redpacket"
+            val icon = when (type) {
+                TransactionType.EXPENSE -> "other"
+                TransactionType.INCOME -> "redpacket"
+                TransactionType.TRANSFER -> "account_transfer"
+                TransactionType.LENDING -> "lend"
+            }
             val category = Category(id, name, icon, type, isDefault = false)
             
             when (type) {
                 TransactionType.EXPENSE -> customExpenseCategories.add(category)
                 TransactionType.INCOME -> customIncomeCategories.add(category)
+                TransactionType.TRANSFER -> customTransferCategories.add(category)
+                TransactionType.LENDING -> customLendingCategories.add(category)
             }
             
             return category
