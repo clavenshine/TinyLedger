@@ -260,7 +260,7 @@ fun HomeScreen(
                         }
                         val balance = uiState.totalNetAssets
                         Text(
-                            text = "${uiState.currencySymbol} ${String.format("%.2f", balance)}",
+                            text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(balance)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -348,7 +348,7 @@ private fun MonthSummaryCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "${currencySymbol} ${String.format("%.2f", monthlyExpense)}",
+                    text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyExpense)}",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -358,37 +358,47 @@ private fun MonthSummaryCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 收入与日均支出
-                Row(
+                // 收入与日均支出 - floating card with shadow
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 2.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFF5F5F5) // Light gray consistent across all themes
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = "本月收入",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                        Text(
-                            text = "${currencySymbol} ${String.format("%.2f", monthlyIncome)}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "日均支出",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                        Text(
-                            text = "${currencySymbol} ${String.format("%.2f", dailyAvgExpense)}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "本月收入",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF757575)
+                            )
+                            Text(
+                                text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyIncome)}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "日均支出",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF757575)
+                            )
+                            Text(
+                                text = "${currencySymbol} ${CurrencyUtils.formatAmount(dailyAvgExpense)}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color(0xFFC62828)
+                            )
+                        }
                     }
                 }
             }
