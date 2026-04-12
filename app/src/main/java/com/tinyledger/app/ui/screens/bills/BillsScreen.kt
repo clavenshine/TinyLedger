@@ -71,19 +71,10 @@ fun BillsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateToSearch) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "搜索"
-                            )
-                            Text(
-                                text = "搜索",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
                     }
                 },
                 actions = {

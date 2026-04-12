@@ -358,26 +358,51 @@ fun SearchScreen(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedButton(
-                            onClick = { showStartDatePicker = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = if (uiState.startDate != null) formatDate(uiState.startDate) else "开始日期",
-                                fontSize = 12.sp
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = { showEndDatePicker = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = if (uiState.endDate != null) formatDate(uiState.endDate) else "结束日期",
-                                fontSize = 12.sp
-                            )
-                        }
+                        OutlinedTextField(
+                            value = if (uiState.startDate != null) formatDate(uiState.startDate) else "",
+                            onValueChange = {},
+                            placeholder = { Text("开始日期", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            readOnly = true,
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            trailingIcon = {
+                                IconButton(onClick = { showStartDatePicker = true }) {
+                                    Icon(
+                                        Icons.Default.DateRange,
+                                        contentDescription = "选择开始日期",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Text(
+                            text = "~",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        OutlinedTextField(
+                            value = if (uiState.endDate != null) formatDate(uiState.endDate) else "",
+                            onValueChange = {},
+                            placeholder = { Text("结束日期", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            readOnly = true,
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            trailingIcon = {
+                                IconButton(onClick = { showEndDatePicker = true }) {
+                                    Icon(
+                                        Icons.Default.DateRange,
+                                        contentDescription = "选择结束日期",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
                     }
                     if (uiState.startDate != null || uiState.endDate != null) {
                         TextButton(
@@ -405,7 +430,8 @@ fun SearchScreen(
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            shape = RoundedCornerShape(12.dp)
                         )
                         Text(
                             text = "~",
@@ -418,7 +444,8 @@ fun SearchScreen(
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                     if (uiState.minAmount != null || uiState.maxAmount != null) {

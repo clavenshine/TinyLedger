@@ -42,26 +42,44 @@ fun CategorySelector(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(categories) { category ->
-                CategoryItem(
-                    category = category,
-                    isSelected = category == selectedCategory,
-                    onClick = { onCategorySelected(category) }
-                )
+        // Non-lazy grid: display all items without scrolling
+        // This avoids the crash caused by nesting LazyVerticalGrid inside verticalScroll
+        val itemsPerRow = 4
+        categories.chunked(itemsPerRow).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { category ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        CategoryItem(
+                            category = category,
+                            isSelected = category == selectedCategory,
+                            onClick = { onCategorySelected(category) }
+                        )
+                    }
+                }
+                // Fill empty slots in the last row
+                repeat(itemsPerRow - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
-            
-            // 新增分类按钮
-            if (showAddButton && onAddCategory != null) {
-                item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Add category button row
+        if (showAddButton && onAddCategory != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
                     AddCategoryButton(
                         onClick = { showAddDialog = true }
                     )
+                }
+                repeat(itemsPerRow - 1) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

@@ -31,7 +31,8 @@ fun TransactionCard(
     transaction: Transaction,
     currencySymbol: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    flat: Boolean = false
 ) {
     val isIncome = transaction.type == TransactionType.INCOME
     val amountColor = if (isIncome) IncomeGreen else ExpenseRed
@@ -40,12 +41,12 @@ fun TransactionCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 2.dp, shape = RoundedCornerShape(12.dp))
+            .then(if (!flat) Modifier.shadow(elevation = 2.dp, shape = RoundedCornerShape(12.dp)) else Modifier)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (flat) 0.dp else 3.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(

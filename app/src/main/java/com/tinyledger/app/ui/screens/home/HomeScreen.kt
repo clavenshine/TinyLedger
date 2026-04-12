@@ -582,7 +582,8 @@ private fun TodayBillsCard(
                     TransactionCard(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
-                        onClick = { onEditTransaction(transaction.id) }
+                        onClick = { onEditTransaction(transaction.id) },
+                        flat = true
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                 }
