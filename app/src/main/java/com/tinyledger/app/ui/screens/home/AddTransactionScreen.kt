@@ -67,7 +67,7 @@ fun AddTransactionScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (uiState.isEditing) "编辑记录" else "添加记录",
+                        text = if (uiState.isEditing) "编辑记账" else "添加记账",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -102,58 +102,52 @@ fun AddTransactionScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "类型",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = uiState.transactionType == TransactionType.EXPENSE,
+                        onClick = { viewModel.setTransactionType(TransactionType.EXPENSE) },
+                        label = { Text("支出", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.error
+                        )
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = uiState.transactionType == TransactionType.EXPENSE,
-                            onClick = { viewModel.setTransactionType(TransactionType.EXPENSE) },
-                            label = { Text("支出") },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-                                selectedLabelColor = MaterialTheme.colorScheme.error
-                            )
+                    FilterChip(
+                        selected = uiState.transactionType == TransactionType.INCOME,
+                        onClick = { viewModel.setTransactionType(TransactionType.INCOME) },
+                        label = { Text("收入", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
                         )
-                        FilterChip(
-                            selected = uiState.transactionType == TransactionType.INCOME,
-                            onClick = { viewModel.setTransactionType(TransactionType.INCOME) },
-                            label = { Text("收入") },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                selectedLabelColor = MaterialTheme.colorScheme.primary
-                            )
+                    )
+                    FilterChip(
+                        selected = uiState.transactionType == TransactionType.TRANSFER,
+                        onClick = { viewModel.setTransactionType(TransactionType.TRANSFER) },
+                        label = { Text("转账", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
+                            selectedLabelColor = Color(0xFFFF9800)
                         )
-                        FilterChip(
-                            selected = uiState.transactionType == TransactionType.TRANSFER,
-                            onClick = { viewModel.setTransactionType(TransactionType.TRANSFER) },
-                            label = { Text("转账") },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
-                                selectedLabelColor = Color(0xFFFF9800)
-                            )
+                    )
+                    FilterChip(
+                        selected = uiState.transactionType == TransactionType.LENDING,
+                        onClick = { viewModel.setTransactionType(TransactionType.LENDING) },
+                        label = { Text("借贷", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF9C27B0).copy(alpha = 0.2f),
+                            selectedLabelColor = Color(0xFF9C27B0)
                         )
-                        FilterChip(
-                            selected = uiState.transactionType == TransactionType.LENDING,
-                            onClick = { viewModel.setTransactionType(TransactionType.LENDING) },
-                            label = { Text("借贷") },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF9C27B0).copy(alpha = 0.2f),
-                                selectedLabelColor = Color(0xFF9C27B0)
-                            )
-                        )
-                    }
+                    )
                 }
             }
 
@@ -165,20 +159,18 @@ fun AddTransactionScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "金额",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = uiState.amount,
                         onValueChange = { viewModel.setAmount(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("0.00") },
-                        prefix = { Text(uiState.currencySymbol) },
+                        placeholder = { Text("0.00", fontSize = 28.sp, fontWeight = FontWeight.Bold) },
+                        prefix = { Text(uiState.currencySymbol, fontSize = 28.sp, fontWeight = FontWeight.Bold) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp
+                        )
                     )
                 }
             }
@@ -241,39 +233,13 @@ fun AddTransactionScreen(
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "分类",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
                         CategorySelector(
                             categories = uiState.categories,
                             selectedCategory = uiState.selectedCategory,
                             onCategorySelected = { viewModel.selectCategory(it) },
                             onAddCategory = { name -> viewModel.addCategory(name) },
                             showAddButton = true,
-                            transactionType = uiState.transactionType,
-                            modifier = Modifier.height(200.dp)
-                        )
-                    }
-                }
-
-                // Account Selector (for EXPENSE/INCOME)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "账户", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        AccountSelectorRow(
-                            account = uiState.selectedAccount,
-                            placeholder = "选择账户（必选）",
-                            onClick = {
-                                viewModel.refreshAccounts()
-                                if (uiState.accounts.isEmpty()) showNoAccountDialog = true else showAccountSelector = true
-                            }
+                            transactionType = uiState.transactionType
                         )
                     }
                 }
@@ -298,10 +264,6 @@ fun AddTransactionScreen(
                             }
                         )
                     }
-                }
-                // Down arrow
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.South, contentDescription = null, tint = Color(0xFF9C27B0), modifier = Modifier.size(28.dp))
                 }
                 // To Account (转入账户)
                 Card(
@@ -355,10 +317,6 @@ fun AddTransactionScreen(
                         )
                     }
                 }
-                // Down arrow
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.South, contentDescription = null, tint = Color(0xFF9C27B0), modifier = Modifier.size(28.dp))
-                }
                 // To Account
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -379,35 +337,83 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Date Selector
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "日期",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            .format(Date(uiState.date)),
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth(),
-                        readOnly = true,
-                        trailingIcon = {
-                            IconButton(onClick = { showDatePicker = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.DateRange,
-                                    contentDescription = "选择日期"
-                                )
-                            }
+            // Account & Date Selector on same row (for EXPENSE/INCOME)
+            if (uiState.transactionType == TransactionType.EXPENSE || uiState.transactionType == TransactionType.INCOME) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Account Selector
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            AccountSelectorRow(
+                                account = uiState.selectedAccount,
+                                placeholder = "选择账户",
+                                onClick = {
+                                    viewModel.refreshAccounts()
+                                    if (uiState.accounts.isEmpty()) showNoAccountDialog = true else showAccountSelector = true
+                                }
+                            )
                         }
+                    }
+                    // Date Selector
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            OutlinedTextField(
+                                value = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                    .format(Date(uiState.date)),
+                                onValueChange = {},
+                                modifier = Modifier.fillMaxWidth(),
+                                readOnly = true,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                trailingIcon = {
+                                    IconButton(onClick = { showDatePicker = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = "选择日期",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Date Selector (for TRANSFER/LENDING - full width)
+            if (uiState.transactionType == TransactionType.TRANSFER || uiState.transactionType == TransactionType.LENDING) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        OutlinedTextField(
+                            value = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                .format(Date(uiState.date)),
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            readOnly = true,
+                            trailingIcon = {
+                                IconButton(onClick = { showDatePicker = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.DateRange,
+                                        contentDescription = "选择日期"
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
 

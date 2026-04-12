@@ -35,6 +35,7 @@ import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.viewmodel.BillsUiState
 import com.tinyledger.app.ui.viewmodel.BillsViewModel
 import com.tinyledger.app.ui.viewmodel.BillsViewMode
+import com.tinyledger.app.util.CurrencyUtils
 import com.tinyledger.app.ui.viewmodel.FilterType
 import kotlinx.coroutines.launch
 import java.util.*
@@ -59,7 +60,7 @@ fun BillsScreen(
     ) {
         // Top bar with title and view mode toggle
         item {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
                         text = "账单",
@@ -70,10 +71,19 @@ fun BillsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateToSearch) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "搜索"
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "搜索"
+                            )
+                            Text(
+                                text = "搜索",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -92,7 +102,7 @@ fun BillsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color(0xFFF5F5F5)
                 )
             )
@@ -409,7 +419,7 @@ private fun MonthSummaryCard(
                     color = Color.White.copy(alpha = 0.7f)
                 )
                 Text(
-                    text = "${currencySymbol} ${String.format("%.2f", balance)}",
+                    text = "${currencySymbol} ${CurrencyUtils.formatAmount(balance)}",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -430,7 +440,7 @@ private fun MonthSummaryCard(
                             color = Color.White.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = "${currencySymbol} ${String.format("%.2f", expense)}",
+                            text = "${currencySymbol} ${CurrencyUtils.formatAmount(expense)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = Color.White
                         )
@@ -442,7 +452,7 @@ private fun MonthSummaryCard(
                             color = Color.White.copy(alpha = 0.7f)
                         )
                         Text(
-                            text = "${currencySymbol} ${String.format("%.2f", income)}",
+                            text = "${currencySymbol} ${CurrencyUtils.formatAmount(income)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = Color.White
                         )

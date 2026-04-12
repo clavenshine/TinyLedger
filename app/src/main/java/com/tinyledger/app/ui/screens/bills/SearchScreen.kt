@@ -16,7 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,6 +38,8 @@ fun SearchScreen(
     var showFilterDialog by remember { mutableStateOf(false) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showEndDatePicker by remember { mutableStateOf(false) }
+    var minAmountText by remember { mutableStateOf("") }
+    var maxAmountText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -151,6 +154,38 @@ fun SearchScreen(
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "清除日期",
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                )
+            }
+        }
+
+        // Amount range display
+        if (uiState.minAmount != null || uiState.maxAmount != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AssistChip(
+                    onClick = { viewModel.setAmountRange(null, null) },
+                    label = {
+                        Text(
+                            text = buildString {
+                                append("金额: ")
+                                append(if (uiState.minAmount != null) String.format("%.2f", uiState.minAmount) else "-")
+                                append(" ~ ")
+                                append(if (uiState.maxAmount != null) String.format("%.2f", uiState.maxAmount) else "-")
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "清除金额筛选",
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -300,8 +335,13 @@ fun SearchScreen(
         }
     }
 
-    // Filter dialog (date range picker)
+    // Filter dialog (date range + amount range picker)
     if (showFilterDialog) {
+        // Sync text fields with current state when dialog opens
+        LaunchedEffect(Unit) {
+            minAmountText = uiState.minAmount?.toString() ?: ""
+            maxAmountText = uiState.maxAmount?.toString() ?: ""
+        }
         AlertDialog(
             onDismissRequest = { showFilterDialog = false },
             title = { Text("筛选条件") },
@@ -346,10 +386,61 @@ fun SearchScreen(
                             Text("清除日期筛选")
                         }
                     }
+
+                    // Amount range
+                    Text(
+                        text = "金额范围",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = minAmountText,
+                            onValueChange = { minAmountText = it },
+                            placeholder = { Text("最低金额", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "~",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        OutlinedTextField(
+                            value = maxAmountText,
+                            onValueChange = { maxAmountText = it },
+                            placeholder = { Text("最高金额", fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (uiState.minAmount != null || uiState.maxAmount != null) {
+                        TextButton(
+                            onClick = {
+                                viewModel.setAmountRange(null, null)
+                                minAmountText = ""
+                                maxAmountText = ""
+                            }
+                        ) {
+                            Text("清除金额筛选")
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showFilterDialog = false }) {
+                TextButton(onClick = {
+                    val min = minAmountText.toDoubleOrNull()
+                    val max = maxAmountText.toDoubleOrNull()
+                    viewModel.setAmountRange(min, max)
+                    showFilterDialog = false
+                }) {
                     Text("确定")
                 }
             },

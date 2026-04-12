@@ -26,7 +26,9 @@ data class SearchUiState(
     val isLoading: Boolean = false,
     val hasSearched: Boolean = false,
     val startDate: Long? = null,
-    val endDate: Long? = null
+    val endDate: Long? = null,
+    val minAmount: Double? = null,
+    val maxAmount: Double? = null
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,6 +42,8 @@ class SearchViewModel @Inject constructor(
     private val _filterType = MutableStateFlow(SearchFilterType.ALL)
     private val _startDate = MutableStateFlow<Long?>(null)
     private val _endDate = MutableStateFlow<Long?>(null)
+    private val _minAmount = MutableStateFlow<Double?>(null)
+    private val _maxAmount = MutableStateFlow<Double?>(null)
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -58,15 +62,23 @@ class SearchViewModel @Inject constructor(
     }
 
     private fun loadSearchResults() {
+        // Combine sub-flows to avoid combine() limitation (max 5 params)
+        val dateRangeFlow = combine(_startDate, _endDate) { start, end ->
+            DateRange(start, end)
+        }
+        val amountRangeFlow = combine(_minAmount, _maxAmount) { min, max ->
+            AmountRange(min, max)
+        }
+
         viewModelScope.launch {
             combine(
                 _query,
                 _filterType,
-                _startDate,
-                _endDate,
+                dateRangeFlow,
+                amountRangeFlow,
                 transactionRepository.getAllTransactions()
-            ) { query, filterType, startDate, endDate, allTransactions ->
-                SearchParams(query, filterType, startDate, endDate, allTransactions)
+            ) { query, filterType, dateRange, amountRange, allTransactions ->
+                SearchParams(query, filterType, dateRange.start, dateRange.end, amountRange.min, amountRange.max, allTransactions)
             }.map { params ->
                 if (params.query.isBlank()) {
                     emptyList()
@@ -101,6 +113,12 @@ class SearchViewModel @Inject constructor(
                                 true
                             }
                         }
+                        .filter { transaction ->
+                            // Filter by amount range
+                            val aboveMin = params.minAmount == null || transaction.amount >= params.minAmount
+                            val belowMax = params.maxAmount == null || transaction.amount <= params.maxAmount
+                            aboveMin && belowMax
+                        }
                         .sortedByDescending { it.date }
                 }
             }.collect { results ->
@@ -125,18 +143,38 @@ class SearchViewModel @Inject constructor(
         _uiState.update { it.copy(startDate = startDate, endDate = endDate) }
     }
 
+    fun setAmountRange(minAmount: Double?, maxAmount: Double?) {
+        _minAmount.value = minAmount
+        _maxAmount.value = maxAmount
+        _uiState.update { it.copy(minAmount = minAmount, maxAmount = maxAmount) }
+    }
+
     fun clearSearch() {
         _query.value = ""
-        _uiState.update { it.copy(query = "", results = emptyList(), hasSearched = false, startDate = null, endDate = null) }
+        _uiState.update { it.copy(query = "", results = emptyList(), hasSearched = false, startDate = null, endDate = null, minAmount = null, maxAmount = null) }
         _startDate.value = null
         _endDate.value = null
+        _minAmount.value = null
+        _maxAmount.value = null
     }
+
+    private data class DateRange(
+        val start: Long?,
+        val end: Long?
+    )
+
+    private data class AmountRange(
+        val min: Double?,
+        val max: Double?
+    )
 
     private data class SearchParams(
         val query: String,
         val filterType: SearchFilterType,
         val startDate: Long?,
         val endDate: Long?,
+        val minAmount: Double?,
+        val maxAmount: Double?,
         val allTransactions: List<Transaction>
     )
 }

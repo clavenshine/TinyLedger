@@ -57,7 +57,7 @@ fun TransactionCard(
             // Category Icon
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
@@ -66,11 +66,11 @@ fun TransactionCard(
                     imageVector = getCategoryIcon(transaction.category.icon),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // Category and Note
             Column(
@@ -79,7 +79,7 @@ fun TransactionCard(
                 Text(
                     text = transaction.category.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold
                 )
                 if (!transaction.note.isNullOrBlank()) {
                     Text(
