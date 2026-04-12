@@ -72,7 +72,7 @@ fun HomeScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "默认账本",
+                            text = "我的账本",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             )
@@ -85,11 +85,7 @@ fun HomeScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Search, contentDescription = "搜索")
-                    }
-                },
+
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color(0xFFF5F5F5)
                 )
@@ -197,7 +193,7 @@ fun HomeScreen(
             }
         }
 
-        // ── 底部自动记账状态 + 净资产 ──
+        // ── 底部当前负债 + 净资产 ──
         item {
             Row(
                 modifier = Modifier
@@ -206,34 +202,45 @@ fun HomeScreen(
                     .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 自动记账状态
+                // 当前负债
                 Card(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (isAutoAccountingEnabled) IOSColors.SystemGreen else IOSColors.SystemOrange)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "自动记账",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isAutoAccountingEnabled) "已开启" else "未开启",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(IOSColors.SystemRed)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "当前负债",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                            )
+                        }
+                        val totalDebt = uiState.accounts
+                            .filter { it.currentBalance < 0 }
+                            .sumOf { it.currentBalance }
+                        if (totalDebt < 0) {
+                            Text(
+                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalDebt)}",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFFC62828),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "你很棒，当前无负债",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = Color(0xFF2E7D32),
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
                     }
                 }
 
@@ -265,6 +272,41 @@ fun HomeScreen(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
+                }
+            }
+        }
+
+        // ── 自动记账状态 ──
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isAutoAccountingEnabled) IOSColors.SystemGreen else IOSColors.SystemOrange)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "自动记账",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isAutoAccountingEnabled) "已开启" else "未开启",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -372,30 +414,41 @@ private fun MonthSummaryCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 12.dp, vertical = 18.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "本月收入",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF757575)
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyIncome)}",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = Color(0xFF2E7D32)
                             )
                         }
-                        Column(horizontalAlignment = Alignment.End) {
+
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(44.dp)
+                                .background(Color(0xFFE0E0E0))
+                        )
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "日均支出",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF757575)
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(dailyAvgExpense)}",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = Color(0xFFC62828)
                             )
                         }
