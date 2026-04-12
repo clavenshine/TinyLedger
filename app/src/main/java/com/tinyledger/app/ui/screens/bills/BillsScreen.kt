@@ -44,6 +44,7 @@ import kotlin.math.roundToInt
 @Composable
 fun BillsScreen(
     onEditTransaction: (Long) -> Unit,
+    onNavigateToSearch: () -> Unit = {},
     viewModel: BillsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -58,7 +59,7 @@ fun BillsScreen(
     ) {
         // Top bar with title and view mode toggle
         item {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = "账单",
@@ -66,6 +67,14 @@ fun BillsScreen(
                             fontWeight = FontWeight.Bold
                         )
                     )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateToSearch) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
+                    }
                 },
                 actions = {
                     // Year/Month picker button
@@ -83,7 +92,7 @@ fun BillsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFFF5F5F5)
                 )
             )
