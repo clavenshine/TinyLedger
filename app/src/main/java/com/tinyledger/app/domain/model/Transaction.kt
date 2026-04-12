@@ -217,6 +217,22 @@ data class Category(
             return removed
         }
 
+        fun renameCustomCategory(category: Category, newName: String): Category? {
+            // Cannot rename default categories
+            if (category.isDefault) return null
+            val list = when (category.type) {
+                TransactionType.EXPENSE -> customExpenseCategories
+                TransactionType.INCOME -> customIncomeCategories
+                TransactionType.TRANSFER -> customTransferCategories
+                TransactionType.LENDING -> customLendingCategories
+            }
+            val index = list.indexOfFirst { it.id == category.id }
+            if (index < 0) return null
+            val renamed = category.copy(name = newName)
+            list[index] = renamed
+            return renamed
+        }
+
         fun fromId(id: String, type: TransactionType): Category {
             return getCategoriesByType(type).find { it.id == id }
                 ?: Category(id, id, "other", type)

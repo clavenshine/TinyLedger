@@ -199,6 +199,32 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
+    fun renameCategory(category: Category, newName: String) {
+        // Validate 4-char limit
+        if (newName.length > 4) return
+        // Cannot rename default categories
+        if (category.isDefault) return
+        
+        val renamed = Category.renameCustomCategory(category, newName) ?: return
+        
+        viewModelScope.launch {
+            // Persist: delete old, save new
+            preferencesRepository.deleteCustomCategory(category.id)
+            preferencesRepository.saveCustomCategory(renamed)
+        }
+        
+        // Refresh category list and update selected if it was renamed
+        val type = _uiState.value.transactionType
+        val categories = Category.getCategoriesByType(type)
+        val currentSelected = _uiState.value.selectedCategory
+        _uiState.update {
+            it.copy(
+                categories = categories,
+                selectedCategory = if (currentSelected?.id == category.id) renamed else currentSelected
+            )
+        }
+    }
+
     fun setAmount(amount: String) {
         _uiState.update { it.copy(amount = amount) }
     }

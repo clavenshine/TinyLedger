@@ -1,6 +1,10 @@
 package com.tinyledger.app.ui.screens.home
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -175,7 +179,107 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Lending SubType Selector (only for LENDING)
+            // Account & Date Selector on same row (for EXPENSE/INCOME) - moved right after Amount
+            if (uiState.transactionType == TransactionType.EXPENSE || uiState.transactionType == TransactionType.INCOME) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Account Selector
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.refreshAccounts()
+                                    if (uiState.accounts.isEmpty()) showNoAccountDialog = true else showAccountSelector = true
+                                }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AccountSelectorRow(
+                                account = uiState.selectedAccount,
+                                placeholder = "选择账户"
+                            )
+                        }
+                    }
+                    // Date Selector
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showDatePicker = true }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = "选择日期",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                        .format(Date(uiState.date)),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Date Selector (for TRANSFER/LENDING - full width)
+            if (uiState.transactionType == TransactionType.TRANSFER || uiState.transactionType == TransactionType.LENDING) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showDatePicker = true }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "选择日期",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                    .format(Date(uiState.date)),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Lending SubType Selector (only for LENDING) - redesigned to match category style
             if (uiState.transactionType == TransactionType.LENDING) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -183,43 +287,40 @@ fun AddTransactionScreen(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            LendingTypeButton(
-                                icon = Icons.Default.SouthWest,
-                                label = "借入",
-                                isSelected = uiState.lendingSubType == LendingSubType.BORROW_IN,
-                                selectedColor = Color(0xFF9C27B0),
-                                onClick = { viewModel.setLendingSubType(LendingSubType.BORROW_IN) }
-                            )
-                            LendingTypeButton(
-                                icon = Icons.Default.NorthEast,
-                                label = "借出",
-                                isSelected = uiState.lendingSubType == LendingSubType.BORROW_OUT,
-                                selectedColor = Color(0xFF9C27B0),
-                                onClick = { viewModel.setLendingSubType(LendingSubType.BORROW_OUT) }
-                            )
-                            LendingTypeButton(
-                                icon = Icons.Default.CreditCardOff,
-                                label = "还款",
-                                isSelected = uiState.lendingSubType == LendingSubType.REPAY,
-                                selectedColor = Color(0xFF9C27B0),
-                                onClick = { viewModel.setLendingSubType(LendingSubType.REPAY) }
-                            )
-                            LendingTypeButton(
-                                icon = Icons.Default.CreditScore,
-                                label = "收款",
-                                isSelected = uiState.lendingSubType == LendingSubType.COLLECT,
-                                selectedColor = Color(0xFF9C27B0),
-                                onClick = { viewModel.setLendingSubType(LendingSubType.COLLECT) }
-                            )
-                        }
+                        LendingTypeButton(
+                            icon = Icons.Default.SouthWest,
+                            label = "借入",
+                            isSelected = uiState.lendingSubType == LendingSubType.BORROW_IN,
+                            selectedColor = Color(0xFF9C27B0),
+                            onClick = { viewModel.setLendingSubType(LendingSubType.BORROW_IN) }
+                        )
+                        LendingTypeButton(
+                            icon = Icons.Default.NorthEast,
+                            label = "借出",
+                            isSelected = uiState.lendingSubType == LendingSubType.BORROW_OUT,
+                            selectedColor = Color(0xFF9C27B0),
+                            onClick = { viewModel.setLendingSubType(LendingSubType.BORROW_OUT) }
+                        )
+                        LendingTypeButton(
+                            icon = Icons.Default.CreditCardOff,
+                            label = "还款",
+                            isSelected = uiState.lendingSubType == LendingSubType.REPAY,
+                            selectedColor = Color(0xFF9C27B0),
+                            onClick = { viewModel.setLendingSubType(LendingSubType.REPAY) }
+                        )
+                        LendingTypeButton(
+                            icon = Icons.Default.CreditScore,
+                            label = "收款",
+                            isSelected = uiState.lendingSubType == LendingSubType.COLLECT,
+                            selectedColor = Color(0xFF9C27B0),
+                            onClick = { viewModel.setLendingSubType(LendingSubType.COLLECT) }
+                        )
                     }
                 }
             }
@@ -239,6 +340,7 @@ fun AddTransactionScreen(
                             onCategorySelected = { viewModel.selectCategory(it) },
                             onAddCategory = { name -> viewModel.addCategory(name) },
                             onDeleteCategory = { category -> viewModel.deleteCategory(category) },
+                            onRenameCategory = { category, newName -> viewModel.renameCategory(category, newName) },
                             showAddButton = true,
                             transactionType = uiState.transactionType
                         )
@@ -338,86 +440,6 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Account & Date Selector on same row (for EXPENSE/INCOME)
-            if (uiState.transactionType == TransactionType.EXPENSE || uiState.transactionType == TransactionType.INCOME) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Account Selector
-                    Card(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                            AccountSelectorRow(
-                                account = uiState.selectedAccount,
-                                placeholder = "选择账户",
-                                onClick = {
-                                    viewModel.refreshAccounts()
-                                    if (uiState.accounts.isEmpty()) showNoAccountDialog = true else showAccountSelector = true
-                                }
-                            )
-                        }
-                    }
-                    // Date Selector
-                    Card(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                            OutlinedTextField(
-                                value = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                    .format(Date(uiState.date)),
-                                onValueChange = {},
-                                modifier = Modifier.fillMaxWidth(),
-                                readOnly = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                trailingIcon = {
-                                    IconButton(onClick = { showDatePicker = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.DateRange,
-                                            contentDescription = "选择日期",
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Date Selector (for TRANSFER/LENDING - full width)
-            if (uiState.transactionType == TransactionType.TRANSFER || uiState.transactionType == TransactionType.LENDING) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        OutlinedTextField(
-                            value = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                                .format(Date(uiState.date)),
-                            onValueChange = {},
-                            modifier = Modifier.fillMaxWidth(),
-                            readOnly = true,
-                            trailingIcon = {
-                                IconButton(onClick = { showDatePicker = true }) {
-                                    Icon(
-                                        imageVector = Icons.Default.DateRange,
-                                        contentDescription = "选择日期"
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
             // Note Input
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -481,103 +503,99 @@ fun AddTransactionScreen(
         }
     }
 
-    // Date Picker Dialog
+    // Date Picker Bottom Sheet
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = uiState.date
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let {
-                            viewModel.setDate(it)
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("确定")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("取消")
-                }
+        // Auto-close when date is selected
+        LaunchedEffect(datePickerState.selectedDateMillis) {
+            if (showDatePicker && datePickerState.selectedDateMillis != null && datePickerState.selectedDateMillis != uiState.date) {
+                viewModel.setDate(datePickerState.selectedDateMillis!!)
+                showDatePicker = false
             }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showDatePicker = false },
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
-            DatePicker(state = datePickerState)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+            ) {
+                DatePicker(state = datePickerState)
+            }
         }
     }
 
-    // Account Selector Dialog
+    // Account Selector Bottom Sheet
     if (showAccountSelector) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showAccountSelector = false },
-            title = { Text("选择账户") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // 账户列表
-                    uiState.accounts.forEach { account ->
-                        ListItem(
-                            headlineContent = { Text(account.name) },
-                            supportingContent = { 
-                                Text("余额: ¥${String.format("%.2f", account.currentBalance)}") 
-                            },
-                            leadingContent = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(parseColor(account.color)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = getAccountIcon(account.type),
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            },
-                            trailingContent = {
-                                if (uiState.selectedAccount?.id == account.id) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "已选择",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                viewModel.selectAccount(account)
-                                showAccountSelector = false
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 8.dp)
+            ) {
+                Text(
+                    text = "选择账户",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                uiState.accounts.forEach { account ->
+                    ListItem(
+                        headlineContent = { Text(account.name) },
+                        supportingContent = {
+                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
+                        },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(parseColor(account.color)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = getAccountIcon(account.type),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
-                        )
-                    }
-                    
-                    if (uiState.accounts.isEmpty()) {
-                        Text(
-                            text = "暂无账户，请在\"账户\"管理中添加",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
+                        },
+                        trailingContent = {
+                            if (uiState.selectedAccount?.id == account.id) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "已选择",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            viewModel.selectAccount(account)
+                            showAccountSelector = false
+                        }
+                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAccountSelector = false }) {
-                    Text("关闭")
+                if (uiState.accounts.isEmpty()) {
+                    Text(
+                        text = "暂无账户，请在\"账户\"管理中添加",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-        )
+        }
     }
 
-    // From Account Selector Dialog
+    // From Account Selector Bottom Sheet
     if (showFromAccountSelector) {
         val dialogTitle = when (uiState.transactionType) {
             TransactionType.TRANSFER -> "选择转出账户"
@@ -589,70 +607,63 @@ fun AddTransactionScreen(
             }
             else -> "选择账户"
         }
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showFromAccountSelector = false },
-            title = { Text(dialogTitle) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    uiState.accounts.forEach { account ->
-                        ListItem(
-                            headlineContent = { Text(account.name) },
-                            supportingContent = {
-                                Text("余额: ¥${String.format("%.2f", account.currentBalance)}")
-                            },
-                            leadingContent = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(parseColor(account.color)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = getAccountIcon(account.type),
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            },
-                            trailingContent = {
-                                if (uiState.selectedFromAccount?.id == account.id) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "已选择",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                viewModel.selectFromAccount(account)
-                                showFromAccountSelector = false
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 8.dp)
+            ) {
+                Text(
+                    text = dialogTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                uiState.accounts.forEach { account ->
+                    ListItem(
+                        headlineContent = { Text(account.name) },
+                        supportingContent = {
+                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
+                        },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(parseColor(account.color)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = getAccountIcon(account.type),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
-                        )
-                    }
-                    if (uiState.accounts.isEmpty()) {
-                        Text(
-                            text = "暂无账户，请在\"账户\"管理中添加",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
+                        },
+                        trailingContent = {
+                            if (uiState.selectedFromAccount?.id == account.id) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "已选择",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            viewModel.selectFromAccount(account)
+                            showFromAccountSelector = false
+                        }
+                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFromAccountSelector = false }) {
-                    Text("关闭")
-                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-        )
+        }
     }
 
-    // To Account Selector Dialog
+    // To Account Selector Bottom Sheet
     if (showToAccountSelector) {
         val dialogTitle = when (uiState.transactionType) {
             TransactionType.TRANSFER -> "选择转入账户"
@@ -664,67 +675,60 @@ fun AddTransactionScreen(
             }
             else -> "选择账户"
         }
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showToAccountSelector = false },
-            title = { Text(dialogTitle) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    uiState.accounts.forEach { account ->
-                        ListItem(
-                            headlineContent = { Text(account.name) },
-                            supportingContent = {
-                                Text("余额: ¥${String.format("%.2f", account.currentBalance)}")
-                            },
-                            leadingContent = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(parseColor(account.color)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = getAccountIcon(account.type),
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            },
-                            trailingContent = {
-                                if (uiState.selectedToAccount?.id == account.id) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "已选择",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                viewModel.selectToAccount(account)
-                                showToAccountSelector = false
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 8.dp)
+            ) {
+                Text(
+                    text = dialogTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                uiState.accounts.forEach { account ->
+                    ListItem(
+                        headlineContent = { Text(account.name) },
+                        supportingContent = {
+                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
+                        },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(parseColor(account.color)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = getAccountIcon(account.type),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
-                        )
-                    }
-                    if (uiState.accounts.isEmpty()) {
-                        Text(
-                            text = "暂无账户，请在\"账户\"管理中添加",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
+                        },
+                        trailingContent = {
+                            if (uiState.selectedToAccount?.id == account.id) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "已选择",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            viewModel.selectToAccount(account)
+                            showToAccountSelector = false
+                        }
+                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showToAccountSelector = false }) {
-                    Text("关闭")
-                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-        )
+        }
     }
 
     // 未添加账户提示对话框 - 精美卡片样式
@@ -847,7 +851,7 @@ private fun parseColor(colorString: String): Color {
 private fun AccountSelectorRow(
     account: Account?,
     placeholder: String,
-    onClick: () -> Unit
+    onClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -917,31 +921,55 @@ private fun LendingTypeButton(
     selectedColor: Color,
     onClick: () -> Unit
 ) {
+    val animatedBorderWidth by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 1.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "lending_border_width"
+    )
+
     Column(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .background(
+                if (isSelected) selectedColor.copy(alpha = 0.1f)
+                else MaterialTheme.colorScheme.surface
+            )
+            .border(
+                width = animatedBorderWidth,
+                color = if (isSelected) selectedColor
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(if (isSelected) selectedColor else Color(0xFFE0E0E0)),
+                .background(
+                    if (isSelected) selectedColor.copy(alpha = 0.2f)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isSelected) Color.White else Color(0xFF757575),
+                tint = if (isSelected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            ),
-            color = if (isSelected) selectedColor else Color(0xFF757575)
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            color = if (isSelected) selectedColor else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
         )
     }
 }

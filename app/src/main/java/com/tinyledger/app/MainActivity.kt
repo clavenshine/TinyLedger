@@ -166,11 +166,13 @@ private fun AppBottomNavigation(
 private fun CenterAddButton(onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(64.dp)
+        modifier = Modifier.width(80.dp)
     ) {
         FloatingActionButton(
             onClick = onClick,
-            modifier = Modifier.size(50.dp),
+            modifier = Modifier
+                .padding(5.dp)
+                .size(70.dp),
             shape = CircleShape,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = Color.White,
@@ -182,7 +184,7 @@ private fun CenterAddButton(onClick: () -> Unit) {
             Icon(
                 Icons.Default.Add,
                 contentDescription = "记账",
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(36.dp)
             )
         }
         Spacer(modifier = Modifier.height(2.dp))

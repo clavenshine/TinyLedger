@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -91,33 +92,47 @@ fun StatisticsScreen(
                         .padding(20.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // 年份栏
+                        // 年份栏 - redesigned with yearly mode toggle on left
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { viewModel.previousMonth() }) {
-                                Icon(
-                                    Icons.Default.ChevronLeft, 
-                                    "上一年", 
-                                    tint = if (uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
-                                )
-                            }
-                            Text(
-                                text = if (uiState.isYearlyMode) "${uiState.selectedYear}年" else "点击此处统计本年累计",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.clickable { 
-                                    if (!uiState.isYearlyMode) viewModel.enterYearlyMode()
+                            if (!uiState.isYearlyMode) {
+                                // Monthly mode: show "本年累计" toggle on left
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .clickable { viewModel.enterYearlyMode() }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "本年累计",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
                                 }
-                            )
-                            IconButton(onClick = { viewModel.nextMonth() }) {
-                                Icon(
-                                    Icons.Default.ChevronRight, 
-                                    "下一年", 
-                                    tint = if (uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
+                            } else {
+                                // Yearly mode: year nav with arrows
+                                IconButton(onClick = { viewModel.previousMonth() }) {
+                                    Icon(Icons.Default.ChevronLeft, "上一年", tint = Color.White)
+                                }
+                                Text(
+                                    text = "${uiState.selectedYear}年",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
                                 )
+                                IconButton(onClick = { viewModel.nextMonth() }) {
+                                    Icon(Icons.Default.ChevronRight, "下一年", tint = Color.White)
+                                }
                             }
                         }
 
@@ -367,7 +382,7 @@ fun PieChart(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${String.format("%.0f", item.percentage)}%",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -427,7 +442,7 @@ fun CategoryExpenseItem(
             ) {
                 Text(
                     text = "${String.format("%.1f", categoryAmount.percentage)}%",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = color,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 )
@@ -438,7 +453,7 @@ fun CategoryExpenseItem(
             // Amount
             Text(
                 text = CurrencyUtils.format(categoryAmount.amount, currencySymbol),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
         }

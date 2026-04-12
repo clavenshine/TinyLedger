@@ -363,29 +363,26 @@ private fun MonthSummaryCard(
                 )
                 .padding(24.dp)
         ) {
+            // Date chip at top-right corner
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.White.copy(alpha = 0.18f),
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Text(
+                    text = "${month}月1日-${month}月${getDaysInMonth(year, month)}日",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                )
+            }
+
             Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "本月支出",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.18f)
-                    ) {
-                        Text(
-                            text = "${month}月1日-${month}月${getDaysInMonth(year, month)}日",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.9f),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = "本月支出",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -393,6 +390,7 @@ private fun MonthSummaryCard(
                     text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyExpense)}",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp,
                         letterSpacing = (-0.5).sp
                     ),
                     color = Color.White
@@ -427,7 +425,7 @@ private fun MonthSummaryCard(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyIncome)}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
                                 color = Color(0xFF2E7D32)
                             )
                         }
@@ -448,7 +446,7 @@ private fun MonthSummaryCard(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(dailyAvgExpense)}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
                                 color = Color(0xFFC62828)
                             )
                         }
@@ -634,8 +632,8 @@ private fun PendingTransactionsCard(
                 ) {
                     Text(
                         text = "暂时无待确认交易账单",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = Color(0xFFBDBDBD)
                     )
                 }
             } else {

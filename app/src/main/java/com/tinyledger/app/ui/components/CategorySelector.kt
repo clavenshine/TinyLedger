@@ -22,12 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.IOSColors
@@ -40,12 +43,15 @@ fun CategorySelector(
     onCategorySelected: (Category) -> Unit,
     onAddCategory: ((String) -> Unit)? = null,
     onDeleteCategory: ((Category) -> Unit)? = null,
+    onRenameCategory: ((Category, String) -> Unit)? = null,
     showAddButton: Boolean = true,
     transactionType: TransactionType = TransactionType.EXPENSE,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf<Category?>(null) }
+    var showEditDialog by remember { mutableStateOf<Category?>(null) }
+    var showActionMenu by remember { mutableStateOf<Category?>(null) }
 
     Column(modifier = modifier) {
         // Non-lazy grid: display all items without scrolling
@@ -63,8 +69,8 @@ fun CategorySelector(
                             isSelected = category == selectedCategory,
                             onClick = { onCategorySelected(category) },
                             onLongClick = {
-                                if (onDeleteCategory != null) {
-                                    showDeleteDialog = category
+                                if (onDeleteCategory != null || onRenameCategory != null) {
+                                    showActionMenu = category
                                 }
                             }
                         )
@@ -96,6 +102,22 @@ fun CategorySelector(
         }
     }
 
+    // Animated action menu (Edit / Delete)
+    showActionMenu?.let { category ->
+        CategoryActionMenu(
+            category = category,
+            onEdit = {
+                showActionMenu = null
+                showEditDialog = category
+            },
+            onDelete = {
+                showActionMenu = null
+                showDeleteDialog = category
+            },
+            onDismiss = { showActionMenu = null }
+        )
+    }
+
     // Delete confirmation dialog with 10-second countdown
     showDeleteDialog?.let { categoryToDelete ->
         DeleteCategoryDialog(
@@ -116,6 +138,19 @@ fun CategorySelector(
             onConfirm = { name ->
                 onAddCategory(name)
                 showAddDialog = false
+            }
+        )
+    }
+
+    // Edit category dialog
+    showEditDialog?.let { category ->
+        EditCategoryDialog(
+            category = category,
+            existingCategories = categories,
+            onDismiss = { showEditDialog = null },
+            onConfirm = { newName ->
+                onRenameCategory?.invoke(category, newName)
+                showEditDialog = null
             }
         )
     }
@@ -381,6 +416,158 @@ private fun DeleteCategoryDialog(
                     color = if (canConfirm) MaterialTheme.colorScheme.error
                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+private fun CategoryActionMenu(
+    category: Category,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Semi-transparent overlay
+    Dialog(onDismissRequest = onDismiss) {
+        // Animated menu with shake effect
+        val infiniteTransition = rememberInfiniteTransition(label = "shake")
+        val shakeOffset by infiniteTransition.animateFloat(
+            initialValue = -1f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(50),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "shake"
+        )
+        val scale by animateFloatAsState(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessHigh
+            ),
+            label = "scale"
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
+                .scale(scale)
+                .offset(x = with(LocalDensity.current) { shakeOffset.toDp() * 0.3f }),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = category.name,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                HorizontalDivider()
+                // Edit option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onEdit() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "编辑",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                HorizontalDivider()
+                // Delete option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onDelete() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "删除",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditCategoryDialog(
+    category: Category,
+    existingCategories: List<Category>,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var categoryName by remember { mutableStateOf(category.name) }
+    var charLimitError by remember { mutableStateOf(false) }
+    var duplicateError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        title = {
+            Text("编辑分类", style = MaterialTheme.typography.titleLarge)
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = categoryName,
+                    onValueChange = {
+                        categoryName = it
+                        charLimitError = it.trim().length > 4
+                        duplicateError = existingCategories.any { c -> c.name == it.trim() && c.id != category.id }
+                    },
+                    label = { Text("分类名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = charLimitError || duplicateError,
+                    supportingText = when {
+                        charLimitError -> {{ Text("分类名称不得超过4个字", color = MaterialTheme.colorScheme.error) }}
+                        duplicateError -> {{ Text("该分类名称已存在，请重新输入", color = MaterialTheme.colorScheme.error) }}
+                        else -> null
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (categoryName.isNotBlank() && !charLimitError && !duplicateError) {
+                        onConfirm(categoryName.trim())
+                    }
+                },
+                enabled = categoryName.isNotBlank() && !charLimitError && !duplicateError
+            ) {
+                Text("保存")
             }
         },
         dismissButton = {

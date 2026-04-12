@@ -2,10 +2,16 @@ package com.tinyledger.app.ui.screens.budget
 
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,6 +20,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -34,6 +43,7 @@ import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.IOSColors
+import kotlinx.coroutines.launch
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -51,7 +61,7 @@ data class ParsedRecord(
     val saved: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ScreenshotAccountingScreen(
     onNavigateBack: () -> Unit = {},
@@ -63,6 +73,8 @@ fun ScreenshotAccountingScreen(
     var isProcessing by remember { mutableStateOf(false) }
     var parsedRecords by remember { mutableStateOf(listOf<ParsedRecord>()) }
     var showResult by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -81,6 +93,21 @@ fun ScreenshotAccountingScreen(
                         parsedRecords = parseScreenshotTextMulti(result.text, homeState.accounts)
                         showResult = true
                         isProcessing = false
+                        if (parsedRecords.isNotEmpty()) {
+                            val expenseCount = parsedRecords.count { it.type == TransactionType.EXPENSE }
+                            val incomeCount = parsedRecords.count { it.type == TransactionType.INCOME }
+                            val msg = buildString {
+                                if (expenseCount > 0) append("识别到 $expenseCount 笔支出")
+                                if (incomeCount > 0) {
+                                    if (isNotEmpty()) append("，")
+                                    append("识别到 $incomeCount 笔收入")
+                                }
+                                append("，已自动填充")
+                            }
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+                            }
+                        }
                     }
                     .addOnFailureListener { e ->
                         Log.e("ScreenshotOCR", "Recognition failed", e)
@@ -95,6 +122,49 @@ fun ScreenshotAccountingScreen(
         }
     }
 
+    val multiImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            isProcessing = true
+            showResult = false
+            parsedRecords = emptyList()
+            var allRecords = mutableListOf<ParsedRecord>()
+            var processed = 0
+            uris.forEach { uri ->
+                try {
+                    val image = InputImage.fromFilePath(context, uri)
+                    val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                    recognizer.process(image)
+                        .addOnSuccessListener { result ->
+                            allRecords.addAll(parseScreenshotTextMulti(result.text, homeState.accounts))
+                            processed++
+                            if (processed == uris.size) {
+                                parsedRecords = allRecords
+                                showResult = true
+                                isProcessing = false
+                                if (allRecords.isNotEmpty()) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("识别到 ${allRecords.size} 条记录，已自动填充", duration = SnackbarDuration.Short)
+                                    }
+                                }
+                            }
+                        }
+                        .addOnFailureListener {
+                            processed++
+                            if (processed == uris.size) {
+                                parsedRecords = allRecords
+                                showResult = true
+                                isProcessing = false
+                            }
+                        }
+                } catch (e: Exception) {
+                    processed++
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -103,7 +173,11 @@ fun ScreenshotAccountingScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "返回", modifier = Modifier.size(28.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            modifier = Modifier.size(24.dp).padding(start = 10.dp)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -111,7 +185,8 @@ fun ScreenshotAccountingScreen(
                 )
             )
         },
-        containerColor = Color(0xFFF5F5F5)
+        containerColor = Color(0xFFF5F5F5),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -121,12 +196,14 @@ fun ScreenshotAccountingScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            // Instruction card
+            // Instruction card - redesigned
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(2.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
                 ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -136,38 +213,155 @@ fun ScreenshotAccountingScreen(
                             Icons.Default.Screenshot,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(64.dp)
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             "选择支付截图，自动识别金额",
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                            textAlign = TextAlign.Center
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             "支持微信、支付宝、银行等支付截图，可识别多条记录",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                            color = Color(0xFF757575),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
 
-            // Select image button
+            // Supported screenshot types tags
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf(
+                        Triple(Icons.Default.Chat, "微信支付", Color(0xFF07C160)),
+                        Triple(Icons.Default.Payment, "支付宝", Color(0xFF1677FF)),
+                        Triple(Icons.Default.AccountBalance, "银行卡", Color(0xFFFF6D00))
+                    ).forEach { (icon, label, color) ->
+                        Surface(
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(30.dp)
+                                .padding(horizontal = 2.dp),
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFF0F0F0)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Select image button - enhanced
+            item {
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val buttonColor = if (isPressed) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+
                 Button(
                     onClick = { imagePicker.launch("image/*") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .combinedClickable(
+                            onClick = { imagePicker.launch("image/*") },
+                            onLongClick = {
+                                Toast.makeText(context, "可选择多张截图批量识别", Toast.LENGTH_SHORT).show()
+                                multiImagePicker.launch("image/*")
+                            },
+                            interactionSource = interactionSource,
+                            indication = null
+                        ),
                     shape = RoundedCornerShape(12.dp),
-                    enabled = !isProcessing
+                    enabled = !isProcessing,
+                    colors = ButtonDefaults.buttonColors(containerColor = buttonColor)
                 ) {
                     if (isProcessing) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("正在识别...")
+                        Text("正在识别...", fontSize = 16.sp)
                     } else {
-                        Icon(Icons.Default.Image, contentDescription = null)
+                        Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("选择截图")
+                        Text("选择截图", fontSize = 16.sp)
+                    }
+                }
+            }
+
+            // Example screenshots area (when no records yet)
+            if (!showResult && !isProcessing) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("微信支付", "支付宝").forEach { label ->
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(100.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f))
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                if (label == "微信支付") Icons.Default.Chat else Icons.Default.Payment,
+                                                contentDescription = null,
+                                                tint = Color(0xFFBDBDBD),
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                "${label}截图示例",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFFBDBDBD)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "如这样的支付截图可自动识别",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFBDBDBD)
+                        )
                     }
                 }
             }
