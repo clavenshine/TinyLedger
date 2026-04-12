@@ -15,6 +15,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class LendingSubType {
+    BORROW_IN,   // 借入
+    BORROW_OUT,  // 借出
+    REPAY,       // 还款
+    COLLECT      // 收款
+}
+
 data class AddTransactionUiState(
     val transactionType: TransactionType = TransactionType.EXPENSE,
     val categories: List<Category> = Category.defaultExpenseCategories,
@@ -29,7 +36,11 @@ data class AddTransactionUiState(
     val currencySymbol: String = "¥",
     // 账户相关
     val accounts: List<Account> = emptyList(),
-    val selectedAccount: Account? = null
+    val selectedAccount: Account? = null,
+    // 转账/借贷相关
+    val selectedFromAccount: Account? = null,
+    val selectedToAccount: Account? = null,
+    val lendingSubType: LendingSubType = LendingSubType.BORROW_IN
 )
 
 @HiltViewModel
@@ -114,7 +125,10 @@ class AddTransactionViewModel @Inject constructor(
             it.copy(
                 transactionType = type,
                 categories = categories,
-                selectedCategory = null
+                selectedCategory = null,
+                selectedFromAccount = null,
+                selectedToAccount = null,
+                lendingSubType = LendingSubType.BORROW_IN
             )
         }
     }
@@ -125,6 +139,18 @@ class AddTransactionViewModel @Inject constructor(
 
     fun selectAccount(account: Account?) {
         _uiState.update { it.copy(selectedAccount = account) }
+    }
+
+    fun selectFromAccount(account: Account?) {
+        _uiState.update { it.copy(selectedFromAccount = account) }
+    }
+
+    fun selectToAccount(account: Account?) {
+        _uiState.update { it.copy(selectedToAccount = account) }
+    }
+
+    fun setLendingSubType(subType: LendingSubType) {
+        _uiState.update { it.copy(lendingSubType = subType, selectedFromAccount = null, selectedToAccount = null) }
     }
 
     fun addCategory(name: String) {
@@ -168,33 +194,98 @@ class AddTransactionViewModel @Inject constructor(
             return
         }
 
-        if (state.selectedCategory == null) {
-            _uiState.update { it.copy(errorMessage = "请选择分类") }
-            return
-        }
-
-        if (state.accounts.isEmpty()) {
-            _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
-            return
-        }
-
-        if (state.selectedAccount == null) {
-            _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
-            return
+        // Transfer/Lending validation
+        when (state.transactionType) {
+            TransactionType.TRANSFER -> {
+                val fromMissing = state.selectedFromAccount == null
+                val toMissing = state.selectedToAccount == null
+                if (fromMissing && toMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的转出账户、转入账户未选择") }
+                    return
+                }
+                if (fromMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的转出账户未选择") }
+                    return
+                }
+                if (toMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的转入账户未选择") }
+                    return
+                }
+            }
+            TransactionType.LENDING -> {
+                val fromMissing = state.selectedFromAccount == null
+                val toMissing = state.selectedToAccount == null
+                val fromLabel = getLendingFromLabel(state.lendingSubType)
+                val toLabel = getLendingToLabel(state.lendingSubType)
+                if (fromMissing && toMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的${fromLabel}、${toLabel}未选择") }
+                    return
+                }
+                if (fromMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的${fromLabel}未选择") }
+                    return
+                }
+                if (toMissing) {
+                    _uiState.update { it.copy(errorMessage = "你的${toLabel}未选择") }
+                    return
+                }
+            }
+            else -> {
+                if (state.selectedCategory == null) {
+                    _uiState.update { it.copy(errorMessage = "请选择分类") }
+                    return
+                }
+                if (state.accounts.isEmpty()) {
+                    _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
+                    return
+                }
+                if (state.selectedAccount == null) {
+                    _uiState.update { it.copy(errorMessage = "请选择账户") }
+                    return
+                }
+            }
         }
 
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
 
         viewModelScope.launch {
             try {
+                // For TRANSFER/LENDING, create a synthetic category
+                val category = when (state.transactionType) {
+                    TransactionType.TRANSFER -> Category("transfer", "转账", "account_transfer", TransactionType.TRANSFER)
+                    TransactionType.LENDING -> {
+                        val subName = when (state.lendingSubType) {
+                            LendingSubType.BORROW_IN -> "借入"
+                            LendingSubType.BORROW_OUT -> "借出"
+                            LendingSubType.REPAY -> "还款"
+                            LendingSubType.COLLECT -> "收款"
+                        }
+                        val subId = when (state.lendingSubType) {
+                            LendingSubType.BORROW_IN -> "borrow_in"
+                            LendingSubType.BORROW_OUT -> "borrow_out"
+                            LendingSubType.REPAY -> "repay"
+                            LendingSubType.COLLECT -> "collect"
+                        }
+                        Category(subId, subName, "lend", TransactionType.LENDING)
+                    }
+                    else -> state.selectedCategory!!
+                }
+
+                // For TRANSFER/LENDING, use fromAccount as the primary account
+                val accountId = when (state.transactionType) {
+                    TransactionType.TRANSFER -> state.selectedFromAccount?.id
+                    TransactionType.LENDING -> state.selectedFromAccount?.id
+                    else -> state.selectedAccount?.id
+                }
+
                 val transaction = Transaction(
                     id = editingTransactionId ?: 0,
                     type = state.transactionType,
-                    category = state.selectedCategory,
+                    category = category,
                     amount = amount,
                     note = state.note.ifBlank { null },
                     date = state.date,
-                    accountId = state.selectedAccount?.id
+                    accountId = accountId
                 )
 
                 if (state.isEditing && editingTransactionId != null) {
@@ -212,6 +303,24 @@ class AddTransactionViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    private fun getLendingFromLabel(subType: LendingSubType): String {
+        return when (subType) {
+            LendingSubType.BORROW_IN -> "负债账户"
+            LendingSubType.BORROW_OUT -> "出账账户"
+            LendingSubType.REPAY -> "出账账户"
+            LendingSubType.COLLECT -> "债权账户"
+        }
+    }
+
+    private fun getLendingToLabel(subType: LendingSubType): String {
+        return when (subType) {
+            LendingSubType.BORROW_IN -> "入账账户"
+            LendingSubType.BORROW_OUT -> "债权账户"
+            LendingSubType.REPAY -> "负债账户"
+            LendingSubType.COLLECT -> "入账账户"
         }
     }
 

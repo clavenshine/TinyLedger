@@ -13,6 +13,7 @@ import com.tinyledger.app.ui.screens.accounts.AccountsScreen
 import com.tinyledger.app.ui.screens.automation.AutoImportScreen
 import com.tinyledger.app.ui.screens.automation.ImportSource
 import com.tinyledger.app.ui.screens.bills.BillsScreen
+import com.tinyledger.app.ui.screens.bills.SearchScreen
 import com.tinyledger.app.ui.screens.budget.BudgetScreen
 import com.tinyledger.app.ui.screens.budget.ScreenshotAccountingScreen
 import com.tinyledger.app.ui.screens.home.AddTransactionScreen
@@ -74,7 +75,20 @@ fun AppNavHost(
             BillsScreen(
                 onEditTransaction = { id ->
                     navController.navigate(Screen.EditTransaction.createRoute(id))
+                },
+                onNavigateToSearch = {
+                    navController.navigate(Screen.Search.route)
                 }
+            )
+        }
+
+        composable(Screen.Search.route) {
+            SearchScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onEditTransaction = { id ->
+                    navController.navigate(Screen.EditTransaction.createRoute(id)) }
             )
         }
 

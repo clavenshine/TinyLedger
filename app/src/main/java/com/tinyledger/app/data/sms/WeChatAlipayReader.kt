@@ -101,6 +101,7 @@ class WeChatAlipayReader @Inject constructor(
         val title = when (type) {
             TransactionType.INCOME -> "支付宝收款"
             TransactionType.EXPENSE -> "支付宝支付"
+            else -> "支付宝交易"
         }
 
         return ExternalTransaction(
@@ -173,6 +174,7 @@ class WeChatAlipayReader @Inject constructor(
         val title = when (type) {
             TransactionType.INCOME -> "微信收款"
             TransactionType.EXPENSE -> "微信支付"
+            else -> "微信交易"
         }
 
         return ExternalTransaction(
