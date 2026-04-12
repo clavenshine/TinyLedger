@@ -13,4 +13,5 @@ interface PreferencesRepository {
     suspend fun updateColorTheme(theme: ColorTheme)
     suspend fun getCustomCategories(): List<Category>
     suspend fun saveCustomCategory(category: Category)
+    suspend fun deleteCustomCategory(categoryId: String)
 }

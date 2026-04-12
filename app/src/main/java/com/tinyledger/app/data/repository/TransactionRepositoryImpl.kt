@@ -117,6 +117,10 @@ class TransactionRepositoryImpl @Inject constructor(
         return transactionDao.getTotalExpenseByAccountId(accountId)
     }
 
+    override suspend fun updateCategoryForTransactions(oldCategoryId: String, newCategoryId: String) {
+        transactionDao.updateCategoryForTransactions(oldCategoryId, newCategoryId)
+    }
+
     private fun TransactionEntity.toDomain(): Transaction {
         return Transaction(
             id = id,

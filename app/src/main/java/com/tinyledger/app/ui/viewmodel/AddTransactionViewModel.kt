@@ -155,6 +155,10 @@ class AddTransactionViewModel @Inject constructor(
 
     fun addCategory(name: String) {
         val type = _uiState.value.transactionType
+        // Check for duplicate name
+        val existingNames = _uiState.value.categories.map { it.name }
+        if (name.trim() in existingNames) return
+        
         val newCategory = Category.addCustomCategory(name, type)
 
         // 持久化保存自定义分类
@@ -168,6 +172,29 @@ class AddTransactionViewModel @Inject constructor(
             it.copy(
                 categories = categories,
                 selectedCategory = newCategory
+            )
+        }
+    }
+
+    fun deleteCategory(category: Category) {
+        // Cannot delete default categories
+        if (category.isDefault) return
+        
+        val removed = Category.removeCustomCategory(category)
+        if (!removed) return
+        
+        viewModelScope.launch {
+            preferencesRepository.deleteCustomCategory(category.id)
+        }
+        
+        // Refresh category list
+        val type = _uiState.value.transactionType
+        val categories = Category.getCategoriesByType(type)
+        val currentSelected = _uiState.value.selectedCategory
+        _uiState.update {
+            it.copy(
+                categories = categories,
+                selectedCategory = if (currentSelected?.id == category.id) null else currentSelected
             )
         }
     }

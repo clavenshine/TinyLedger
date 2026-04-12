@@ -71,6 +71,15 @@ class PreferencesRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun deleteCustomCategory(categoryId: String) {
+        dataStore.edit { preferences ->
+            val existing = preferences[CUSTOM_CATEGORIES_KEY] ?: ""
+            val categories = parseCustomCategories(existing).toMutableList()
+            categories.removeAll { it.id == categoryId }
+            preferences[CUSTOM_CATEGORIES_KEY] = serializeCustomCategories(categories)
+        }
+    }
+
     /**
      * 简单的自定义分类序列化格式: id|name|icon|typeValue;id|name|icon|typeValue;...
      */

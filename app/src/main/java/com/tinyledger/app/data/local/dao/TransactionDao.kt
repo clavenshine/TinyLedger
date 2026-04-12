@@ -61,6 +61,10 @@ interface TransactionDao {
     // 按账户ID计算支出总额
     @Query("SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE accountId = :accountId AND type = 0")
     fun getTotalExpenseByAccountId(accountId: Long): Flow<Double>
+
+    // 迁移分类：将旧分类ID更新为新分类ID
+    @Query("UPDATE transactions SET category = :newCategoryId, updatedAt = :timestamp WHERE category = :oldCategoryId")
+    suspend fun updateCategoryForTransactions(oldCategoryId: String, newCategoryId: String, timestamp: Long = System.currentTimeMillis())
 }
 
 data class CategoryTotal(

@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -29,17 +32,20 @@ import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.IOSColors
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CategorySelector(
     categories: List<Category>,
     selectedCategory: Category?,
     onCategorySelected: (Category) -> Unit,
     onAddCategory: ((String) -> Unit)? = null,
+    onDeleteCategory: ((Category) -> Unit)? = null,
     showAddButton: Boolean = true,
     transactionType: TransactionType = TransactionType.EXPENSE,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf<Category?>(null) }
 
     Column(modifier = modifier) {
         // Non-lazy grid: display all items without scrolling
@@ -55,7 +61,12 @@ fun CategorySelector(
                         CategoryItem(
                             category = category,
                             isSelected = category == selectedCategory,
-                            onClick = { onCategorySelected(category) }
+                            onClick = { onCategorySelected(category) },
+                            onLongClick = {
+                                if (onDeleteCategory != null) {
+                                    showDeleteDialog = category
+                                }
+                            }
                         )
                     }
                 }
@@ -85,9 +96,22 @@ fun CategorySelector(
         }
     }
 
+    // Delete confirmation dialog with 10-second countdown
+    showDeleteDialog?.let { categoryToDelete ->
+        DeleteCategoryDialog(
+            categoryName = categoryToDelete.name,
+            onConfirm = {
+                onDeleteCategory?.invoke(categoryToDelete)
+                showDeleteDialog = null
+            },
+            onDismiss = { showDeleteDialog = null }
+        )
+    }
+
     if (showAddDialog && onAddCategory != null) {
         AddCategoryDialog(
             transactionType = transactionType,
+            existingCategories = categories,
             onDismiss = { showAddDialog = false },
             onConfirm = { name ->
                 onAddCategory(name)
@@ -97,11 +121,13 @@ fun CategorySelector(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryItem(
     category: Category,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     val animatedBorderWidth by animateDpAsState(
         targetValue = if (isSelected) 2.dp else 1.dp,
@@ -111,8 +137,12 @@ private fun CategoryItem(
     
     Column(
         modifier = Modifier
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .background(
                 if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 else MaterialTheme.colorScheme.surface
@@ -124,7 +154,8 @@ private fun CategoryItem(
                 shape = RoundedCornerShape(12.dp)
             )
             .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
@@ -173,6 +204,7 @@ private fun AddCategoryButton(
     
     Column(
         modifier = Modifier
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .background(
@@ -184,7 +216,8 @@ private fun AddCategoryButton(
                 shape = RoundedCornerShape(12.dp)
             )
             .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
@@ -216,11 +249,13 @@ private fun AddCategoryButton(
 @Composable
 private fun AddCategoryDialog(
     transactionType: TransactionType,
+    existingCategories: List<Category>,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
     var categoryName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf(categoryIcons.first()) }
+    var duplicateError by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     
     val isExpense = transactionType == TransactionType.EXPENSE
@@ -241,14 +276,17 @@ private fun AddCategoryDialog(
             ) {
                 OutlinedTextField(
                     value = categoryName,
-                    onValueChange = { categoryName = it },
+                    onValueChange = { 
+                        categoryName = it
+                        duplicateError = existingCategories.any { c -> c.name == it.trim() }
+                    },
                     label = { Text("分类名称") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
                         onDone = {
-                            if (categoryName.isNotBlank()) {
+                            if (categoryName.isNotBlank() && !duplicateError) {
                                 onConfirm(categoryName)
                             }
                         }
@@ -259,7 +297,11 @@ private fun AddCategoryDialog(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
-                    }
+                    },
+                    isError = duplicateError,
+                    supportingText = if (duplicateError) {
+                        { Text("该分类名称已存在，请重新输入分类名称", color = MaterialTheme.colorScheme.error) }
+                    } else null
                 )
                 
                 Text(
@@ -289,13 +331,56 @@ private fun AddCategoryDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (categoryName.isNotBlank()) {
+                    if (categoryName.isNotBlank() && !duplicateError) {
                         onConfirm(categoryName)
                     }
                 },
-                enabled = categoryName.isNotBlank()
+                enabled = categoryName.isNotBlank() && !duplicateError
             ) {
                 Text("添加")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DeleteCategoryDialog(
+    categoryName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var countdown by remember { mutableIntStateOf(10) }
+    val canConfirm = countdown <= 0
+    
+    LaunchedEffect(Unit) {
+        while (countdown > 0) {
+            kotlinx.coroutines.delay(1000)
+            countdown--
+        }
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        title = { Text("删除分类", fontWeight = FontWeight.Bold) },
+        text = {
+            Text("你确认要删除此分类类型吗？")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = canConfirm
+            ) {
+                Text(
+                    if (canConfirm) "确认删除" else "确认删除 (${countdown}s)",
+                    color = if (canConfirm) MaterialTheme.colorScheme.error
+                           else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
             }
         },
         dismissButton = {

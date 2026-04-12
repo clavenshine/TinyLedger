@@ -71,10 +71,10 @@ data class Category(
             Category("utilities", "水电气网", "utilities", TransactionType.EXPENSE),
             Category("insurance", "保险", "insurance", TransactionType.EXPENSE),
             Category("travel", "旅游", "travel", TransactionType.EXPENSE),
-            Category("credit_card_repay", "归还信用卡", "credit_card_repay", TransactionType.EXPENSE),
+            Category("credit_card_repay", "还信用卡", "credit_card_repay", TransactionType.EXPENSE),
             Category("mortgage", "房贷支出", "mortgage", TransactionType.EXPENSE),
             Category("repay_loan", "归还借款", "repay_loan", TransactionType.EXPENSE),
-            Category("alipay_repay", "支付宝还款", "alipay_repay", TransactionType.EXPENSE),
+            Category("alipay_repay", "还支付宝", "alipay_repay", TransactionType.EXPENSE),
             Category("douyin_repay", "抖音还款", "douyin_repay", TransactionType.EXPENSE),
             Category("jd_repay", "京东还款", "jd_repay", TransactionType.EXPENSE),
             Category("account_transfer", "账户转账", "account_transfer", TransactionType.EXPENSE),
@@ -83,7 +83,7 @@ data class Category(
             Category("accommodation", "住宿", "accommodation", TransactionType.EXPENSE),
             Category("charity", "慈善捐赠", "charity", TransactionType.EXPENSE),
             Category("send_redpacket", "派发红包", "send_redpacket", TransactionType.EXPENSE),
-            Category("family_living", "家庭生活费", "family_living", TransactionType.EXPENSE),
+            Category("family_living", "生活开支", "family_living", TransactionType.EXPENSE),
             Category("other", "其他", "other", TransactionType.EXPENSE)
         )
 
@@ -133,6 +133,49 @@ data class Category(
             }
         }
 
+        /**
+         * 检测自定义分类与默认分类名称重复，返回需要迁移的映射（customId -> defaultId）
+         */
+        fun findDuplicateCustomCategories(): Map<String, String> {
+            val migrationMap = mutableMapOf<String, String>()
+            
+            fun checkDuplicates(customs: List<Category>, defaults: List<Category>) {
+                for (custom in customs) {
+                    val matchingDefault = defaults.find { it.name == custom.name }
+                    if (matchingDefault != null) {
+                        migrationMap[custom.id] = matchingDefault.id
+                    }
+                }
+            }
+            
+            checkDuplicates(customExpenseCategories, defaultExpenseCategories)
+            checkDuplicates(customIncomeCategories, defaultIncomeCategories)
+            checkDuplicates(customTransferCategories, defaultTransferCategories)
+            checkDuplicates(customLendingCategories, defaultLendingCategories)
+            
+            return migrationMap
+        }
+
+        /**
+         * 移除与默认分类重名的自定义分类，并返回被移除的自定义分类列表
+         */
+        fun removeDuplicateCustomCategories(duplicateIds: Set<String>): List<Category> {
+            val removed = mutableListOf<Category>()
+            
+            fun removeAndCollect(list: MutableList<Category>): List<Category> {
+                val toRemove = list.filter { it.id in duplicateIds }
+                list.removeAll(toRemove)
+                return toRemove
+            }
+            
+            removed.addAll(removeAndCollect(customExpenseCategories))
+            removed.addAll(removeAndCollect(customIncomeCategories))
+            removed.addAll(removeAndCollect(customTransferCategories))
+            removed.addAll(removeAndCollect(customLendingCategories))
+            
+            return removed
+        }
+
         fun getCategoriesByType(type: TransactionType): List<Category> {
             return when (type) {
                 TransactionType.EXPENSE -> defaultExpenseCategories + customExpenseCategories
@@ -160,6 +203,18 @@ data class Category(
             }
             
             return category
+        }
+
+        fun removeCustomCategory(category: Category): Boolean {
+            // Cannot delete default categories
+            if (category.isDefault) return false
+            val removed = when (category.type) {
+                TransactionType.EXPENSE -> customExpenseCategories.remove(category)
+                TransactionType.INCOME -> customIncomeCategories.remove(category)
+                TransactionType.TRANSFER -> customTransferCategories.remove(category)
+                TransactionType.LENDING -> customLendingCategories.remove(category)
+            }
+            return removed
         }
 
         fun fromId(id: String, type: TransactionType): Category {

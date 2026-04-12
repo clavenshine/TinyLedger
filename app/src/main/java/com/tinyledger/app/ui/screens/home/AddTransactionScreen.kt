@@ -238,6 +238,7 @@ fun AddTransactionScreen(
                             selectedCategory = uiState.selectedCategory,
                             onCategorySelected = { viewModel.selectCategory(it) },
                             onAddCategory = { name -> viewModel.addCategory(name) },
+                            onDeleteCategory = { category -> viewModel.deleteCategory(category) },
                             showAddButton = true,
                             transactionType = uiState.transactionType
                         )
@@ -340,12 +341,12 @@ fun AddTransactionScreen(
             // Account & Date Selector on same row (for EXPENSE/INCOME)
             if (uiState.transactionType == TransactionType.EXPENSE || uiState.transactionType == TransactionType.INCOME) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Account Selector
                     Card(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -361,7 +362,7 @@ fun AddTransactionScreen(
                     }
                     // Date Selector
                     Card(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface
                         )

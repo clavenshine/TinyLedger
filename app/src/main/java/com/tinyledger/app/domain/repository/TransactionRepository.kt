@@ -18,4 +18,5 @@ interface TransactionRepository {
     fun getTransactionsByAccountId(accountId: Long): Flow<List<Transaction>>
     fun getTotalIncomeByAccountId(accountId: Long): Flow<Double>
     fun getTotalExpenseByAccountId(accountId: Long): Flow<Double>
+    suspend fun updateCategoryForTransactions(oldCategoryId: String, newCategoryId: String)
 }
