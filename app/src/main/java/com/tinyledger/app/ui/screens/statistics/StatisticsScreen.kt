@@ -92,79 +92,82 @@ fun StatisticsScreen(
                         .padding(20.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // 年份栏 - redesigned with yearly mode toggle on left
+                        // Tab Row: Month tab (left) + Yearly tab (right) with large rounded corners
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            if (!uiState.isYearlyMode) {
-                                // Monthly mode: show "本年累计" toggle on left
+                            // Month Tab
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (!uiState.isYearlyMode) Color.White else Color.Transparent)
+                                    .clickable { if (uiState.isYearlyMode) viewModel.exitYearlyMode() }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (!uiState.isYearlyMode) DateUtils.formatDisplayMonth(uiState.selectedYear, uiState.selectedMonth) else "月份",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = if (!uiState.isYearlyMode) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = if (!uiState.isYearlyMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
+                                )
+                            }
+                            // Yearly Tab
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (uiState.isYearlyMode) Color.White else Color.Transparent)
+                                    .clickable { if (!uiState.isYearlyMode) viewModel.enterYearlyMode() }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .clickable { viewModel.enterYearlyMode() }
-                                        .padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(
                                         Icons.Default.CalendarMonth,
                                         contentDescription = null,
-                                        tint = Color.White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (uiState.isYearlyMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
                                     )
                                     Text(
-                                        text = "本年累计",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        color = Color.White.copy(alpha = 0.85f)
+                                        text = if (uiState.isYearlyMode) "${uiState.selectedYear}年" else "本年累计",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = if (uiState.isYearlyMode) FontWeight.Bold else FontWeight.Normal
+                                        ),
+                                        color = if (uiState.isYearlyMode) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
                                     )
-                                }
-                            } else {
-                                // Yearly mode: year nav with arrows
-                                IconButton(onClick = { viewModel.previousMonth() }) {
-                                    Icon(Icons.Default.ChevronLeft, "上一年", tint = Color.White)
-                                }
-                                Text(
-                                    text = "${uiState.selectedYear}年",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                                IconButton(onClick = { viewModel.nextMonth() }) {
-                                    Icon(Icons.Default.ChevronRight, "下一年", tint = Color.White)
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        // 月份栏
+                        // Month/Year navigation with arrows
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { viewModel.previousMonth() }) {
-                                Icon(
-                                    Icons.Default.ChevronLeft, 
-                                    "上个月", 
-                                    tint = if (!uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
-                                )
+                                Icon(Icons.Default.ChevronLeft, "上一个月/年", tint = Color.White)
                             }
                             Text(
-                                text = if (!uiState.isYearlyMode) DateUtils.formatDisplayMonth(uiState.selectedYear, uiState.selectedMonth) else "点击此处按月统计",
+                                text = if (!uiState.isYearlyMode) DateUtils.formatDisplayMonth(uiState.selectedYear, uiState.selectedMonth) else "${uiState.selectedYear}年",
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.clickable { 
-                                    if (uiState.isYearlyMode) viewModel.exitYearlyMode()
-                                }
+                                color = Color.White
                             )
                             IconButton(onClick = { viewModel.nextMonth() }) {
-                                Icon(
-                                    Icons.Default.ChevronRight, 
-                                    "下个月", 
-                                    tint = if (!uiState.isYearlyMode) Color.White else Color.White.copy(alpha = 0.4f)
-                                )
+                                Icon(Icons.Default.ChevronRight, "下一个月/年", tint = Color.White)
                             }
                         }
 
@@ -298,7 +301,7 @@ private fun SummaryColumn(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
             color = valueColor
         )
     }

@@ -182,12 +182,12 @@ fun AddTransactionScreen(
             // Account & Date Selector on same row (for EXPENSE/INCOME) - moved right after Amount
             if (uiState.transactionType == TransactionType.EXPENSE || uiState.transactionType == TransactionType.INCOME) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Account Selector
                     Card(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Box(
@@ -208,7 +208,7 @@ fun AddTransactionScreen(
                     }
                     // Date Selector
                     Card(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface
                         )
@@ -290,7 +290,7 @@ fun AddTransactionScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         LendingTypeButton(
@@ -538,45 +538,18 @@ fun AddTransactionScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 8.dp)
+                    .padding(vertical = 8.dp)
             ) {
                 Text(
                     text = "选择账户",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEach { account ->
-                    ListItem(
-                        headlineContent = { Text(account.name) },
-                        supportingContent = {
-                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
-                        },
-                        leadingContent = {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(parseColor(account.color)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = getAccountIcon(account.type),
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        trailingContent = {
-                            if (uiState.selectedAccount?.id == account.id) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "已选择",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable {
+                uiState.accounts.forEachIndexed { _, account ->
+                    AccountItem(
+                        account = account,
+                        isSelected = uiState.selectedAccount?.id == account.id,
+                        onClick = {
                             viewModel.selectAccount(account)
                             showAccountSelector = false
                         }
@@ -614,45 +587,18 @@ fun AddTransactionScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 8.dp)
+                    .padding(vertical = 8.dp)
             ) {
                 Text(
                     text = dialogTitle,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEach { account ->
-                    ListItem(
-                        headlineContent = { Text(account.name) },
-                        supportingContent = {
-                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
-                        },
-                        leadingContent = {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(parseColor(account.color)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = getAccountIcon(account.type),
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        trailingContent = {
-                            if (uiState.selectedFromAccount?.id == account.id) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "已选择",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable {
+                uiState.accounts.forEachIndexed { _, account ->
+                    AccountItem(
+                        account = account,
+                        isSelected = uiState.selectedFromAccount?.id == account.id,
+                        onClick = {
                             viewModel.selectFromAccount(account)
                             showFromAccountSelector = false
                         }
@@ -682,45 +628,18 @@ fun AddTransactionScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp, horizontal = 8.dp)
+                    .padding(vertical = 8.dp)
             ) {
                 Text(
                     text = dialogTitle,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEach { account ->
-                    ListItem(
-                        headlineContent = { Text(account.name) },
-                        supportingContent = {
-                            Text("余额: \u00A5${String.format("%.2f", account.currentBalance)}")
-                        },
-                        leadingContent = {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(parseColor(account.color)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = getAccountIcon(account.type),
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        },
-                        trailingContent = {
-                            if (uiState.selectedToAccount?.id == account.id) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "已选择",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable {
+                uiState.accounts.forEachIndexed { _, account ->
+                    AccountItem(
+                        account = account,
+                        isSelected = uiState.selectedToAccount?.id == account.id,
+                        onClick = {
                             viewModel.selectToAccount(account)
                             showToAccountSelector = false
                         }
@@ -848,15 +767,62 @@ private fun parseColor(colorString: String): Color {
 }
 
 @Composable
+private fun AccountItem(
+    account: Account,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(parseColor(account.color)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = getAccountIcon(account.type),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = account.name, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "余额: \u00A5${String.format("%.2f", account.currentBalance)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "已选择",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
 private fun AccountSelectorRow(
     account: Account?,
     placeholder: String,
     onClick: () -> Unit = {}
 ) {
+    val hasOnClick = onClick != {}
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .then(if (hasOnClick) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 8.dp)
     ) {
         Row(
@@ -929,7 +895,6 @@ private fun LendingTypeButton(
 
     Column(
         modifier = Modifier
-            .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .background(
@@ -948,7 +913,7 @@ private fun LendingTypeButton(
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(60.dp)
                 .clip(CircleShape)
                 .background(
                     if (isSelected) selectedColor.copy(alpha = 0.2f)
@@ -960,7 +925,7 @@ private fun LendingTypeButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isSelected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
