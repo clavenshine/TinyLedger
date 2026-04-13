@@ -194,7 +194,7 @@ private fun CategoryItem(
     ) {
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(
                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -207,7 +207,7 @@ private fun CategoryItem(
                 contentDescription = null,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -256,7 +256,7 @@ private fun AddCategoryButton(
     ) {
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
@@ -267,7 +267,7 @@ private fun AddCategoryButton(
                 imageVector = Icons.Default.Add,
                 contentDescription = "新增分类",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))

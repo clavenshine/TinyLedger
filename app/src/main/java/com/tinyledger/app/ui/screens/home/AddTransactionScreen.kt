@@ -215,9 +215,9 @@ fun AddTransactionScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxSize()
                                 .clickable { showDatePicker = true }
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -234,7 +234,7 @@ fun AddTransactionScreen(
                                 Text(
                                     text = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                                         .format(Date(uiState.date)),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -272,7 +272,7 @@ fun AddTransactionScreen(
                             Text(
                                 text = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                                     .format(Date(uiState.date)),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp)
                             )
                         }
                     }
@@ -816,13 +816,12 @@ private fun AccountItem(
 private fun AccountSelectorRow(
     account: Account?,
     placeholder: String,
-    onClick: () -> Unit = {}
+    onClick: (() -> Unit)? = null
 ) {
-    val hasOnClick = onClick != {}
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (hasOnClick) Modifier.clickable { onClick() } else Modifier)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 8.dp)
     ) {
         Row(
@@ -913,7 +912,7 @@ private fun LendingTypeButton(
     ) {
         Box(
             modifier = Modifier
-                .size(60.dp)
+                .size(44.dp)
                 .clip(CircleShape)
                 .background(
                     if (isSelected) selectedColor.copy(alpha = 0.2f)
@@ -925,7 +924,7 @@ private fun LendingTypeButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (isSelected) selectedColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
