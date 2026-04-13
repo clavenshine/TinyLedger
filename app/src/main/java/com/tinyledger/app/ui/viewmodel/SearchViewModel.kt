@@ -6,12 +6,12 @@ import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.PreferencesRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
-import com.tinyledger.app.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.*
 import javax.inject.Inject
 
 enum class SearchFilterType {
@@ -61,43 +61,49 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     private fun loadSearchResults() {
-        // Combine sub-flows to avoid combine() limitation (max 5 params)
+        // Combine filter parameters (not including query for debounce)
         val dateRangeFlow = combine(_startDate, _endDate) { start, end ->
             DateRange(start, end)
         }
         val amountRangeFlow = combine(_minAmount, _maxAmount) { min, max ->
             AmountRange(min, max)
         }
+        val filtersFlow = combine(_filterType, dateRangeFlow, amountRangeFlow) { filterType, dateRange, amountRange ->
+            FilterParams(filterType, dateRange.start, dateRange.end, amountRange.min, amountRange.max)
+        }
 
+        // Debounced query → SQL search → then apply in-memory filters
         viewModelScope.launch {
-            combine(
-                _query,
-                _filterType,
-                dateRangeFlow,
-                amountRangeFlow,
-                transactionRepository.getAllTransactions()
-            ) { query, filterType, dateRange, amountRange, allTransactions ->
-                SearchParams(query, filterType, dateRange.start, dateRange.end, amountRange.min, amountRange.max, allTransactions)
-            }.map { params ->
-                if (params.query.isBlank()) {
-                    emptyList()
-                } else {
-                    val keyword = params.query.trim().lowercase()
-                    params.allTransactions
-                        .filter { transaction ->
-                            // Match by category name
-                            transaction.category.name.lowercase().contains(keyword) ||
-                            // Match by note
-                            transaction.note?.lowercase()?.contains(keyword) == true ||
-                            // Match by amount (exact or partial)
-                            transaction.amount.toString().contains(keyword) ||
-                            // Match by category id
-                            transaction.category.id.lowercase().contains(keyword)
-                        }
+            _query
+                .debounce(250) // 250ms debounce for real-time feel without excessive queries
+                .distinctUntilChanged()
+                .flatMapLatest { query ->
+                    if (query.isBlank()) {
+                        flowOf(emptyList())
+                    } else {
+                        // Use SQL-level search for note + category, then apply additional filters
+                        transactionRepository.searchTransactionsFull(query.trim())
+                            .map { results ->
+                                val keyword = query.trim().lowercase()
+                                results.filter { transaction ->
+                                    // Also match by category display name (Chinese names not in DB)
+                                    val matchesCategoryName = transaction.category.name.lowercase().contains(keyword)
+                                    val matchesNote = transaction.note?.lowercase()?.contains(keyword) == true
+                                    val matchesAmount = transaction.amount.toString().contains(keyword)
+                                    val matchesCategoryId = transaction.category.id.lowercase().contains(keyword)
+                                    matchesCategoryName || matchesNote || matchesAmount || matchesCategoryId
+                                }
+                            }
+                            .flowOn(Dispatchers.Default)
+                    }
+                }
+                .combine(filtersFlow) { results, filters ->
+                    results
                         .filter { transaction ->
                             // Filter by type
-                            when (params.filterType) {
+                            when (filters.filterType) {
                                 SearchFilterType.ALL -> true
                                 SearchFilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE
                                 SearchFilterType.INCOME -> transaction.type == TransactionType.INCOME
@@ -107,23 +113,23 @@ class SearchViewModel @Inject constructor(
                         }
                         .filter { transaction ->
                             // Filter by date range
-                            if (params.startDate != null && params.endDate != null) {
-                                transaction.date in params.startDate..params.endDate
+                            if (filters.startDate != null && filters.endDate != null) {
+                                transaction.date in filters.startDate..filters.endDate
                             } else {
                                 true
                             }
                         }
                         .filter { transaction ->
                             // Filter by amount range
-                            val aboveMin = params.minAmount == null || transaction.amount >= params.minAmount
-                            val belowMax = params.maxAmount == null || transaction.amount <= params.maxAmount
+                            val aboveMin = filters.minAmount == null || transaction.amount >= filters.minAmount
+                            val belowMax = filters.maxAmount == null || transaction.amount <= filters.maxAmount
                             aboveMin && belowMax
                         }
                         .sortedByDescending { it.date }
                 }
-            }.collect { results ->
-                _uiState.update { it.copy(results = results, isLoading = false) }
-            }
+                .collect { results ->
+                    _uiState.update { it.copy(results = results, isLoading = false) }
+                }
         }
     }
 
@@ -168,13 +174,11 @@ class SearchViewModel @Inject constructor(
         val max: Double?
     )
 
-    private data class SearchParams(
-        val query: String,
+    private data class FilterParams(
         val filterType: SearchFilterType,
         val startDate: Long?,
         val endDate: Long?,
         val minAmount: Double?,
-        val maxAmount: Double?,
-        val allTransactions: List<Transaction>
+        val maxAmount: Double?
     )
 }

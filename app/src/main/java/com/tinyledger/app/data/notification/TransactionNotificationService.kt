@@ -99,6 +99,8 @@ class TransactionNotificationService : NotificationListenerService() {
         "com.oppo.mms",
         "com.vivo.mms",
         "com.hihonor.mms",
+        "com.google.android.apps.messaging",
+        "com.tencent.android.msgpush",  // 腾讯消息推送
     )
 
     // 银行短信特征关键词
@@ -318,20 +320,18 @@ class TransactionNotificationService : NotificationListenerService() {
     ): ParsedNotification? {
         val combined = "$title $fullContent".trim()
 
-        // 微信支付相关的通知来自 "微信支付" 或 title 包含支付关键词
-        val isPaymentNotif = title.contains("微信支付") ||
+        // 微信支付通知：title 必须是 "微信支付" 或 "微信红包" 等服务号名称
+        // 普通聊天消息的 title 是发送者昵称，不应被捕获
+        val isPaymentTitle = title.contains("微信支付") ||
                 title.contains("微信红包") ||
+                title.contains("微信收款") ||
                 title.contains("零钱") ||
                 title.contains("转账") ||
-                combined.contains("微信支付") ||
-                combined.contains("支付成功") ||
-                combined.contains("付款成功") ||
-                combined.contains("收款成功") ||
-                combined.contains("已收款") ||
-                combined.contains("已付款")
+                title.contains("WeChat Pay")
 
-        // 微信普通聊天消息 - 不解析
-        if (!isPaymentNotif && !hasPaymentKeywords(combined)) {
+        // 必须是支付服务号发出的通知，拒绝普通聊天消息
+        if (!isPaymentTitle) {
+            Log.d(TAG, "微信非支付通知，跳过: title=$title")
             return null
         }
 
@@ -368,22 +368,28 @@ class TransactionNotificationService : NotificationListenerService() {
     ): ParsedNotification? {
         val combined = "$title $fullContent".trim()
 
-        val isPaymentNotif = title.contains("支付宝") ||
+        // 支付宝通知的 title 通常包含 "支付宝"、"花呗"、"余额宝" 等
+        val isPaymentTitle = title.contains("支付宝") ||
                 title.contains("花呗") ||
                 title.contains("余额宝") ||
-                combined.contains("支付宝") ||
-                combined.contains("付款成功") ||
-                combined.contains("收款成功")
+                title.contains("借呗") ||
+                title.contains("网商银行") ||
+                title.contains("Alipay")
 
-        if (!isPaymentNotif && !hasPaymentKeywords(combined)) {
-            return null
+        // 如果 title 不含支付室关键词，则检查内容是否包含明确的支付宝交易信息
+        if (!isPaymentTitle) {
+            val hasAlipayContent = combined.contains("支付宝") && hasPaymentKeywords(combined)
+            if (!hasAlipayContent) {
+                Log.d(TAG, "支付宝非支付通知，跳过: title=$title")
+                return null
+            }
         }
 
         val amount = extractAmount(combined) ?: return null
 
         return when {
             combined.containsAny("收款", "到账", "已收款", "转账收到", "退款",
-                "红包", "余额宝收益") -> {
+                "红包", "余额宝收益", "收钱") -> {
                 ParsedNotification(
                     type = TransactionType.INCOME,
                     amount = amount,
@@ -391,7 +397,7 @@ class TransactionNotificationService : NotificationListenerService() {
                 )
             }
             combined.containsAny("付款", "消费", "已扣款", "支付成功", "已付款",
-                "花呗", "扣费", "充值", "缴费") -> {
+                "花呗", "扣费", "充值", "缴费", "扫码付款", "付款成功") -> {
                 ParsedNotification(
                     type = TransactionType.EXPENSE,
                     amount = amount,
@@ -418,7 +424,7 @@ class TransactionNotificationService : NotificationListenerService() {
 
         return when {
             combined.containsAny("收款", "到账", "退款", "退还", "收入", "返现",
-                "已退款", "退款成功") -> {
+                "已退款", "退款成功", "已收到") -> {
                 ParsedNotification(
                     type = TransactionType.INCOME,
                     amount = amount,
@@ -427,7 +433,7 @@ class TransactionNotificationService : NotificationListenerService() {
             }
             combined.containsAny("付款", "支付", "消费", "已扣款", "扣费",
                 "已付款", "下单", "购买", "订单", "支付成功",
-                "付款成功", "充值", "缴费") -> {
+                "付款成功", "充值", "缴费", "已支付", "已消费") -> {
                 ParsedNotification(
                     type = TransactionType.EXPENSE,
                     amount = amount,
@@ -463,6 +469,7 @@ class TransactionNotificationService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
+                // 存储短信记录
                 notificationSmsDao.insert(
                     NotificationSmsEntity(
                         address = address,
@@ -473,9 +480,64 @@ class TransactionNotificationService : NotificationListenerService() {
                     )
                 )
                 Log.d(TAG, "银行短信已存储: $address - ${body.take(40)}")
+
+                // 尝试从银行短信中解析交易并自动记账
+                if (isEnabled(applicationContext)) {
+                    val parsed = parseBankSmsTransaction(body)
+                    if (parsed != null) {
+                        val category = inferCategory(parsed)
+
+                        val transaction = Transaction(
+                            type = parsed.type,
+                            category = category,
+                            amount = parsed.amount,
+                            note = parsed.note,
+                            date = System.currentTimeMillis(),
+                            accountId = null  // 银行短信无法自动匹配账户
+                        )
+
+                        if (isSeamlessEnabled(applicationContext)) {
+                            transactionRepository.insertTransaction(transaction)
+                            Log.d(TAG, "银行短信无感自动记账成功: ${parsed.type} ¥${parsed.amount}")
+                            playFeedback()
+                        } else {
+                            val pendingId = pendingTransactionRepository.insertPendingTransaction(transaction)
+                            Log.d(TAG, "银行短信待确认记账已保存: pendingId=$pendingId")
+                            showTransactionConfirmationNotification(pendingId, transaction, address)
+                        }
+                    }
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "存储银行短信失败", e)
+                Log.e(TAG, "处理银行短信失败", e)
             }
+        }
+    }
+
+    /**
+     * 从银行短信内容解析交易信息
+     * 支持常见银行短信格式，如：
+     * - "您尾号1234的储蓄卡于12月01日支出100.00元，可用余额5000.00元"
+     * - "您账户1234于12月01日收入5000.00元"
+     */
+    private fun parseBankSmsTransaction(body: String): ParsedNotification? {
+        val amount = extractAmount(body) ?: return null
+
+        return when {
+            body.containsAny("收入", "到账", "入账", "收款", "转入", "存入", "汇入") -> {
+                ParsedNotification(
+                    type = TransactionType.INCOME,
+                    amount = amount,
+                    note = "银行收款: ${body.take(40)}"
+                )
+            }
+            body.containsAny("支出", "消费", "扣款", "转出", "付款", "已扣款") -> {
+                ParsedNotification(
+                    type = TransactionType.EXPENSE,
+                    amount = amount,
+                    note = "银行支出: ${body.take(40)}"
+                )
+            }
+            else -> null
         }
     }
 
@@ -497,23 +559,51 @@ class TransactionNotificationService : NotificationListenerService() {
 
     /**
      * 从文本中提取金额。
-     * 强制要求：必须匹配到 "数字+元" 模式才认为是有效的交易金额。
-     * 如果文本中没有 "XX元" 或 "XX.XX元" 的格式，一律返回 null，不予记账。
+     * 支持多种格式：
+     * 1. "数字+元" 模式（银行短信常见）：如 "123.45元"
+     * 2. "¥/￥+数字" 模式（微信/支付宝常见）：如 "¥123.45" "￥123.45"
+     * 3. 交易关键词后跟数字（兜底）：如 "支付100" "消费50.00"
      */
     private fun extractAmount(text: String): Double? {
-        // 必须包含 "数字+元" 模式，否则直接返回 null
-        val yuanRegex = Regex("([0-9]+(?:\\.[0-9]{1,2})?)\\s*元")
+        // 优先级1：¥/￥ 符号锚定（微信支付、支付宝最常用的金额格式）
+        val symbolRegex = Regex("[¥￥]\\s*(\\d+(?:\\.\\d{1,2})?)")
+        val symbolMatch = symbolRegex.find(text)
+        if (symbolMatch != null) {
+            val amount = symbolMatch.groupValues[1].toDoubleOrNull()
+            if (amount != null && amount > 0 && amount < 10_000_000) {
+                Log.d(TAG, "匹配到'¥/￥+数字'模式: $amount")
+                return amount
+            }
+        }
+
+        // 优先级2："数字+元" 模式（银行短信常见）
+        val yuanRegex = Regex("(\\d+(?:\\.\\d{1,2})?)\\s*元")
         val yuanMatch = yuanRegex.find(text)
-        if (yuanMatch == null) {
-            Log.d(TAG, "未匹配到'数字+元'模式，跳过: ${text.take(80)}")
-            return null
+        if (yuanMatch != null) {
+            val amount = yuanMatch.groupValues[1].toDoubleOrNull()
+            if (amount != null && amount > 0 && amount < 10_000_000) {
+                Log.d(TAG, "匹配到'数字+元'模式: $amount")
+                return amount
+            }
         }
 
-        val amount = yuanMatch.groupValues[1].toDoubleOrNull()
-        if (amount != null && amount > 0 && amount < 10_000_000) {
-            return amount
+        // 优先级3：交易关键词后跟数字（兜底模式，需更严格匹配）
+        // 如 "支付123.45" "消费100" "付款50.00" "到账200"
+        val anchoredRegex = Regex(
+            "(?:支付|付款|消费|支出|扣款|扣费|收款|到账|入账|转账|退款|充值|缴费)" +
+            "[^\\d\\n]{0,10}?" +  // 关键词后最多10个非数字字符
+            "(\\d+(?:\\.\\d{1,2})?)"
+        )
+        val anchoredMatch = anchoredRegex.find(text)
+        if (anchoredMatch != null) {
+            val amount = anchoredMatch.groupValues[1].toDoubleOrNull()
+            if (amount != null && amount > 0 && amount < 10_000_000) {
+                Log.d(TAG, "匹配到'关键词+数字'模式: $amount")
+                return amount
+            }
         }
 
+        Log.d(TAG, "未匹配到有效金额模式: ${text.take(80)}")
         return null
     }
 
@@ -635,7 +725,7 @@ class TransactionNotificationService : NotificationListenerService() {
             .setContentText("$appLabel · $categoryName")
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("$typeLabel: $amountText\n分类: $categoryName\n来源: $appLabel${if (!transaction.note.isNullOrBlank()) "\n备注: ${transaction.note?.take(40)}" else ""}")
+                    .bigText("$typeLabel: $amountText\n分类: $categoryName\n来源: $appLabel${if (!transaction.note.isNullOrBlank()) "\n备注: ${transaction.note.take(40)}" else ""}")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)

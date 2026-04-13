@@ -9,6 +9,7 @@ interface TransactionRepository {
     fun getTransactionsByType(type: Int): Flow<List<Transaction>>
     fun getTransactionsByCategory(category: String): Flow<List<Transaction>>
     fun searchTransactions(keyword: String): Flow<List<Transaction>>
+    fun searchTransactionsFull(keyword: String): Flow<List<Transaction>>
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun insertTransaction(transaction: Transaction): Long
     suspend fun updateTransaction(transaction: Transaction)

@@ -50,6 +50,12 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun searchTransactionsFull(keyword: String): Flow<List<Transaction>> {
+        return transactionDao.searchTransactionsFull(keyword).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
     override suspend fun getTransactionById(id: Long): Transaction? {
         return transactionDao.getTransactionById(id)?.toDomain()
     }

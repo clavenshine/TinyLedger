@@ -22,6 +22,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE note LIKE '%' || :keyword || '%' ORDER BY date DESC")
     fun searchTransactions(keyword: String): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM transactions WHERE note LIKE '%' || :keyword || '%' OR category LIKE '%' || :keyword || '%' ORDER BY date DESC")
+    fun searchTransactionsFull(keyword: String): Flow<List<TransactionEntity>>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getTransactionById(id: Long): TransactionEntity?
 

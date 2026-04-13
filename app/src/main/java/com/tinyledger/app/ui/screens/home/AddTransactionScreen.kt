@@ -518,12 +518,14 @@ fun AddTransactionScreen(
         }
         ModalBottomSheet(
             onDismissRequest = { showDatePicker = false },
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 32.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
                 DatePicker(state = datePickerState)
             }
@@ -534,11 +536,13 @@ fun AddTransactionScreen(
     if (showAccountSelector) {
         ModalBottomSheet(
             onDismissRequest = { showAccountSelector = false },
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(vertical = 8.dp)
             ) {
                 Text(
@@ -565,7 +569,7 @@ fun AddTransactionScreen(
                         modifier = Modifier.padding(16.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -584,11 +588,13 @@ fun AddTransactionScreen(
         }
         ModalBottomSheet(
             onDismissRequest = { showFromAccountSelector = false },
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(vertical = 8.dp)
             ) {
                 Text(
@@ -607,7 +613,7 @@ fun AddTransactionScreen(
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -626,11 +632,13 @@ fun AddTransactionScreen(
         }
         ModalBottomSheet(
             onDismissRequest = { showToAccountSelector = false },
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(vertical = 8.dp)
             ) {
                 Text(
@@ -649,7 +657,7 @@ fun AddTransactionScreen(
                         }
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
