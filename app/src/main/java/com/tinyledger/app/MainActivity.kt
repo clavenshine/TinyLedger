@@ -198,13 +198,13 @@ private fun NavItemView(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier.width(64.dp),
+        modifier = Modifier.width(72.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Selected indicator dot
         Box(
             modifier = Modifier
-                .width(if (isSelected) 20.dp else 0.dp)
+                .width(if (isSelected) 24.dp else 0.dp)
                 .height(3.dp)
                 .background(
                     if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
@@ -215,7 +215,7 @@ private fun NavItemView(
 
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
@@ -225,15 +225,15 @@ private fun NavItemView(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 },
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
 
         Text(
             text = item.title,
             style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 10.sp
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp
             ),
             color = if (isSelected) {
                 MaterialTheme.colorScheme.primary

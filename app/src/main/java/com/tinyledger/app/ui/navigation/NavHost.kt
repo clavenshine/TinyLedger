@@ -16,6 +16,7 @@ import com.tinyledger.app.ui.screens.bills.BillsScreen
 import com.tinyledger.app.ui.screens.bills.SearchScreen
 import com.tinyledger.app.ui.screens.budget.BudgetScreen
 import com.tinyledger.app.ui.screens.budget.ScreenshotAccountingScreen
+import com.tinyledger.app.ui.screens.help.HelpScreen
 import com.tinyledger.app.ui.screens.home.AddTransactionScreen
 import com.tinyledger.app.ui.screens.home.HomeScreen
 import com.tinyledger.app.ui.screens.profile.ProfileScreen
@@ -113,6 +114,9 @@ fun AppNavHost(
                 },
                 onNavigateToAccounts = {
                     navController.navigate(Screen.Accounts.route)
+                },
+                onNavigateToHelp = {
+                    navController.navigate(Screen.Help.route)
                 }
             )
         }
@@ -179,6 +183,14 @@ fun AppNavHost(
 
         composable(Screen.ScreenshotAccounting.route) {
             ScreenshotAccountingScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Help.route) {
+            HelpScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

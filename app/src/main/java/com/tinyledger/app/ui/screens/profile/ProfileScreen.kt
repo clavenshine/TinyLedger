@@ -45,6 +45,7 @@ fun ProfileScreen(
     onNavigateToBudget: () -> Unit = {},
     onNavigateToScreenshotAccounting: () -> Unit = {},
     onNavigateToAccounts: () -> Unit = {},
+    onNavigateToHelp: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -443,6 +444,16 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column {
+                    ProfileSettingsItem(
+                        icon = Icons.Default.HelpOutline,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        title = "使用帮助",
+                        subtitle = "记账逻辑与操作说明",
+                        onClick = onNavigateToHelp
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
                     ProfileSettingsItem(
                         icon = Icons.Default.Info,
                         iconTint = IOSColors.TextSecondary,
