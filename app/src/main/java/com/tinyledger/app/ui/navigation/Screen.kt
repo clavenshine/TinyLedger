@@ -18,4 +18,7 @@ sealed class Screen(val route: String) {
     data object ScreenshotAccounting : Screen("screenshot_accounting")
     data object Search : Screen("search")
     data object Help : Screen("help")
+    data object EditPendingTransaction : Screen("edit_pending_transaction/{pendingId}") {
+        fun createRoute(pendingId: Long) = "edit_pending_transaction/$pendingId"
+    }
 }

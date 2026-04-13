@@ -1,5 +1,6 @@
 package com.tinyledger.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,14 +38,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Handle notification edit intent
+        val pendingId = intent?.getLongExtra(
+            com.tinyledger.app.data.notification.TransactionActionReceiver.EXTRA_PENDING_ID, -1L
+        ) ?: -1L
+
         setContent {
-            TinyLedgerAppContent()
+            TinyLedgerAppContent(pendingEditId = if (pendingId > 0) pendingId else null)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
     }
 }
 
 @Composable
-fun TinyLedgerAppContent() {
+fun TinyLedgerAppContent(pendingEditId: Long? = null) {
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
@@ -61,6 +73,13 @@ fun TinyLedgerAppContent() {
         val navController = rememberNavController()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
+
+        // Handle notification edit pending transaction
+        LaunchedEffect(pendingEditId) {
+            if (pendingEditId != null && pendingEditId > 0) {
+                navController.navigate(Screen.EditPendingTransaction.createRoute(pendingEditId))
+            }
+        }
 
         val showBottomBar = currentRoute in listOf(
             Screen.Home.route,

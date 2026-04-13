@@ -19,6 +19,7 @@ import com.tinyledger.app.ui.screens.budget.ScreenshotAccountingScreen
 import com.tinyledger.app.ui.screens.help.HelpScreen
 import com.tinyledger.app.ui.screens.home.AddTransactionScreen
 import com.tinyledger.app.ui.screens.home.HomeScreen
+import com.tinyledger.app.ui.screens.home.PendingTransactionEditScreen
 import com.tinyledger.app.ui.screens.profile.ProfileScreen
 import com.tinyledger.app.ui.screens.settings.ImportType
 import com.tinyledger.app.ui.screens.settings.SettingsScreen
@@ -217,6 +218,24 @@ fun AppNavHost(
             val transactionId = backStackEntry.arguments?.getLong("transactionId") ?: 0L
             AddTransactionScreen(
                 transactionId = transactionId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToAccounts = {
+                    navController.navigate(Screen.Accounts.route)
+                }
+            )
+        }
+
+        composable(
+            route = Screen.EditPendingTransaction.route,
+            arguments = listOf(
+                navArgument("pendingId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val pendingId = backStackEntry.arguments?.getLong("pendingId") ?: 0L
+            PendingTransactionEditScreen(
+                pendingId = pendingId,
                 onNavigateBack = {
                     navController.popBackStack()
                 },

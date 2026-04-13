@@ -20,4 +20,7 @@ interface PendingTransactionDao {
 
     @Query("DELETE FROM pending_transactions")
     suspend fun deleteAll()
+
+    @Query("SELECT * FROM pending_transactions WHERE id = :id")
+    suspend fun getById(id: Long): PendingTransactionEntity?
 }

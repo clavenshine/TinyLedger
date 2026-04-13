@@ -68,6 +68,9 @@ fun ProfileScreen(
     var vibrationEnabled by remember {
         mutableStateOf(TransactionNotificationService.isVibrationEnabled(context))
     }
+    var seamlessEnabled by remember {
+        mutableStateOf(TransactionNotificationService.isSeamlessEnabled(context))
+    }
     LaunchedEffect(Unit) {
         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
     }
@@ -178,6 +181,10 @@ fun ProfileScreen(
                                     onCheckedChange = { newEnabled ->
                                         notificationEnabled = newEnabled
                                         TransactionNotificationService.setEnabled(context, newEnabled)
+                                        if (!newEnabled) {
+                                            seamlessEnabled = false
+                                            TransactionNotificationService.setSeamlessEnabled(context, false)
+                                        }
                                     }
                                 )
                             } else {
@@ -193,6 +200,26 @@ fun ProfileScreen(
                                     Text("去授权", color = IOSColors.SystemOrange)
                                 }
                             }
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Seamless auto-accounting
+                    ProfileSettingsItem(
+                        icon = Icons.Default.AutoAwesome,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        title = "无感自动记账",
+                        subtitle = if (seamlessEnabled) "自动完成记账，无需确认" else "捕获交易后需手动确认",
+                        trailing = {
+                            Switch(
+                                checked = seamlessEnabled,
+                                enabled = hasNotificationPermission && notificationEnabled,
+                                onCheckedChange = { newEnabled ->
+                                    seamlessEnabled = newEnabled
+                                    TransactionNotificationService.setSeamlessEnabled(context, newEnabled)
+                                }
+                            )
                         }
                     )
 

@@ -1,7 +1,12 @@
 package com.tinyledger.app.data.notification
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.graphics.drawable.Icon
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -11,13 +16,18 @@ import android.os.VibratorManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.tinyledger.app.MainActivity
+import com.tinyledger.app.R
 import com.tinyledger.app.data.local.dao.NotificationSmsDao
 import com.tinyledger.app.data.local.entity.NotificationSmsEntity
+import com.tinyledger.app.data.local.entity.PendingTransactionEntity
 import com.tinyledger.app.domain.model.AccountType
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.AccountRepository
+import com.tinyledger.app.domain.repository.PendingTransactionRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -41,8 +51,13 @@ class TransactionNotificationService : NotificationListenerService() {
     @Inject lateinit var transactionRepository: TransactionRepository
     @Inject lateinit var accountRepository: AccountRepository
     @Inject lateinit var notificationSmsDao: NotificationSmsDao
+    @Inject lateinit var pendingTransactionRepository: PendingTransactionRepository
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Notification channel ID for transaction confirmation
+    private val CHANNEL_ID = "transaction_confirmation"
+    private val NOTIFICATION_ID_BASE = 10000
 
     // 用于去重：防止短时间内同一笔通知重复记账
     private val recentHashes = LinkedHashMap<String, Long>(50, 0.75f, true)
@@ -103,6 +118,7 @@ class TransactionNotificationService : NotificationListenerService() {
         const val KEY_BANK_SMS_CAPTURE_ENABLED = "bank_sms_capture_enabled"
         const val KEY_SOUND_ENABLED = "notification_sound_enabled"
         const val KEY_VIBRATION_ENABLED = "notification_vibration_enabled"
+        const val KEY_SEAMLESS_ENABLED = "seamless_auto_accounting_enabled"
 
         fun isEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -142,6 +158,16 @@ class TransactionNotificationService : NotificationListenerService() {
         fun setVibrationEnabled(context: Context, enabled: Boolean) {
             val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             prefs.edit().putBoolean(KEY_VIBRATION_ENABLED, enabled).apply()
+        }
+
+        fun isSeamlessEnabled(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_SEAMLESS_ENABLED, false)
+        }
+
+        fun setSeamlessEnabled(context: Context, enabled: Boolean) {
+            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(KEY_SEAMLESS_ENABLED, enabled).apply()
         }
 
         fun hasPermission(context: Context): Boolean {
@@ -249,11 +275,18 @@ class TransactionNotificationService : NotificationListenerService() {
                     date = System.currentTimeMillis(),
                     accountId = accountId
                 )
-                transactionRepository.insertTransaction(transaction)
-                Log.d(TAG, "自动记账成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
 
-                // 播放提示音/震动
-                playFeedback()
+                if (isSeamlessEnabled(applicationContext)) {
+                    // 无感模式：直接自动记账
+                    transactionRepository.insertTransaction(transaction)
+                    Log.d(TAG, "无感自动记账成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
+                    playFeedback()
+                } else {
+                    // 非无感模式：存入待确认表 + 弹出通知
+                    val pendingId = pendingTransactionRepository.insertPendingTransaction(transaction)
+                    Log.d(TAG, "待确认记账已保存: pendingId=$pendingId ${parsed.type} ¥${parsed.amount}")
+                    showTransactionConfirmationNotification(pendingId, transaction, appLabel)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "自动记账失败", e)
             }
@@ -521,6 +554,115 @@ class TransactionNotificationService : NotificationListenerService() {
         } catch (e: Exception) {
             Log.e(TAG, "播放反馈失败", e)
         }
+    }
+
+    /**
+     * 显示交易确认通知（非无感模式时调用）
+     * 通知包含三个操作按钮：编辑、删除、确认
+     */
+    private fun showTransactionConfirmationNotification(
+        pendingId: Long,
+        transaction: Transaction,
+        appLabel: String
+    ) {
+        val context = applicationContext
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // 创建通知渠道（高优先级，显示为浮动横幅）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "记账确认",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "自动记账确认通知"
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val isIncome = transaction.type == TransactionType.INCOME
+        val amountPrefix = if (isIncome) "+" else "-"
+        val typeLabel = if (isIncome) "收入" else "支出"
+        val amountText = "$amountPrefix¥${String.format("%.2f", transaction.amount)}"
+        val categoryName = transaction.category.name
+
+        // 构建确认操作 PendingIntent
+        val confirmIntent = Intent(context, TransactionActionReceiver::class.java).apply {
+            action = TransactionActionReceiver.ACTION_CONFIRM
+            putExtra(TransactionActionReceiver.EXTRA_PENDING_ID, pendingId)
+            putExtra(TransactionActionReceiver.EXTRA_NOTIFICATION_ID, NOTIFICATION_ID_BASE + pendingId.toInt())
+        }
+        val confirmPendingIntent = PendingIntent.getBroadcast(
+            context,
+            pendingId.toInt(),
+            confirmIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 构建删除操作 PendingIntent
+        val deleteIntent = Intent(context, TransactionActionReceiver::class.java).apply {
+            action = TransactionActionReceiver.ACTION_DELETE
+            putExtra(TransactionActionReceiver.EXTRA_PENDING_ID, pendingId)
+            putExtra(TransactionActionReceiver.EXTRA_NOTIFICATION_ID, NOTIFICATION_ID_BASE + pendingId.toInt())
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(
+            context,
+            (pendingId + 100000).toInt(),
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 构建编辑操作 PendingIntent → 打开APP的记账界面
+        val editIntent = Intent(context, MainActivity::class.java).apply {
+            action = TransactionActionReceiver.ACTION_EDIT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(TransactionActionReceiver.EXTRA_PENDING_ID, pendingId)
+            putExtra(TransactionActionReceiver.EXTRA_NOTIFICATION_ID, NOTIFICATION_ID_BASE + pendingId.toInt())
+        }
+        val editPendingIntent = PendingIntent.getActivity(
+            context,
+            (pendingId + 200000).toInt(),
+            editIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 构建通知
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("$typeLabel $amountText")
+            .setContentText("$appLabel · $categoryName")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("$typeLabel: $amountText\n分类: $categoryName\n来源: $appLabel${if (!transaction.note.isNullOrBlank()) "\n备注: ${transaction.note?.take(40)}" else ""}")
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setAutoCancel(false)
+            .setOngoing(false)
+            // 点击通知本身也打开编辑界面
+            .setContentIntent(editPendingIntent)
+            // 三个操作按钮：编辑、删除、确认
+            .addAction(
+                android.R.drawable.ic_menu_edit,
+                "编辑",
+                editPendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_delete,
+                "删除",
+                deletePendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_agenda,
+                "确认",
+                confirmPendingIntent
+            )
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID_BASE + pendingId.toInt(), notification)
+        Log.d(TAG, "确认通知已显示: pendingId=$pendingId")
     }
 
     data class ParsedNotification(
