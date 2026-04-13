@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -545,10 +546,11 @@ fun AddTransactionScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEachIndexed { _, account ->
+                uiState.accounts.forEachIndexed { index, account ->
                     AccountItem(
                         account = account,
                         isSelected = uiState.selectedAccount?.id == account.id,
+                        isLast = index == uiState.accounts.lastIndex,
                         onClick = {
                             viewModel.selectAccount(account)
                             showAccountSelector = false
@@ -594,10 +596,11 @@ fun AddTransactionScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEachIndexed { _, account ->
+                uiState.accounts.forEachIndexed { index, account ->
                     AccountItem(
                         account = account,
                         isSelected = uiState.selectedFromAccount?.id == account.id,
+                        isLast = index == uiState.accounts.lastIndex,
                         onClick = {
                             viewModel.selectFromAccount(account)
                             showFromAccountSelector = false
@@ -635,10 +638,11 @@ fun AddTransactionScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-                uiState.accounts.forEachIndexed { _, account ->
+                uiState.accounts.forEachIndexed { index, account ->
                     AccountItem(
                         account = account,
                         isSelected = uiState.selectedToAccount?.id == account.id,
+                        isLast = index == uiState.accounts.lastIndex,
                         onClick = {
                             viewModel.selectToAccount(account)
                             showToAccountSelector = false
@@ -770,43 +774,77 @@ private fun parseColor(colorString: String): Color {
 private fun AccountItem(
     account: Account,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isLast: Boolean = false
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
+    Column {
+        Card(
             modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(parseColor(account.color)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clickable { onClick() },
+            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+            ),
+            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
         ) {
-            Icon(
-                imageVector = getAccountIcon(account.type),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(parseColor(account.color)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = getAccountIcon(account.type),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = account.name,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        if (!account.cardNumber.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "(${account.cardNumber.takeLast(4)})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = "\u00A5${String.format("%.2f", account.currentBalance)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "已选择",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = account.name, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = "余额: \u00A5${String.format("%.2f", account.currentBalance)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "已选择",
-                tint = MaterialTheme.colorScheme.primary
+        if (!isLast) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 28.dp),
+                color = Color.Gray.copy(alpha = 0.2f),
+                thickness = 0.5.dp
             )
         }
     }

@@ -540,12 +540,23 @@ private fun AccountCard(
 
                 // 账户信息
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = account.name,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Medium
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = account.name,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Medium
+                            )
                         )
-                    )
+                        if (!account.cardNumber.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "(${account.cardNumber.takeLast(4)})",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
                     Text(
                         text = account.type.displayName,
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -814,131 +825,140 @@ private fun AddAccountDialog(
     var cardNumber by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text("添加账户")
-        },
-        text = {
-            Column(
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "添加账户",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("账户名称") },
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                singleLine = true
+            )
+
+            // 账户类型选择
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
             ) {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("账户名称") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    value = selectedType.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("账户类型") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
-
-                // 账户类型选择
-                ExposedDropdownMenuBox(
+                ExposedDropdownMenu(
                     expanded = expanded,
-                    onExpandedChange = { expanded = it }
+                    onDismissRequest = { expanded = false }
                 ) {
-                    OutlinedTextField(
-                        value = selectedType.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("账户类型") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                    AccountType.entries.forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.displayName) },
+                            onClick = {
+                                selectedType = type
+                                expanded = false
+                            },
+                            leadingIcon = {
+                                Icon(getAccountIcon(type.icon), contentDescription = null)
+                            }
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = initialBalance,
+                onValueChange = { initialBalance = it.filter { c -> c.isDigit() || c == '.' } },
+                label = { Text("期初余额") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            )
+
+            OutlinedTextField(
+                value = cardNumber,
+                onValueChange = { cardNumber = it.takeLast(4) },
+                label = { Text("卡号后4位(可选)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // 颜色选择 - 两边对齐
+            Text(
+                "选择颜色",
+                style = MaterialTheme.typography.labelMedium
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                accountColors.take(5).forEach { color ->
+                    ColorOption(
+                        color = color,
+                        isSelected = selectedColor == color,
+                        onClick = { selectedColor = color }
                     )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        AccountType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type.displayName) },
-                                onClick = {
-                                    selectedType = type
-                                    expanded = false
-                                },
-                                leadingIcon = {
-                                    Icon(getAccountIcon(type.icon), contentDescription = null)
-                                }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                accountColors.drop(5).forEach { color ->
+                    ColorOption(
+                        color = color,
+                        isSelected = selectedColor == color,
+                        onClick = { selectedColor = color }
+                    )
+                }
+            }
+
+            // 按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(
+                    onClick = {
+                        if (name.isNotBlank()) {
+                            onConfirm(
+                                name,
+                                selectedType,
+                                selectedType.icon,
+                                initialBalance.toDoubleOrNull() ?: 0.0,
+                                selectedColor,
+                                cardNumber.takeIf { it.isNotBlank() }
                             )
                         }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = initialBalance,
-                    onValueChange = { initialBalance = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("期初余额") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
-
-                OutlinedTextField(
-                    value = cardNumber,
-                    onValueChange = { cardNumber = it.takeLast(4) },
-                    label = { Text("卡号后4位(可选)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                // 颜色选择
-                Text(
-                    "选择颜色",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    },
+                    enabled = name.isNotBlank()
                 ) {
-                    accountColors.take(5).forEach { color ->
-                        ColorOption(
-                            color = color,
-                            isSelected = selectedColor == color,
-                            onClick = { selectedColor = color }
-                        )
-                    }
+                    Text("添加")
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    accountColors.drop(5).forEach { color ->
-                        ColorOption(
-                            color = color,
-                            isSelected = selectedColor == color,
-                            onClick = { selectedColor = color }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        onConfirm(
-                            name,
-                            selectedType,
-                            selectedType.icon,
-                            initialBalance.toDoubleOrNull() ?: 0.0,
-                            selectedColor,
-                            cardNumber.takeIf { it.isNotBlank() }
-                        )
-                    }
-                },
-                enabled = name.isNotBlank()
-            ) {
-                Text("添加")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
             }
         }
-    )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -980,76 +1000,99 @@ private fun EditAccountDialog(
         )
     }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text("编辑账户")
-        },
-        text = {
-            Column(
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "编辑账户",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("账户名称") },
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                singleLine = true
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
             ) {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("账户名称") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    value = selectedType.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("账户类型") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
-
-                ExposedDropdownMenuBox(
+                ExposedDropdownMenu(
                     expanded = expanded,
-                    onExpandedChange = { expanded = it }
+                    onDismissRequest = { expanded = false }
                 ) {
-                    OutlinedTextField(
-                        value = selectedType.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("账户类型") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        AccountType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type.displayName) },
-                                onClick = {
-                                    selectedType = type
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = cardNumber,
-                    onValueChange = { cardNumber = it.takeLast(4) },
-                    label = { Text("卡号后4位(可选)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                Text("选择颜色", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    accountColors.forEach { color ->
-                        ColorOption(
-                            color = color,
-                            isSelected = selectedColor == color,
-                            onClick = { selectedColor = color }
+                    AccountType.entries.forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.displayName) },
+                            onClick = {
+                                selectedType = type
+                                expanded = false
+                            }
                         )
                     }
                 }
+            }
 
+            OutlinedTextField(
+                value = cardNumber,
+                onValueChange = { cardNumber = it.takeLast(4) },
+                label = { Text("卡号后4位(可选)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Text("选择颜色", style = MaterialTheme.typography.labelMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                accountColors.take(5).forEach { color ->
+                    ColorOption(
+                        color = color,
+                        isSelected = selectedColor == color,
+                        onClick = { selectedColor = color }
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                accountColors.drop(5).forEach { color ->
+                    ColorOption(
+                        color = color,
+                        isSelected = selectedColor == color,
+                        onClick = { selectedColor = color }
+                    )
+                }
+            }
+
+            // 按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 TextButton(
                     onClick = { showDeleteConfirm = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = IOSColors.SystemRed)
@@ -1058,26 +1101,25 @@ private fun EditAccountDialog(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("删除账户")
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        onConfirm(name, selectedType, selectedType.icon, selectedColor, cardNumber.takeIf { it.isNotBlank() })
+                Row {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
                     }
-                },
-                enabled = name.isNotBlank()
-            ) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            if (name.isNotBlank()) {
+                                onConfirm(name, selectedType, selectedType.icon, selectedColor, cardNumber.takeIf { it.isNotBlank() })
+                            }
+                        },
+                        enabled = name.isNotBlank()
+                    ) {
+                        Text("保存")
+                    }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
