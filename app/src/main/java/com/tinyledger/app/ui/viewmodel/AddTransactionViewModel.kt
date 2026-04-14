@@ -22,6 +22,12 @@ enum class LendingSubType {
     COLLECT      // 收款
 }
 
+// Credit repayment sub-type for transfer mode
+enum class CreditRepaySubType {
+    NORMAL,      // Normal transfer
+    CREDIT_REPAY // Credit account repayment
+}
+
 data class AddTransactionUiState(
     val transactionType: TransactionType = TransactionType.EXPENSE,
     val categories: List<Category> = Category.defaultExpenseCategories,
@@ -40,7 +46,10 @@ data class AddTransactionUiState(
     // 转账/借贷相关
     val selectedFromAccount: Account? = null,
     val selectedToAccount: Account? = null,
-    val lendingSubType: LendingSubType = LendingSubType.BORROW_IN
+    val lendingSubType: LendingSubType = LendingSubType.BORROW_IN,
+    // 信用还款相关
+    val creditRepaySubType: CreditRepaySubType = CreditRepaySubType.NORMAL,
+    val creditAccountToRepay: Account? = null // 要还款的信用账户
 )
 
 @HiltViewModel
@@ -128,7 +137,25 @@ class AddTransactionViewModel @Inject constructor(
                 selectedCategory = null,
                 selectedFromAccount = null,
                 selectedToAccount = null,
-                lendingSubType = LendingSubType.BORROW_IN
+                lendingSubType = LendingSubType.BORROW_IN,
+                creditRepaySubType = CreditRepaySubType.NORMAL,
+                creditAccountToRepay = null
+            )
+        }
+    }
+    
+    // Set credit repayment mode
+    fun setCreditRepayMode(creditAccount: Account) {
+        _uiState.update {
+            it.copy(
+                transactionType = TransactionType.TRANSFER,
+                categories = Category.defaultTransferCategories,
+                selectedCategory = Category("credit_repay", "信用还款", "credit_card_repay", TransactionType.TRANSFER),
+                selectedFromAccount = null, // Will select cash account
+                selectedToAccount = creditAccount, // Credit account to repay
+                creditRepaySubType = CreditRepaySubType.CREDIT_REPAY,
+                creditAccountToRepay = creditAccount,
+                amount = kotlin.math.abs(creditAccount.currentBalance).toString().takeIf { creditAccount.currentBalance < 0 } ?: ""
             )
         }
     }
