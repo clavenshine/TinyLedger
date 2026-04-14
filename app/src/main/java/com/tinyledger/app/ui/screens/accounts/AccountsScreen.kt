@@ -59,6 +59,10 @@ fun AccountsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
+    // Tab state
+    var selectedTab by remember { mutableStateOf(0) } // 0: 全部, 1: 现金, 2: 信用
+    val tabs = listOf("全部账户", "现金账户", "信用账户")
+    
     // 删除确认对话框状态
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var accountToDelete by remember { mutableStateOf<Account?>(null) }
@@ -72,6 +76,17 @@ fun AccountsScreen(
             animationKey++
         }
     }
+    
+    // 根据tab筛选账户
+    val filteredAccountsWithBalance = when (selectedTab) {
+        0 -> uiState.accountsWithBalance // 全部
+        1 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CASH } // 现金
+        2 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CREDIT } // 信用
+        else -> uiState.accountsWithBalance
+    }
+    
+    // 计算筛选后的总额
+    val filteredTotalBalance = filteredAccountsWithBalance.sumOf { it.second }
 
     // 删除确认对话框
     if (showDeleteConfirmDialog && accountToDelete != null) {
@@ -127,6 +142,42 @@ fun AccountsScreen(
                 totalBalance = totalCalculatedBalance,
                 currencySymbol = currencySymbol
             )
+            
+            // Tab 筛选器
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.primary,
+                edgePadding = 16.dp,
+                divider = {}
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { 
+                            Text(
+                                title,
+                                fontSize = 14.sp,
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                            ) 
+                        }
+                    )
+                }
+            }
+            
+            // 显示当前筛选类型的总额
+            if (selectedTab != 0) {
+                Text(
+                    text = "${tabs[selectedTab].replace("账户", "")}: ${currencySymbol} ${CurrencyUtils.formatAmount(filteredTotalBalance)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
 
             // 账户列表
             LazyColumn(
@@ -135,7 +186,7 @@ fun AccountsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 itemsIndexed(
-                    items = uiState.accountsWithBalance,
+                    items = filteredAccountsWithBalance,
                     key = { _, item -> item.first.id }
                 ) { index, (account, calculatedBalance) ->
                     Box(
@@ -167,9 +218,32 @@ fun AccountsScreen(
                     }
                 }
 
-                if (uiState.accountsWithBalance.isEmpty()) {
+                if (filteredAccountsWithBalance.isEmpty()) {
                     item {
-                        EmptyAccountsView()
+                        if (uiState.accountsWithBalance.isEmpty()) {
+                            EmptyAccountsView()
+                        } else {
+                            // 有账户但当前tab没有
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "该类型下暂无账户",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
