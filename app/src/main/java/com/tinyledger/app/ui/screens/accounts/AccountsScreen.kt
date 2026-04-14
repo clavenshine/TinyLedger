@@ -7,9 +7,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1663,6 +1665,7 @@ private fun DeleteConfirmDialog(
 }
 
 // 带标签的数字滚轮选择器
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NumberPickerWithLabel(
     label: String,
@@ -1671,6 +1674,43 @@ private fun NumberPickerWithLabel(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val items = range.toList()
+    val itemHeightDp = 30.dp
+    val visibleItems = 3
+    val density = LocalDensity.current
+    val itemHeightPx = with(density) { itemHeightDp.toPx() }
+    val listState = rememberLazyListState()
+    val cardBgColor = Color(0xFFF5F5F5)
+
+    // Initialize scroll position to current value
+    LaunchedEffect(Unit) {
+        val index = items.indexOf(value).coerceAtLeast(0)
+        listState.scrollToItem(index)
+    }
+
+    // When value changes externally, scroll to it
+    LaunchedEffect(value) {
+        val index = items.indexOf(value).coerceAtLeast(0)
+        if (listState.firstVisibleItemIndex != index || listState.firstVisibleItemScrollOffset != 0) {
+            listState.animateScrollToItem(index)
+        }
+    }
+
+    // When scroll settles, report the centered value
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            val centerIndex = listState.firstVisibleItemIndex +
+                (if (listState.firstVisibleItemScrollOffset > itemHeightPx / 2) 1 else 0)
+            val newValue = items.getOrNull(centerIndex.coerceIn(items.indices))
+            if (newValue != null && newValue != value) {
+                onValueChange(newValue)
+            }
+        }
+    }
+
+    // Use snap fling behavior
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1681,15 +1721,14 @@ private fun NumberPickerWithLabel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        
-        // 3D 立体滚轮选择器
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
+                .height(itemHeightDp * visibleItems),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFF5F5F5)
+                containerColor = cardBgColor
             ),
             elevation = CardDefaults.cardElevation(
                 defaultElevation = 4.dp
@@ -1699,111 +1738,84 @@ private fun NumberPickerWithLabel(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                // 渐变遮罩营造立体感
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
-                        .align(Alignment.TopCenter)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFFF5F5F5),
-                                    Color.Transparent
-                                )
+                LazyColumn(
+                    state = listState,
+                    flingBehavior = flingBehavior,
+                    contentPadding = PaddingValues(vertical = itemHeightDp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    itemsIndexed(items) { index, item ->
+                        val isCentered = remember {
+                            derivedStateOf {
+                                val firstVisible = listState.firstVisibleItemIndex
+                                val offset = listState.firstVisibleItemScrollOffset
+                                val centeredIndex = firstVisible + (if (offset > itemHeightPx / 2) 1 else 0)
+                                index == centeredIndex
+                            }
+                        }
+                        val centered = isCentered.value
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(itemHeightDp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "$item 日",
+                                fontSize = if (centered) 20.sp else 14.sp,
+                                fontWeight = if (centered) FontWeight.Bold else FontWeight.Normal,
+                                color = if (centered)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    Color.Gray.copy(alpha = 0.4f)
                             )
-                        )
-                )
+                        }
+                    }
+                }
+
+                // Center highlight bar
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color(0xFFF5F5F5)
-                                )
-                            )
-                        )
-                )
-                
-                // 中间选择区域高亮
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp)
+                        .height(itemHeightDp)
                         .align(Alignment.Center)
                         .background(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(8.dp)
                         )
                 )
-                
-                // 当前值显示
-                Text(
-                    text = "$value 日",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp
-                    ),
-                    color = MaterialTheme.colorScheme.primary
+
+                // Top gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeightDp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    cardBgColor,
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
-                
-                // 上下箭头按钮
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // 上箭头
-                    IconButton(
-                        onClick = {
-                            if (value < range.last) {
-                                onValueChange(value + 1)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .align(Alignment.CenterHorizontally)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "增加",
-                            tint = if (value < range.last) 
-                                MaterialTheme.colorScheme.primary 
-                            else 
-                                Color.Gray.copy(alpha = 0.3f),
-                            modifier = Modifier.size(32.dp)
+
+                // Bottom gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeightDp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    cardBgColor
+                                )
+                            )
                         )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(40.dp))
-                    
-                    // 下箭头
-                    IconButton(
-                        onClick = {
-                            if (value > range.first) {
-                                onValueChange(value - 1)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .align(Alignment.CenterHorizontally)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "减少",
-                            tint = if (value > range.first) 
-                                MaterialTheme.colorScheme.primary 
-                            else 
-                                Color.Gray.copy(alpha = 0.3f),
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
+                )
             }
         }
     }

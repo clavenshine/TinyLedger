@@ -3,10 +3,13 @@ package com.tinyledger.app.ui.screens.statistics
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,7 +19,11 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +33,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,10 +43,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.CategoryAmount
 import com.tinyledger.app.ui.theme.ChartColors
-import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.viewmodel.StatisticsViewModel
 import com.tinyledger.app.util.CurrencyUtils
 import com.tinyledger.app.util.DateUtils
+import kotlin.math.atan2
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +58,10 @@ fun StatisticsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isDark = isSystemInDarkTheme()
     val chartColors = if (isDark) ChartColors.paletteDark else ChartColors.palette
+    val listState = rememberLazyListState()
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
@@ -275,11 +289,14 @@ fun StatisticsScreen(
             }
 
             itemsIndexed(uiState.expenseByCategory) { index, item ->
-                CategoryExpenseItem(
+                // Feature 4: Parallax scrolling effect for category detail items
+                ParallaxCategoryExpenseItem(
                     categoryAmount = item,
                     currencySymbol = uiState.currencySymbol,
                     color = chartColors[index % chartColors.size],
-                    isLast = index == uiState.expenseByCategory.lastIndex
+                    isLast = index == uiState.expenseByCategory.lastIndex,
+                    index = index,
+                    listState = listState
                 )
             }
         }
@@ -313,72 +330,157 @@ fun PieChart(
     colors: List<Color> = ChartColors.palette,
     modifier: Modifier = Modifier
 ) {
+    // Feature 5: Track selected/hovered segment index
+    var selectedIndex by remember { mutableIntStateOf(-1) }
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        // Donut chart
+        // Donut chart with tap interaction
         Box(
             modifier = Modifier.size(160.dp),
             contentAlignment = Alignment.Center
         ) {
-            Canvas(modifier = Modifier.size(150.dp)) {
+            val density = LocalDensity.current
+
+            Canvas(
+                modifier = Modifier
+                    .size(150.dp)
+                    .pointerInput(data) {
+                        detectTapGestures { tapOffset ->
+                            // Convert tap to angle and determine which segment was tapped
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            val dx = tapOffset.x - center.x
+                            val dy = tapOffset.y - center.y
+                            val distance = sqrt(dx.pow(2) + dy.pow(2))
+                            val strokeWidth = with(density) { 32.dp.toPx() }
+                            val radius = (size.width.coerceAtMost(size.height) - strokeWidth) / 2
+
+                            // Check if tap is within the donut ring
+                            if (distance >= radius - strokeWidth / 2 && distance <= radius + strokeWidth / 2) {
+                                // Calculate angle in degrees (0 at top, clockwise)
+                                var angle = Math.toDegrees(
+                                    atan2(dy.toDouble(), dx.toDouble())
+                                ).toFloat() + 90f
+                                if (angle < 0) angle += 360f
+
+                                // Find which segment this angle falls into
+                                var cumAngle = 0f
+                                var foundIndex = -1
+                                for (i in data.indices) {
+                                    val sweep = data[i].percentage * 3.6f
+                                    if (angle >= cumAngle && angle < cumAngle + sweep) {
+                                        foundIndex = i
+                                        break
+                                    }
+                                    cumAngle += sweep
+                                }
+                                selectedIndex = if (foundIndex == selectedIndex) -1 else foundIndex
+                            } else {
+                                selectedIndex = -1
+                            }
+                        }
+                    }
+            ) {
                 val strokeWidth = 32.dp.toPx()
+                val selectedStrokeWidth = 40.dp.toPx() // Enlarged stroke for selected segment
                 val radius = (size.minDimension - strokeWidth) / 2
                 val center = Offset(size.width / 2, size.height / 2)
-                val gap = 2f // Gap in degrees between segments
+                val gap = 2f
 
                 var startAngle = -90f
                 data.forEachIndexed { index, item ->
                     val sweepAngle = (item.percentage * 3.6f) - gap
                     if (sweepAngle > 0) {
+                        val isSelected = index == selectedIndex
+                        val currentStroke = if (isSelected) selectedStrokeWidth else strokeWidth
+                        val currentRadius = if (isSelected) {
+                            (size.minDimension - selectedStrokeWidth) / 2
+                        } else radius
+
                         drawArc(
                             color = colors[index % colors.size],
                             startAngle = startAngle + gap / 2,
                             sweepAngle = sweepAngle,
                             useCenter = false,
-                            topLeft = Offset(center.x - radius, center.y - radius),
-                            size = Size(radius * 2, radius * 2),
-                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            topLeft = Offset(center.x - currentRadius, center.y - currentRadius),
+                            size = Size(currentRadius * 2, currentRadius * 2),
+                            style = Stroke(width = currentStroke, cap = StrokeCap.Round)
                         )
                     }
                     startAngle += item.percentage * 3.6f
                 }
             }
 
-            // Center text
+            // Center text - shows selected category or total
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "总支出",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val total = data.sumOf { it.amount }
-                Text(
-                    text = String.format("%.2f", total),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                if (selectedIndex >= 0 && selectedIndex < data.size) {
+                    val selected = data[selectedIndex]
+                    Text(
+                        text = selected.category.name,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = colors[selectedIndex % colors.size]
+                    )
+                    Text(
+                        text = String.format("%.2f", selected.amount),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${String.format("%.1f", selected.percentage)}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "总支出",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val total = data.sumOf { it.amount }
+                    Text(
+                        text = String.format("%.2f", total),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // Legend (top 5)
+        // Legend (top 5) - highlight selected
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             data.take(5).forEachIndexed { index, item ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val isSelected = index == selectedIndex
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .then(
+                            if (isSelected) Modifier.background(
+                                colors[index % colors.size].copy(alpha = 0.1f)
+                            ) else Modifier
+                        )
+                        .clickable {
+                            selectedIndex = if (selectedIndex == index) -1 else index
+                        }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
+                            .size(if (isSelected) 12.dp else 10.dp)
                             .clip(CircleShape)
                             .background(colors[index % colors.size])
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = item.category.name,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        ),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
@@ -419,6 +521,93 @@ fun CategoryExpenseItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Color indicator
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Category name
+            Text(
+                text = categoryAmount.category.name,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Percentage pill
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = color.copy(alpha = 0.12f)
+            ) {
+                Text(
+                    text = "${String.format("%.1f", categoryAmount.percentage)}%",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = color,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Amount
+            Text(
+                text = CurrencyUtils.format(categoryAmount.amount, currencySymbol),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+/**
+ * Feature 4: Category expense item with parallax scrolling effect
+ * The card content shifts slightly relative to the card itself as you scroll,
+ * creating a subtle depth/parallax illusion.
+ */
+@Composable
+fun ParallaxCategoryExpenseItem(
+    categoryAmount: CategoryAmount,
+    currencySymbol: String,
+    color: Color = ChartColors.palette[0],
+    isLast: Boolean = false,
+    index: Int = 0,
+    listState: LazyListState
+) {
+    // Calculate parallax offset based on scroll position
+    val parallaxOffset by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val itemInfo = layoutInfo.visibleItemsInfo.find { it.index == index + 3 } // offset by header items
+            if (itemInfo != null) {
+                val viewportCenter = layoutInfo.viewportStartOffset + layoutInfo.viewportSize.height / 2
+                val itemCenter = itemInfo.offset + itemInfo.size / 2
+                val distanceFromCenter = (itemCenter - viewportCenter).toFloat()
+                // Subtle parallax: shift content by a fraction of distance from viewport center
+                distanceFromCenter * 0.04f
+            } else 0f
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 3.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    translationY = parallaxOffset
+                }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

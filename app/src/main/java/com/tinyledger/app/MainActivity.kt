@@ -35,28 +35,42 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    // Reactive state for pending edit ID
+    private val _pendingEditId = mutableStateOf<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Handle notification edit intent
-        val pendingId = intent?.getLongExtra(
-            com.tinyledger.app.data.notification.TransactionActionReceiver.EXTRA_PENDING_ID, -1L
-        ) ?: -1L
+        // Read pending ID from initial intent
+        handlePendingIntent(intent)
 
         setContent {
-            TinyLedgerAppContent(pendingEditId = if (pendingId > 0) pendingId else null)
+            val pendingId by remember { _pendingEditId }
+            TinyLedgerAppContent(
+                pendingEditId = pendingId,
+                onPendingHandled = { _pendingEditId.value = null }
+            )
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Update reactive state so Compose triggers navigation
+        handlePendingIntent(intent)
+    }
+
+    private fun handlePendingIntent(intent: Intent?) {
+        val pendingId = intent?.getLongExtra(
+            com.tinyledger.app.data.notification.TransactionActionReceiver.EXTRA_PENDING_ID, -1L
+        ) ?: -1L
+        _pendingEditId.value = if (pendingId > 0) pendingId else null
     }
 }
 
 @Composable
-fun TinyLedgerAppContent(pendingEditId: Long? = null) {
+fun TinyLedgerAppContent(pendingEditId: Long? = null, onPendingHandled: () -> Unit = {}) {
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val settingsState by settingsViewModel.uiState.collectAsState()
     val updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
@@ -78,6 +92,7 @@ fun TinyLedgerAppContent(pendingEditId: Long? = null) {
         LaunchedEffect(pendingEditId) {
             if (pendingEditId != null && pendingEditId > 0) {
                 navController.navigate(Screen.EditPendingTransaction.createRoute(pendingEditId))
+                onPendingHandled()
             }
         }
 

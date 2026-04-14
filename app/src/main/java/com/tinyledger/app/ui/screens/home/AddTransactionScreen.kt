@@ -1,15 +1,20 @@
 package com.tinyledger.app.ui.screens.home
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,9 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -32,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.AccountType
 import com.tinyledger.app.domain.model.TransactionType
@@ -39,6 +48,7 @@ import com.tinyledger.app.ui.components.CategorySelector
 import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.LendingSubType
 import com.tinyledger.app.util.DateUtils
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -52,11 +62,20 @@ fun AddTransactionScreen(
     viewModel: AddTransactionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     var showDatePicker by remember { mutableStateOf(false) }
     var showAccountSelector by remember { mutableStateOf(false) }
     var showFromAccountSelector by remember { mutableStateOf(false) }
     var showToAccountSelector by remember { mutableStateOf(false) }
     var showNoAccountDialog by remember { mutableStateOf(false) }
+
+    // Read vibration setting from SharedPreferences
+    val vibrationEnabled = remember {
+        TransactionNotificationService.isVibrationEnabled(context)
+    }
+
+    // Feature 3: Save button animation state
+    var isSaveAnimating by remember { mutableStateOf(false) }
 
     LaunchedEffect(transactionId) {
         if (transactionId != null && transactionId > 0) {
@@ -166,7 +185,7 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Amount Input with dynamic zoom effect
+            // Amount Input with dynamic zoom effect (Feature 1: font size auto-enlarges when typing)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -177,17 +196,28 @@ fun AddTransactionScreen(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Dynamic font size: grows from 28sp to 36sp as user types, animated smoothly
+                    val targetFontSize = if (uiState.amount.isNotEmpty()) 36f else 28f
+                    val animatedFontSize by animateFloatAsState(
+                        targetValue = targetFontSize,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "amount_font_size"
+                    )
+
                     OutlinedTextField(
                         value = uiState.amount,
                         onValueChange = { viewModel.setAmount(it) },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("0.00", fontSize = 28.sp, fontWeight = FontWeight.Bold) },
-                        prefix = { Text(uiState.currencySymbol, fontSize = 28.sp, fontWeight = FontWeight.Bold) },
+                        prefix = { Text(uiState.currencySymbol, fontSize = animatedFontSize.sp, fontWeight = FontWeight.Bold) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 28.sp
+                            fontSize = animatedFontSize.sp
                         )
                     )
                 }
@@ -356,7 +386,8 @@ fun AddTransactionScreen(
                             onDeleteCategory = { category -> viewModel.deleteCategory(category) },
                             onRenameCategory = { category, newName -> viewModel.renameCategory(category, newName) },
                             showAddButton = true,
-                            transactionType = uiState.transactionType
+                            transactionType = uiState.transactionType,
+                            vibrationEnabled = vibrationEnabled
                         )
                     }
                 }
@@ -454,12 +485,13 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Note Input
+            // Note Input - Feature 3: Floating borderless input with gradient border on focus
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
-                )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -468,13 +500,64 @@ fun AddTransactionScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = uiState.note,
-                        onValueChange = { viewModel.setNote(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("添加备注...") },
-                        maxLines = 3
+
+                    val noteInteractionSource = remember { MutableInteractionSource() }
+                    val isNoteFocused by noteInteractionSource.collectIsFocusedAsState()
+
+                    // Gradient border animation
+                    val borderAlpha by animateFloatAsState(
+                        targetValue = if (isNoteFocused) 1f else 0f,
+                        animationSpec = tween(400),
+                        label = "note_border_alpha"
                     )
+                    val gradientColors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.tertiary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (borderAlpha > 0f) {
+                                    Modifier.border(
+                                        width = 1.5.dp,
+                                        brush = Brush.linearGradient(
+                                            colors = gradientColors.map { it.copy(alpha = borderAlpha) }
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                } else Modifier
+                            )
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        BasicTextField(
+                            value = uiState.note,
+                            onValueChange = { viewModel.setNote(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            maxLines = 3,
+                            interactionSource = noteInteractionSource,
+                            decorationBox = { innerTextField ->
+                                if (uiState.note.isEmpty()) {
+                                    Text(
+                                        "添加备注...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
                 }
             }
 
@@ -487,29 +570,62 @@ fun AddTransactionScreen(
                 )
             }
 
-            // Save Button
+            // Save Button - Feature 3: Color deepens on press with brief loading animation
+            val saveButtonColor by animateColorAsState(
+                targetValue = if (isSaveAnimating || uiState.isSaving)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                else
+                    MaterialTheme.colorScheme.primary,
+                animationSpec = tween(300),
+                label = "save_button_color"
+            )
+            val saveButtonScale by animateFloatAsState(
+                targetValue = if (isSaveAnimating) 0.96f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "save_button_scale"
+            )
+
             Button(
                 onClick = {
+                    isSaveAnimating = true
                     viewModel.saveTransaction()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !uiState.isSaving,
+                    .height(56.dp)
+                    .scale(saveButtonScale),
+                enabled = !uiState.isSaving && !isSaveAnimating,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = saveButtonColor
                 )
             ) {
-                if (uiState.isSaving) {
+                if (uiState.isSaving || isSaveAnimating) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "保存中...",
+                        style = MaterialTheme.typography.titleMedium
                     )
                 } else {
                     Text(
                         text = "保存",
                         style = MaterialTheme.typography.titleMedium
                     )
+                }
+            }
+
+            // Reset save animation after a brief delay if save didn't trigger navigation
+            LaunchedEffect(isSaveAnimating) {
+                if (isSaveAnimating) {
+                    delay(1500)
+                    isSaveAnimating = false
                 }
             }
 

@@ -541,10 +541,9 @@ class SmsReader @Inject constructor(
         val uriProbeResults = mutableListOf<String>()
 
         // ── 第一阶段：从标准 URI 读取 SMS ──
+        // Only query the main URI which includes all SMS (inbox + sent)
         val standardUris = listOf(
-            Telephony.Sms.CONTENT_URI,                    // content://sms
-            Uri.parse("content://sms/inbox"),             // content://sms/inbox
-            Uri.parse("content://sms/sent"),              // content://sms/sent
+            Telephony.Sms.CONTENT_URI
         )
 
         for (smsUri in standardUris) {
@@ -573,124 +572,67 @@ class SmsReader @Inject constructor(
         }
 
         // ── 第二阶段：探测其他可能存储 SMS 的 URI ──
+        // Only probe non-standard URIs if Phase 1 found nothing
         // 国产 ROM (MIUI/ColorOS/HarmonyOS) 可能把通知类短信存在不同位置
-        val probeUris = listOf(
-            "content://mms-sms",
-            "content://mms-sms/conversations",
-            "content://mms-sms/complete-conversations",
-            "content://sms/icc",
-            "content://sms/icc2",
-            "content://mms",
-            "content://mms/inbox",
-        )
-
-        for (uriStr in probeUris) {
-            try {
-                val uri = Uri.parse(uriStr)
-                val cursor = contentResolver.query(uri, null, null, null, null)
-                cursor?.use {
-                    val count = it.count
-                    val cols = it.columnNames?.toList() ?: emptyList()
-                    val hasAddress = cols.any { c -> c.equals("address", true) }
-                    val hasBody = cols.any { c -> c.equals("body", true) }
-
-                    // 如果有 address 和 body 列，尝试从中读取 CCB 短信
-                    var ccbFound = 0
-                    if (hasAddress && count > 0) {
-                        val addrIdx = it.getColumnIndex("address")
-                        while (it.moveToNext()) {
-                            try {
-                                val addr = it.getString(addrIdx) ?: continue
-                                if (addr.contains("95533")) ccbFound++
-                            } catch (_: Exception) { break }
-                        }
-                    }
-
-                    uriProbeResults.add("$uriStr: ${count}行, cols=${cols.size}, addr=$hasAddress, body=$hasBody, ccb=$ccbFound")
-
-                    // 如果在此 URI 发现了 CCB 短信，尝试完整读取
-                    if (ccbFound > 0 && hasBody) {
-                        it.moveToPosition(-1)  // reset cursor
-                        readFromGenericCursor(
-                            it, seenIds, transactions, bankHits, addressSet,
-                            { totalRead++ }, { parsedOk++ }, { excludedCount++ },
-                            { unknownSourceCount++ }, { noAmountCount++ },
-                            { noTypeCount++ }, { lowConfCount++ }, { exceptionCount++ }
-                        ).let { stats ->
-                            ccbAddressMatchCount += stats.ccbMatch
-                            nullAddressCount += stats.nullAddress
-                            nullBodyCount += stats.nullBody
-                            duplicateCount += stats.duplicate
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                uriProbeResults.add("$uriStr: ERR(${e.javaClass.simpleName})")
-            }
-        }
-
-        // ── 第三阶段：直接按地址搜索 CCB 短信 ──
-        // 在标准 SMS provider 中用 WHERE address LIKE '%95533%' 直接搜索
-        try {
-            val ccbCursor = contentResolver.query(
-                Telephony.Sms.CONTENT_URI,
-                arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE),
-                "${Telephony.Sms.ADDRESS} LIKE ?",
-                arrayOf("%95533%"),
-                null
+        if (transactions.isEmpty()) {
+            val probeUris = listOf(
+                "content://mms-sms",
+                "content://mms-sms/conversations",
+                "content://mms-sms/complete-conversations",
+                "content://sms/icc",
+                "content://sms/icc2",
+                "content://mms",
+                "content://mms/inbox",
             )
-            ccbCursor?.use {
-                val directCcbCount = it.count
-                uriProbeResults.add("直接搜CCB(LIKE%95533%): ${directCcbCount}行")
-                if (directCcbCount > 0) {
-                    val addrIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
-                    val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
-                    val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
-                    val idIdx = it.getColumnIndex(Telephony.Sms._ID)
-                    while (it.moveToNext()) {
-                        try {
-                            val id = it.getLong(idIdx)
-                            if (!seenIds.add(id)) continue
-                            val address = it.getString(addrIdx) ?: continue
-                            val body = it.getString(bodyIdx) ?: continue
-                            val date = it.getLong(dateIdx)
-                            ccbAddressMatchCount++
-                            totalRead++
-                            addressSet.add(address)
-                            val normalizedAddress = address.removePrefix("+86").removePrefix("86").removePrefix("12580").removePrefix("12520").trim()
-                            val source = parser.detectBankSource(body, normalizedAddress)
-                            if (source != "未知来源") bankHits[source] = (bankHits[source] ?: 0) + 1
-                            val parseResult = parser.parseSmsContent(body, normalizedAddress)
-                            if (parseResult.type != null && parseResult.amount != null && parseResult.amount > 0) {
-                                parsedOk++
-                                transactions.add(SmsTransaction(id = id, address = address, body = body, date = date,
-                                    type = parseResult.type, amount = parseResult.amount, source = source,
-                                    isTransfer = parser.isTransferSms(body), cardLastFour = parseResult.cardLastFour, confidence = parseResult.confidence))
+
+            for (uriStr in probeUris) {
+                try {
+                    val uri = Uri.parse(uriStr)
+                    val cursor = contentResolver.query(uri, null, null, null, null)
+                    cursor?.use {
+                        val count = it.count
+                        val cols = it.columnNames?.toList() ?: emptyList()
+                        val hasAddress = cols.any { c -> c.equals("address", true) }
+                        val hasBody = cols.any { c -> c.equals("body", true) }
+
+                        // 如果有 address 和 body 列，尝试从中读取 CCB 短信
+                        var ccbFound = 0
+                        if (hasAddress && count > 0) {
+                            val addrIdx = it.getColumnIndex("address")
+                            while (it.moveToNext()) {
+                                try {
+                                    val addr = it.getString(addrIdx) ?: continue
+                                    if (addr.contains("95533")) ccbFound++
+                                } catch (_: Exception) { break }
                             }
-                        } catch (_: Exception) { exceptionCount++ }
+                        }
+
+                        uriProbeResults.add("$uriStr: ${count}行, cols=${cols.size}, addr=$hasAddress, body=$hasBody, ccb=$ccbFound")
+
+                        // 如果在此 URI 发现了 CCB 短信，尝试完整读取
+                        if (ccbFound > 0 && hasBody) {
+                            it.moveToPosition(-1)  // reset cursor
+                            readFromGenericCursor(
+                                it, seenIds, transactions, bankHits, addressSet,
+                                { totalRead++ }, { parsedOk++ }, { excludedCount++ },
+                                { unknownSourceCount++ }, { noAmountCount++ },
+                                { noTypeCount++ }, { lowConfCount++ }, { exceptionCount++ }
+                            ).let { stats ->
+                                ccbAddressMatchCount += stats.ccbMatch
+                                nullAddressCount += stats.nullAddress
+                                nullBodyCount += stats.nullBody
+                                duplicateCount += stats.duplicate
+                            }
+                        }
                     }
+                } catch (e: Exception) {
+                    uriProbeResults.add("$uriStr: ERR(${e.javaClass.simpleName})")
                 }
             }
-        } catch (e: Exception) {
-            uriProbeResults.add("直接搜CCB: ERR(${e.javaClass.simpleName})")
         }
 
-        // ── 第四阶段：尝试通过 thread_id 方式查找 ──
-        // 有些 ROM 的 ContentProvider 不支持 address 列搜索，但支持 thread_id 查询
-        try {
-            // 查找所有会话线程
-            val threadCursor = contentResolver.query(
-                Uri.parse("content://sms/conversations"),
-                arrayOf("thread_id", "msg_count"),
-                null, null, null
-            )
-            threadCursor?.use {
-                val threadCount = it.count
-                uriProbeResults.add("会话线程数: $threadCount")
-            }
-        } catch (e: Exception) {
-            uriProbeResults.add("会话线程: ERR(${e.javaClass.simpleName})")
-        }
+        // Phase 3 (CCB-specific query) removed — bank address filter in Phase 1 now covers CCB
+        // Phase 4 (thread ID exploration) removed — minimal diagnostic value
 
         // ── 第五阶段：从 Room 数据库读取通知栏捕获的银行短信 ──
         // 这些短信来自 NotificationListenerService 捕获的 1069xxxx 通知短信
@@ -839,8 +781,23 @@ class SmsReader @Inject constructor(
             Telephony.Sms.DATE_SENT
         )
 
-        // 当 afterTime <= 0 时不加任何过滤条件，确保读取全部短信
-        val selection: String? = if (afterTime > 0) "${Telephony.Sms.DATE} > ?" else null
+        // Build address filter to pre-filter by known bank phone numbers at SQL level
+        val bankNumbers = listOf(
+            "95533", "95588", "95599", "95566", "95555", "95559",
+            "95528", "95568", "95558", "95561", "95511", "95577",
+            "95595", "95508", "95580"
+        )
+        val addressFilter = bankNumbers.joinToString(" OR ") { num ->
+            "${Telephony.Sms.ADDRESS} LIKE '%$num%'"
+        }
+
+        // Combine bank address filter with optional time filter
+        val selection = buildString {
+            append("($addressFilter)")
+            if (afterTime > 0) {
+                append(" AND ${Telephony.Sms.DATE} > ?")
+            }
+        }
         val selectionArgs: Array<String>? = if (afterTime > 0) arrayOf(afterTime.toString()) else null
 
         var cursor: Cursor? = null
