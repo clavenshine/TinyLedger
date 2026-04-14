@@ -114,7 +114,7 @@ fun AppNavHost(
                     navController.navigate(Screen.ScreenshotAccounting.route)
                 },
                 onNavigateToAccounts = {
-                    navController.navigate(Screen.Accounts.route)
+                    navController.navigate(Screen.Accounts.createRoute(0))
                 },
                 onNavigateToHelp = {
                     navController.navigate(Screen.Help.route)
@@ -226,7 +226,7 @@ fun AppNavHost(
                     navController.popBackStack()
                 },
                 onNavigateToAccounts = {
-                    navController.navigate(Screen.Accounts.route)
+                    navController.navigate(Screen.Accounts.createRoute(0))
                 }
             )
         }
@@ -244,7 +244,7 @@ fun AppNavHost(
                     navController.popBackStack()
                 },
                 onNavigateToAccounts = {
-                    navController.navigate(Screen.Accounts.route)
+                    navController.navigate(Screen.Accounts.createRoute(0))
                 }
             )
         }
@@ -262,7 +262,7 @@ fun AppNavHost(
                     navController.popBackStack()
                 },
                 onNavigateToAccounts = {
-                    navController.navigate(Screen.Accounts.route)
+                    navController.navigate(Screen.Accounts.createRoute(0))
                 }
             )
         }
