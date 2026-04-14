@@ -15,8 +15,8 @@ android {
         applicationId = "com.tinyledger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20405  // = 2*10000 + 4*100 + 5 (for v2.4.5)
-        versionName = "2.4.5"
+        versionCode = 20406  // = 2*10000 + 4*100 + 6 (for v2.4.6)
+        versionName = "2.4.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
