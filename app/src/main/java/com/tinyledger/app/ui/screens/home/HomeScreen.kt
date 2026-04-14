@@ -39,7 +39,7 @@ import java.util.*
 fun HomeScreen(
     onAddTransaction: () -> Unit = {},
     onEditTransaction: (Long) -> Unit = {},
-    onNavigateToAccounts: () -> Unit = {},
+    onNavigateToAccounts: (Int) -> Unit = {}, // 0: 全部, 1: 现金, 2: 信用
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -140,7 +140,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable { onNavigateToAccounts() },
+                        .clickable { onNavigateToAccounts(0) }, // 导航到全部账户
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -204,7 +204,7 @@ fun HomeScreen(
             ) {
                 // 信用账户
                 Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts() },
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(2) }, // 导航到信用账户tab
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -224,17 +224,17 @@ fun HomeScreen(
                             )
                         }
                         val creditAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
-                        val totalOverdraft = creditAccounts.filter { it.second < 0 }.sumOf { kotlin.math.abs(it.second) }
-                        if (totalOverdraft > 0) {
+                        val totalCreditBalance = creditAccounts.sumOf { it.second } // 显示负数
+                        if (totalCreditBalance != 0.0) {
                             Text(
-                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalOverdraft)}",
+                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalCreditBalance)}",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFFC62828),
+                                color = if (totalCreditBalance < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         } else {
                             Text(
-                                text = "无信用透支",
+                                text = "无信用账户",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = Color(0xFF2E7D32),
                                 modifier = Modifier.padding(top = 6.dp)
@@ -245,7 +245,7 @@ fun HomeScreen(
 
                 // 现金账户
                 Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts() },
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(1) }, // 导航到现金账户tab
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)

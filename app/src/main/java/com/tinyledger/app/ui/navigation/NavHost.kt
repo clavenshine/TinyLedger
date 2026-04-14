@@ -67,8 +67,8 @@ fun AppNavHost(
                 onEditTransaction = { id ->
                     navController.navigate(Screen.EditTransaction.createRoute(id))
                 },
-                onNavigateToAccounts = {
-                    navController.navigate(Screen.Accounts.route)
+                onNavigateToAccounts = { tabIndex ->
+                    navController.navigate(Screen.Accounts.createRoute(tabIndex))
                 }
             )
         }
@@ -122,8 +122,13 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.Accounts.route) {
+        composable(
+            route = Screen.Accounts.route,
+            arguments = listOf(navArgument("tabIndex") { type = NavType.IntType; defaultValue = 0 })
+        ) { backStackEntry ->
+            val tabIndex = backStackEntry.arguments?.getInt("tabIndex") ?: 0
             AccountsScreen(
+                initialTab = tabIndex,
                 onNavigateBack = {
                     navController.popBackStack()
                 },

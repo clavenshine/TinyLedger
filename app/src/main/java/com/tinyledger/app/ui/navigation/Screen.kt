@@ -6,7 +6,9 @@ sealed class Screen(val route: String) {
     data object Statistics : Screen("statistics")
     data object Profile : Screen("profile")
     data object Settings : Screen("settings")
-    data object Accounts : Screen("accounts")
+    data object Accounts : Screen("accounts/{tabIndex}") {
+        fun createRoute(tabIndex: Int = 0) = "accounts/$tabIndex"
+    }
     data object AddTransaction : Screen("add_transaction")
     data object CreditRepay : Screen("credit_repay/{accountId}") {
         fun createRoute(accountId: Long) = "credit_repay/$accountId"

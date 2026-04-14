@@ -84,19 +84,21 @@ fun CategorySelector(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // Add category button row
+        // Add category button row - positioned on the right side
         if (showAddButton && onAddCategory != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Fill empty slots first (left side)
+                repeat(itemsPerRow - 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+                // Add button on the right
                 Box(modifier = Modifier.weight(1f)) {
                     AddCategoryButton(
                         onClick = { showAddDialog = true }
                     )
-                }
-                repeat(itemsPerRow - 1) {
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }

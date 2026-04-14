@@ -10,18 +10,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.scale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -54,14 +60,15 @@ import kotlin.math.roundToInt
 @Composable
 fun AccountsScreen(
     currencySymbol: String = "¥",
+    initialTab: Int = 0, // 0: 全部, 1: 现金, 2: 信用
     onNavigateBack: () -> Unit = {},
     onNavigateToRepay: (Account) -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    // Tab state
-    var selectedTab by remember { mutableStateOf(0) } // 0: 全部, 1: 现金, 2: 信用
+    // Tab state - use initialTab parameter
+    var selectedTab by remember { mutableStateOf(initialTab) } // 0: 全部, 1: 现金, 2: 信用
     val tabs = listOf("全部账户", "现金账户", "信用账户")
     
     // 删除确认对话框状态
@@ -137,48 +144,72 @@ fun AccountsScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // 总资产卡片
-            val totalCalculatedBalance = uiState.accountsWithBalance.sumOf { it.second }
-            TotalBalanceCard(
-                totalBalance = totalCalculatedBalance,
-                currencySymbol = currencySymbol
-            )
-            
-            // Tab 筛选器
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.primary,
-                edgePadding = 16.dp,
-                divider = {}
+            // Tab 筛选器 - 移到顶部，居中，3D立体效果
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { 
+                    // 3D 浮起按钮效果
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clickable { selectedTab = index },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (selectedTab == index) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                Color.White
+                        ),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = if (selectedTab == index) 8.dp else 4.dp
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                title,
+                                text = title,
                                 fontSize = 14.sp,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
-                            ) 
+                                fontWeight = FontWeight.Bold,
+                                color = if (selectedTab == index) 
+                                    Color.White 
+                                else 
+                                    MaterialTheme.colorScheme.onSurface
+                            )
                         }
-                    )
+                    }
+                    
+                    if (index < tabs.lastIndex) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                 }
             }
             
-            // 显示当前筛选类型的总额
-            if (selectedTab != 0) {
-                Text(
-                    text = "${tabs[selectedTab].replace("账户", "")}: ${currencySymbol} ${CurrencyUtils.formatAmount(filteredTotalBalance)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+            // 总资产卡片 - 根据选中tab显示不同余额
+            val displayBalance = when (selectedTab) {
+                0 -> uiState.accountsWithBalance.sumOf { it.second } // 全部账户
+                1 -> uiState.accountsWithBalance
+                    .filter { it.first.attribute == AccountAttribute.CASH }
+                    .sumOf { it.second } // 现金账户
+                2 -> uiState.accountsWithBalance
+                    .filter { it.first.attribute == AccountAttribute.CREDIT }
+                    .sumOf { it.second } // 信用账户（负数显示）
+                else -> 0.0
             }
+            
+            TotalBalanceCard(
+                totalBalance = displayBalance,
+                currencySymbol = currencySymbol,
+                showTitle = false, // 不显示“总资产”
+                largeNumber = true // 放大数字
+            )
 
             // 账户列表
             LazyColumn(
@@ -538,7 +569,9 @@ private fun SwipeableAccountCard(
 @Composable
 private fun TotalBalanceCard(
     totalBalance: Double,
-    currencySymbol: String
+    currencySymbol: String,
+    showTitle: Boolean = true,
+    largeNumber: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -556,20 +589,26 @@ private fun TotalBalanceCard(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "总资产",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = Color.White.copy(alpha = 0.8f)
+            if (showTitle) {
+                Text(
+                    text = "总资产",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
                 )
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Text(
                 text = "$currencySymbol ${CurrencyUtils.formatAmount(totalBalance)}",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    fontSize = if (largeNumber) 36.sp else 28.sp
                 )
             )
+            Spacer(modifier = Modifier.height(if (showTitle) 8.dp else 16.dp))
         }
     }
 }
@@ -972,7 +1011,7 @@ private fun EmptyAccountsView() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun AddAccountDialog(
     onDismiss: () -> Unit,
@@ -1007,7 +1046,8 @@ private fun AddAccountDialog(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()), // 添加滚动以避开键盘
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -1076,17 +1116,41 @@ private fun AddAccountDialog(
                 }
             }
 
+            // 期初余额 - 允许负数（信用账户）
             OutlinedTextField(
                 value = initialBalance,
-                onValueChange = { initialBalance = it.filter { c -> c.isDigit() || c == '.' } },
-                label = { Text("期初余额") },
+                onValueChange = { input ->
+                    val filtered = input.filter { char -> char.isDigit() || char == '.' || char == '-' }
+                    initialBalance = if (selectedAttribute == AccountAttribute.CREDIT) {
+                        if (filtered.length > 1 && filtered[0] != '-')
+                            filtered.filter { char -> char.isDigit() || char == '.' }
+                        else
+                            filtered
+                    } else {
+                        filtered.filter { char -> char.isDigit() || char == '.' }
+                    }
+                },
+                label = { Text("期初余额", fontSize = 16.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
             )
             
             // 信用账户额外字段
             if (selectedAttribute == AccountAttribute.CREDIT) {
+                // 卡号后4位
+                OutlinedTextField(
+                    value = cardNumber,
+                    onValueChange = { cardNumber = it.takeLast(4) },
+                    label = { Text("卡号后4位(可选)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
                 OutlinedTextField(
                     value = creditLimit,
                     onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
@@ -1100,29 +1164,26 @@ private fun AddAccountDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
-                        value = billDay,
-                        onValueChange = { 
-                            if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
-                        },
-                        label = { Text("账单日") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    // 账单日 - 滚轮选择器
+                    NumberPickerWithLabel(
+                        label = "账单日",
+                        value = billDay.toIntOrNull() ?: 1,
+                        range = 1..31,
+                        onValueChange = { billDay = it.toString() },
+                        modifier = Modifier.weight(1f)
                     )
                     
-                    OutlinedTextField(
-                        value = repaymentDay,
-                        onValueChange = { 
-                            if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
-                        },
-                        label = { Text("还款日") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    // 还款日 - 滚轮选择器
+                    NumberPickerWithLabel(
+                        label = "还款日",
+                        value = repaymentDay.toIntOrNull() ?: 10,
+                        range = 1..31,
+                        onValueChange = { repaymentDay = it.toString() },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             } else {
+                // 现金账户：卡号后4位
                 OutlinedTextField(
                     value = cardNumber,
                     onValueChange = { cardNumber = it.takeLast(4) },
@@ -1599,4 +1660,151 @@ private fun DeleteConfirmDialog(
             // 空置，因为按钮已移到confirmButton中居中
         }
     )
+}
+
+// 带标签的数字滚轮选择器
+@Composable
+private fun NumberPickerWithLabel(
+    label: String,
+    value: Int,
+    range: IntRange,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        // 3D 立体滚轮选择器
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFF5F5F5)
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 4.dp
+            )
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // 渐变遮罩营造立体感
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFF5F5F5),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color(0xFFF5F5F5)
+                                )
+                            )
+                        )
+                )
+                
+                // 中间选择区域高亮
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .align(Alignment.Center)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                )
+                
+                // 当前值显示
+                Text(
+                    text = "$value 日",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                // 上下箭头按钮
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 上箭头
+                    IconButton(
+                        onClick = {
+                            if (value < range.last) {
+                                onValueChange(value + 1)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .align(Alignment.CenterHorizontally)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "增加",
+                            tint = if (value < range.last) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                Color.Gray.copy(alpha = 0.3f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(40.dp))
+                    
+                    // 下箭头
+                    IconButton(
+                        onClick = {
+                            if (value > range.first) {
+                                onValueChange(value - 1)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .align(Alignment.CenterHorizontally)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "减少",
+                            tint = if (value > range.first) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                Color.Gray.copy(alpha = 0.3f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
