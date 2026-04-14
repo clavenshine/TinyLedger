@@ -79,17 +79,27 @@ class AccountViewModel @Inject constructor(
 
     // 计算账户余额 = 期初余额 + 收入 - 支出
     private suspend fun calculateAccountBalance(account: Account): Double {
-        var totalIncome = 0.0
-        var totalExpense = 0.0
-        
-        transactionRepository.getTotalIncomeByAccountId(account.id).first().let { income ->
-            totalIncome = income
+        return if (account.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT) {
+            // 信用账户：期初余额 - 支出（支出增加负债）
+            var totalExpense = 0.0
+            transactionRepository.getTotalExpenseByAccountId(account.id).first().let { expense ->
+                totalExpense = expense
+            }
+            account.initialBalance - totalExpense
+        } else {
+            // 现金账户：期初余额 + 收入 - 支出
+            var totalIncome = 0.0
+            var totalExpense = 0.0
+            
+            transactionRepository.getTotalIncomeByAccountId(account.id).first().let { income ->
+                totalIncome = income
+            }
+            transactionRepository.getTotalExpenseByAccountId(account.id).first().let { expense ->
+                totalExpense = expense
+            }
+            
+            account.initialBalance + totalIncome - totalExpense
         }
-        transactionRepository.getTotalExpenseByAccountId(account.id).first().let { expense ->
-            totalExpense = expense
-        }
-        
-        return account.initialBalance + totalIncome - totalExpense
     }
 
     // 切换账户展开/折叠状态

@@ -85,9 +85,19 @@ class TransactionRepositoryImpl @Inject constructor(
     // 根据账户ID计算并更新余额：期初 + 收入 - 支出
     private suspend fun updateAccountBalanceById(accountId: Long) {
         val account = accountDao.getAccountById(accountId) ?: return
-        val totalIncome = transactionDao.getTotalIncomeByAccountId(accountId).first()
-        val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
-        val calculatedBalance = account.initialBalance + totalIncome - totalExpense
+        
+        val calculatedBalance = if (account.attribute == "credit") {
+            // 信用账户：期初余额 - 支出（支出增加负债）
+            // 注意：信用账户的 currentBalance 为负数表示负债
+            val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
+            account.initialBalance - totalExpense
+        } else {
+            // 现金账户：期初余额 + 收入 - 支出
+            val totalIncome = transactionDao.getTotalIncomeByAccountId(accountId).first()
+            val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
+            account.initialBalance + totalIncome - totalExpense
+        }
+        
         accountDao.updateBalance(accountId, calculatedBalance)
     }
 
