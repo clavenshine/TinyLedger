@@ -191,10 +191,12 @@ fun AccountsScreen(
         EditAccountDialog(
             account = uiState.selectedAccount!!,
             onDismiss = { viewModel.hideEditDialog() },
-            onConfirm = { name, type, icon, color, cardNumber ->
-                viewModel.updateAccount(uiState.selectedAccount!!, name, type, icon, color, cardNumber)
+            onConfirm = { name, type, icon, color, cardNumber, creditLimit, billDay, repaymentDay ->
+                viewModel.updateAccount(uiState.selectedAccount!!, name, type, icon, color, cardNumber, creditLimit, billDay, repaymentDay)
             },
-            onDelete = { viewModel.deleteAccount(uiState.selectedAccount!!.id) }
+            onDelete = { viewModel.deleteAccount(uiState.selectedAccount!!.id) },
+            hasUnsettledDebt = uiState.selectedAccount!!.attribute == AccountAttribute.CREDIT && 
+                uiState.selectedAccount!!.currentBalance != 0.0
         )
     }
 }
@@ -1043,15 +1045,34 @@ private fun AddAccountDialog(
 private fun EditAccountDialog(
     account: Account,
     onDismiss: () -> Unit,
-    onConfirm: (String, AccountType, String, String, String?) -> Unit,
-    onDelete: () -> Unit
+    onConfirm: (String, AccountType, String, String, String?, Double, Int, Int) -> Unit,
+    onDelete: () -> Unit,
+    hasUnsettledDebt: Boolean = false
 ) {
     var name by remember { mutableStateOf(account.name) }
-    var selectedType by remember { mutableStateOf(account.type) }
     var selectedColor by remember { mutableStateOf(account.color) }
     var cardNumber by remember { mutableStateOf(account.cardNumber ?: "") }
-    var expanded by remember { mutableStateOf(false) }
+    
+    // Credit account fields
+    var creditLimit by remember { mutableStateOf(account.creditLimit.toString().takeIf { account.creditLimit > 0 } ?: "") }
+    var billDay by remember { mutableStateOf(account.billDay.toString().takeIf { account.billDay > 0 } ?: "1") }
+    var repaymentDay by remember { mutableStateOf(account.repaymentDay.toString().takeIf { account.repaymentDay > 0 } ?: "10") }
+    
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDebtWarning by remember { mutableStateOf(false) }
+
+    if (showDebtWarning) {
+        AlertDialog(
+            onDismissRequest = { showDebtWarning = false },
+            title = { Text("无法删除") },
+            text = { Text("该信用账户尚有未结清负债（当前余额: ¥${String.format("%.2f", account.currentBalance)}），请先还清负债后再删除。") },
+            confirmButton = {
+                TextButton(onClick = { showDebtWarning = false }) {
+                    Text("知道了")
+                }
+            }
+        )
+    }
 
     if (showDeleteConfirm) {
         AlertDialog(
@@ -1079,11 +1100,13 @@ private fun EditAccountDialog(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1100,44 +1123,65 @@ private fun EditAccountDialog(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = it }
-            ) {
-                OutlinedTextField(
-                    value = selectedType.displayName,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("账户类型") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    AccountType.entries.forEach { type ->
-                        DropdownMenuItem(
-                            text = { Text(type.displayName) },
-                            onClick = {
-                                selectedType = type
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
+            
+            // 显示账户类型（不可编辑）
             OutlinedTextField(
-                value = cardNumber,
-                onValueChange = { cardNumber = it.takeLast(4) },
-                label = { Text("卡号后4位(可选)") },
+                value = account.type.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("账户类型") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                trailingIcon = {
+                    Icon(getAccountIcon(account.type.icon), contentDescription = null)
+                }
             )
+            
+            // 信用账户字段
+            if (account.attribute == AccountAttribute.CREDIT) {
+                OutlinedTextField(
+                    value = creditLimit,
+                    onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("信用额度") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = billDay,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
+                        },
+                        label = { Text("账单日") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    
+                    OutlinedTextField(
+                        value = repaymentDay,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
+                        },
+                        label = { Text("还款日") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            } else {
+                OutlinedTextField(
+                    value = cardNumber,
+                    onValueChange = { cardNumber = it.takeLast(4) },
+                    label = { Text("卡号后4位(可选)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
 
             Text("选择颜色", style = MaterialTheme.typography.labelMedium)
             Row(
@@ -1171,7 +1215,13 @@ private fun EditAccountDialog(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 TextButton(
-                    onClick = { showDeleteConfirm = true },
+                    onClick = {
+                        if (hasUnsettledDebt) {
+                            showDebtWarning = true
+                        } else {
+                            showDeleteConfirm = true
+                        }
+                    },
                     colors = ButtonDefaults.textButtonColors(contentColor = IOSColors.SystemRed)
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null)
@@ -1186,7 +1236,16 @@ private fun EditAccountDialog(
                     TextButton(
                         onClick = {
                             if (name.isNotBlank()) {
-                                onConfirm(name, selectedType, selectedType.icon, selectedColor, cardNumber.takeIf { it.isNotBlank() })
+                                onConfirm(
+                                    name,
+                                    account.type,
+                                    account.type.icon,
+                                    selectedColor,
+                                    cardNumber.takeIf { it.isNotBlank() },
+                                    creditLimit.toDoubleOrNull() ?: 0.0,
+                                    billDay.toIntOrNull() ?: 1,
+                                    repaymentDay.toIntOrNull() ?: 10
+                                )
                             }
                         },
                         enabled = name.isNotBlank()

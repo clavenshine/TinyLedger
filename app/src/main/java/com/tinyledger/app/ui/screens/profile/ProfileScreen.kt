@@ -306,7 +306,7 @@ fun ProfileScreen(
         item { Spacer(modifier = Modifier.height(20.dp)) }
 
         item {
-            SectionTitle("资产账户")
+            SectionTitle("账户管理")
         }
 
         item {
@@ -321,8 +321,8 @@ fun ProfileScreen(
                     ProfileSettingsItem(
                         icon = Icons.Default.AccountBalance,
                         iconTint = IOSColors.Primary,
-                        title = "资产账户",
-                        subtitle = "管理银行卡、支付宝、微信等账户",
+                        title = "我的账户",
+                        subtitle = "管理现金账户和信用账户",
                         onClick = onNavigateToAccounts
                     )
                 }

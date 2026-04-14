@@ -168,14 +168,14 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "添加资产账户",
+                                text = "添加账户",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "首次安装使用本软件时，需添加资产账户，添加账户后本卡片不再提示，后续要添加账户，请到'我的'-->'资产账户'模块中添加",
+                                text = "首次安装使用本软件时，需添加账户，添加账户后本卡片不再提示，后续要添加账户，请到'我的'-->'账户管理'模块中添加",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
@@ -202,9 +202,9 @@ fun HomeScreen(
                     .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 当前负债
+                // 信用账户
                 Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts() },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -219,23 +219,22 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "当前负债",
+                                text = "信用账户",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
-                        val totalDebt = uiState.accounts
-                            .filter { it.currentBalance < 0 }
-                            .sumOf { it.currentBalance }
-                        if (totalDebt < 0) {
+                        val creditAccounts = uiState.accounts.filter { it.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
+                        val totalOverdraft = creditAccounts.filter { it.currentBalance < 0 }.sumOf { kotlin.math.abs(it.currentBalance) }
+                        if (totalOverdraft > 0) {
                             Text(
-                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalDebt)}",
+                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalOverdraft)}",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = Color(0xFFC62828),
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         } else {
                             Text(
-                                text = "你很棒，当前无负债",
+                                text = "无信用透支",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = Color(0xFF2E7D32),
                                 modifier = Modifier.padding(top = 6.dp)
@@ -244,9 +243,9 @@ fun HomeScreen(
                     }
                 }
 
-                // 净资产
+                // 现金账户
                 Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts() },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -261,13 +260,14 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "净资产",
+                                text = "现金账户",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
-                        val balance = uiState.totalNetAssets
+                        val cashAccounts = uiState.accounts.filter { it.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
+                        val cashTotal = cashAccounts.sumOf { it.currentBalance }
                         Text(
-                            text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(balance)}",
+                            text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(cashTotal)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(top = 4.dp)
                         )

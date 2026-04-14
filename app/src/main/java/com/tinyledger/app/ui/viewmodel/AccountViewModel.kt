@@ -202,7 +202,10 @@ class AccountViewModel @Inject constructor(
         type: AccountType,
         icon: String,
         color: String,
-        cardNumber: String?
+        cardNumber: String?,
+        creditLimit: Double = 0.0,
+        billDay: Int = 0,
+        repaymentDay: Int = 0
     ) {
         viewModelScope.launch {
             val updated = account.copy(
@@ -211,6 +214,9 @@ class AccountViewModel @Inject constructor(
                 icon = icon,
                 color = color,
                 cardNumber = cardNumber,
+                creditLimit = creditLimit,
+                billDay = billDay,
+                repaymentDay = repaymentDay,
                 updatedAt = System.currentTimeMillis()
             )
             accountRepository.updateAccount(updated)
