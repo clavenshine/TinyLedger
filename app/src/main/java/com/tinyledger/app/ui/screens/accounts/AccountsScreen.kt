@@ -518,6 +518,7 @@ private fun SwipeableAccountCard(
                         monthlyTransactions = monthlyTransactions,
                         expandedMonths = expandedMonths,
                         accountId = account.id,
+                        accountAttribute = account.attribute,
                         currencySymbol = currencySymbol,
                         onMonthClick = onMonthClick,
                         onContainerClick = {
@@ -719,10 +720,37 @@ private fun TransactionDetailsSection(
     monthlyTransactions: List<MonthlyTransactions>,
     expandedMonths: Set<String>,
     accountId: Long,
+    accountAttribute: AccountAttribute = AccountAttribute.CASH,
     currencySymbol: String,
     onMonthClick: (String) -> Unit,
     onContainerClick: () -> Unit = {}
 ) {
+    // Sub-tab state for credit accounts
+    var selectedSubTab by remember { mutableStateOf(0) } // 0: 全部, 1: 消费, 2: 还款
+    val subTabs = if (accountAttribute == AccountAttribute.CREDIT) {
+        listOf("全部", "消费", "还款")
+    } else {
+        listOf("全部")
+    }
+    
+    // Filter transactions based on selected sub-tab
+    val filteredMonthlyTransactions = remember(monthlyTransactions, selectedSubTab, accountAttribute) {
+        if (accountAttribute != AccountAttribute.CREDIT || selectedSubTab == 0) {
+            monthlyTransactions
+        } else {
+            monthlyTransactions.map { monthly ->
+                val filteredTransactions = monthly.transactions.filter { transaction ->
+                    when (selectedSubTab) {
+                        1 -> transaction.category.id != "credit_repay" // 消费：非还款类别
+                        2 -> transaction.category.id == "credit_repay" // 还款：还款类别
+                        else -> true
+                    }
+                }
+                monthly.copy(transactions = filteredTransactions)
+            }.filter { it.transactions.isNotEmpty() } // 移除空的月份
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -737,8 +765,31 @@ private fun TransactionDetailsSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
+        
+        // Sub-tabs for credit accounts
+        if (accountAttribute == AccountAttribute.CREDIT) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                subTabs.forEachIndexed { index, title ->
+                    FilterChip(
+                        selected = selectedSubTab == index,
+                        onClick = { selectedSubTab = index },
+                        label = { Text(title, fontSize = 13.sp) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+        }
 
-        if (monthlyTransactions.isEmpty()) {
+        if (filteredMonthlyTransactions.isEmpty()) {
             Text(
                 text = "暂无交易记录",
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -747,7 +798,7 @@ private fun TransactionDetailsSection(
                 modifier = Modifier.padding(vertical = 16.dp)
             )
         } else {
-            monthlyTransactions.forEach { monthly ->
+            filteredMonthlyTransactions.forEach { monthly ->
                 MonthSection(
                     monthly = monthly,
                     isExpanded = expandedMonths.contains("${accountId}_${monthly.yearMonth}"),
