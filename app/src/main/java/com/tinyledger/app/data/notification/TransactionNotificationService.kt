@@ -207,21 +207,23 @@ class TransactionNotificationService : NotificationListenerService() {
         // 用最长的内容来解析
         val fullContent = listOf(bigText, text).maxByOrNull { it.length } ?: ""
 
-        Log.d(TAG, "收到通知 pkg=$packageName title=$title text=${text.take(80)} bigText=${bigText.take(80)}")
+        Log.d(TAG, "[通知捕获] pkg=$packageName title='$title' text='${text.take(80)}' bigText='${bigText.take(80)}'")
 
         // ── 路径1：支付类应用 → 自动记账 ──────────────────────────────
         val appLabel = paymentPackages[packageName]
         if (appLabel != null) {
             if (!isEnabled(applicationContext)) {
-                Log.d(TAG, "自动记账未开启，跳过 $packageName")
+                Log.d(TAG, "[通知捕获] 自动记账未开启，跳过 $packageName")
                 return
             }
+            Log.d(TAG, "[通知捕获] 检测到支付应用: $appLabel ($packageName)")
             handlePaymentNotification(packageName, appLabel, title, text, fullContent, subText)
             return
         }
 
         // ── 路径2：银行短信通知捕获 ──────────────────────────────────
         if (packageName in smsPackages && isBankSmsCaptureEnabled(applicationContext)) {
+            Log.d(TAG, "[通知捕获] 检测到短信应用: $packageName")
             handleBankSmsNotification(packageName, title, fullContent.ifBlank { text })
         }
     }
@@ -239,7 +241,10 @@ class TransactionNotificationService : NotificationListenerService() {
         subText: String
     ) {
         val combined = "$title $fullContent $subText".trim()
-        if (combined.isBlank()) return
+        if (combined.isBlank()) {
+            Log.d(TAG, "[支付通知] 内容为空，跳过")
+            return
+        }
 
         // 去重：同一内容5分钟内不重复记账
         val dedupKey = md5("$packageName|${combined.take(100)}")
@@ -247,7 +252,7 @@ class TransactionNotificationService : NotificationListenerService() {
         synchronized(recentHashes) {
             val lastTime = recentHashes[dedupKey]
             if (lastTime != null && now - lastTime < 5 * 60 * 1000L) {
-                Log.d(TAG, "跳过重复通知: $dedupKey")
+                Log.d(TAG, "[支付通知] 跳过重复通知: $dedupKey")
                 return
             }
             recentHashes[dedupKey] = now
@@ -257,16 +262,14 @@ class TransactionNotificationService : NotificationListenerService() {
 
         val parsed = parsePaymentNotification(packageName, appLabel, title, text, fullContent)
         if (parsed == null) {
-            Log.d(TAG, "无法解析为支付通知: $combined")
+            Log.d(TAG, "[支付通知] 无法解析为支付通知: $combined")
             return
         }
 
-        Log.d(TAG, "解析成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
+        Log.d(TAG, "[支付通知] 解析成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
 
         serviceScope.launch {
             try {
-                val accounts = accountRepository.getAllAccounts().first()
-                val accountId = matchAccount(packageName, accounts)
                 val category = inferCategory(parsed)
 
                 val transaction = Transaction(
@@ -275,22 +278,26 @@ class TransactionNotificationService : NotificationListenerService() {
                     amount = parsed.amount,
                     note = parsed.note,
                     date = System.currentTimeMillis(),
-                    accountId = accountId
+                    accountId = null  // 支付通知无法自动匹配账户
                 )
 
-                if (isSeamlessEnabled(applicationContext)) {
+                val seamlessEnabled = isSeamlessEnabled(applicationContext)
+                Log.d(TAG, "[支付通知] 无感模式: $seamlessEnabled")
+
+                if (seamlessEnabled) {
                     // 无感模式：直接自动记账
                     transactionRepository.insertTransaction(transaction)
-                    Log.d(TAG, "无感自动记账成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
+                    Log.d(TAG, "[无感记账] 成功: ${parsed.type} ¥${parsed.amount} [${parsed.note}]")
                     playFeedback()
                 } else {
                     // 非无感模式：存入待确认表 + 弹出通知
                     val pendingId = pendingTransactionRepository.insertPendingTransaction(transaction)
-                    Log.d(TAG, "待确认记账已保存: pendingId=$pendingId ${parsed.type} ¥${parsed.amount}")
+                    Log.d(TAG, "[待确认] 已保存: pendingId=$pendingId ${parsed.type} ¥${parsed.amount}")
+                    Log.d(TAG, "[待确认] 准备弹出确认通知...")
                     showTransactionConfirmationNotification(pendingId, transaction, appLabel)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "自动记账失败", e)
+                Log.e(TAG, "[支付通知] 自动记账失败", e)
             }
         }
     }
@@ -667,7 +674,13 @@ class TransactionNotificationService : NotificationListenerService() {
             ).apply {
                 description = "自动记账确认通知"
                 enableVibration(true)
+                enableLights(true)
+                lightColor = android.graphics.Color.parseColor("#3F51B5")
                 setShowBadge(true)
+                // 确保可以在锁屏上显示
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                // 确保显示为横幅通知
+                setBypassDnd(true)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -728,7 +741,9 @@ class TransactionNotificationService : NotificationListenerService() {
                     .bigText("$typeLabel: $amountText\n分类: $categoryName\n来源: $appLabel${if (!transaction.note.isNullOrBlank()) "\n备注: ${transaction.note.take(40)}" else ""}")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(false)
             .setOngoing(false)
             // 点击通知本身也打开编辑界面
@@ -752,7 +767,7 @@ class TransactionNotificationService : NotificationListenerService() {
             .build()
 
         notificationManager.notify(NOTIFICATION_ID_BASE + pendingId.toInt(), notification)
-        Log.d(TAG, "确认通知已显示: pendingId=$pendingId")
+        Log.d(TAG, "确认通知已显示: pendingId=$pendingId $typeLabel ¥${transaction.amount}")
     }
 
     data class ParsedNotification(

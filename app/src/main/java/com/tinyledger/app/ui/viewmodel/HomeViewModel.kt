@@ -47,8 +47,6 @@ class HomeViewModel @Inject constructor(
     private fun loadData() {
         val (year, month) = DateUtils.getCurrentYearMonth()
         val (startDate, endDate) = DateUtils.getMonthStartEnd(year, month)
-        val todayStart = DateUtils.getTodayStart()
-        val todayEnd = DateUtils.getTodayEnd()
 
         // 当前日期是本月第几天
         val calendar = java.util.Calendar.getInstance()
@@ -59,9 +57,18 @@ class HomeViewModel @Inject constructor(
                 transactionRepository.getTransactionsByDateRange(startDate, endDate),
                 transactionRepository.getTotalByTypeAndDateRange(TransactionType.INCOME.value, startDate, endDate),
                 transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
-                transactionRepository.getTransactionsByDateRange(todayStart, todayEnd),
+                transactionRepository.getAllTransactions(),  // 获取所有交易，然后按日期过滤
                 preferencesRepository.getSettings()
-            ) { monthTransactions, income, expense, todayTx, settings ->
+            ) { monthTransactions, income, expense, allTransactions, settings ->
+                // 动态计算今日日期范围（每次发射时重新计算）
+                val todayStart = DateUtils.getTodayStart()
+                val todayEnd = DateUtils.getTodayEnd()
+
+                // 严格按交易日期过滤今日账单
+                val todayTx = allTransactions.filter { tx ->
+                    tx.date in todayStart..todayEnd
+                }.sortedByDescending { it.date }
+
                 val todayInc = todayTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
                 val todayExp = todayTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
                 val dailyAvg = if (dayOfMonth > 0) expense / dayOfMonth else 0.0
