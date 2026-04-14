@@ -223,8 +223,8 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
-                        val creditAccounts = uiState.accounts.filter { it.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
-                        val totalOverdraft = creditAccounts.filter { it.currentBalance < 0 }.sumOf { kotlin.math.abs(it.currentBalance) }
+                        val creditAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
+                        val totalOverdraft = creditAccounts.filter { it.second < 0 }.sumOf { kotlin.math.abs(it.second) }
                         if (totalOverdraft > 0) {
                             Text(
                                 text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalOverdraft)}",
@@ -264,8 +264,8 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
-                        val cashAccounts = uiState.accounts.filter { it.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
-                        val cashTotal = cashAccounts.sumOf { it.currentBalance }
+                        val cashAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
+                        val cashTotal = cashAccounts.sumOf { it.second }
                         Text(
                             text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(cashTotal)}",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),

@@ -26,7 +26,8 @@ data class HomeUiState(
     val currencySymbol: String = "¥",
     val isLoading: Boolean = false,
     val hasAccounts: Boolean = true,
-    val accounts: List<com.tinyledger.app.domain.model.Account> = emptyList()
+    val accounts: List<com.tinyledger.app.domain.model.Account> = emptyList(),
+    val accountsWithBalance: List<Pair<com.tinyledger.app.domain.model.Account, Double>> = emptyList()
 )
 
 @HiltViewModel
@@ -87,9 +88,15 @@ class HomeViewModel @Inject constructor(
             }.combine(pendingTransactionRepository.getAllPendingTransactions()) { state, pendingTx ->
                 state.copy(pendingTransactions = pendingTx)
             }.combine(accountRepository.getAllAccounts()) { state, accounts ->
+                // Calculate balance for each account
+                val accountsWithBalance = accounts.map { account ->
+                    val calculatedBalance = calculateAccountBalance(account)
+                    Pair(account, calculatedBalance)
+                }
                 state.copy(
                     hasAccounts = accounts.isNotEmpty(),
-                    accounts = accounts
+                    accounts = accounts,
+                    accountsWithBalance = accountsWithBalance
                 )
             }.combine(accountRepository.getTotalBalance()) { state, totalBalance ->
                 state.copy(totalNetAssets = totalBalance)
@@ -120,6 +127,20 @@ class HomeViewModel @Inject constructor(
     fun confirmPendingTransaction(pendingId: Long, transaction: Transaction) {
         viewModelScope.launch {
             pendingTransactionRepository.confirmPendingTransaction(pendingId, transaction)
+        }
+    }
+    
+    // 计算账户余额 = 期初余额 + 收入 - 支出
+    private suspend fun calculateAccountBalance(account: com.tinyledger.app.domain.model.Account): Double {
+        return if (account.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT) {
+            // 信用账户：期初余额 - 支出（支出增加负债）
+            val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+            account.initialBalance - totalExpense
+        } else {
+            // 现金账户：期初余额 + 收入 - 支出
+            val totalIncome = transactionRepository.getTotalIncomeByAccountId(account.id).first()
+            val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+            account.initialBalance + totalIncome - totalExpense
         }
     }
 }
