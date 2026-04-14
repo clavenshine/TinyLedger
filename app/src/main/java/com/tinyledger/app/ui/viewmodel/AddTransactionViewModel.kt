@@ -159,6 +159,16 @@ class AddTransactionViewModel @Inject constructor(
             )
         }
     }
+    
+    // Set credit repayment mode by account ID (for navigation)
+    fun setCreditRepayModeById(accountId: Long) {
+        viewModelScope.launch {
+            val account = accountRepository.getAccountById(accountId)
+            if (account != null && account.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT) {
+                setCreditRepayMode(account)
+            }
+        }
+    }
 
     fun selectCategory(category: Category) {
         _uiState.update { it.copy(selectedCategory = category) }

@@ -126,7 +126,24 @@ fun AppNavHost(
             AccountsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToRepay = { creditAccount ->
+                    navController.navigate(Screen.CreditRepay.createRoute(creditAccount.id))
                 }
+            )
+        }
+
+        composable(
+            route = Screen.CreditRepay.route,
+            arguments = listOf(navArgument("accountId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getLong("accountId") ?: 0L
+            // Navigate to AddTransactionScreen and trigger credit repayment mode
+            AddTransactionScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                initialCreditAccountId = if (accountId > 0) accountId else null
             )
         }
 

@@ -46,6 +46,7 @@ fun AddTransactionScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAccounts: () -> Unit = {},
     transactionId: Long? = null,
+    initialCreditAccountId: Long? = null,
     viewModel: AddTransactionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -58,6 +59,13 @@ fun AddTransactionScreen(
     LaunchedEffect(transactionId) {
         if (transactionId != null && transactionId > 0) {
             viewModel.loadTransaction(transactionId)
+        }
+    }
+
+    // Trigger credit repayment mode when navigating from credit account
+    LaunchedEffect(initialCreditAccountId) {
+        if (initialCreditAccountId != null && initialCreditAccountId > 0) {
+            viewModel.setCreditRepayModeById(initialCreditAccountId)
         }
     }
 

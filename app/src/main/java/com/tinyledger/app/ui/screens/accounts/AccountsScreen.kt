@@ -55,6 +55,7 @@ import kotlin.math.roundToInt
 fun AccountsScreen(
     currencySymbol: String = "¥",
     onNavigateBack: () -> Unit = {},
+    onNavigateToRepay: (Account) -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -215,8 +216,7 @@ fun AccountsScreen(
                                 showDeleteConfirmDialog = true
                             },
                             onRepay = {
-                                // TODO: Navigate to AddTransactionScreen with credit repayment mode
-                                // This will be implemented once we have navigation set up
+                                onNavigateToRepay(account)
                             }
                         )
                     }
