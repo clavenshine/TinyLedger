@@ -213,6 +213,10 @@ fun AccountsScreen(
                             onDelete = {
                                 accountToDelete = account
                                 showDeleteConfirmDialog = true
+                            },
+                            onRepay = {
+                                // TODO: Navigate to AddTransactionScreen with credit repayment mode
+                                // This will be implemented once we have navigation set up
                             }
                         )
                     }
@@ -286,7 +290,8 @@ private fun SwipeableAccountCard(
     onCardClick: () -> Unit,
     onMonthClick: (String) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRepay: () -> Unit = {} // 信用还款回调
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
     var swipeDirection by remember { mutableStateOf(0) } // 0=无滑动, -1=左滑(显示删除), 1=右滑(显示编辑)
@@ -499,7 +504,8 @@ private fun SwipeableAccountCard(
                         } else {
                             onCardClick()
                         }
-                    }
+                    },
+                    onRepay = onRepay
                 )
 
                 // 展开的交易明细
@@ -573,7 +579,8 @@ private fun AccountCard(
     calculatedBalance: Double,
     currencySymbol: String,
     isExpanded: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRepay: () -> Unit = {}
 ) {
     val rotationAngle by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
@@ -652,6 +659,30 @@ private fun AccountCard(
                             color = if (calculatedBalance >= 0) IOSColors.SystemGreen else IOSColors.SystemRed
                         )
                     )
+                    
+                    // 信用账户还款按钮
+                    if (account.attribute == AccountAttribute.CREDIT && calculatedBalance < 0) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = {
+                                // 阻止事件冒泡，不触发卡片点击
+                                onRepay()
+                            },
+                            modifier = Modifier.height(24.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = IOSColors.SystemRed.copy(alpha = 0.1f),
+                                contentColor = IOSColors.SystemRed
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "还款",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(8.dp))
