@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +48,7 @@ fun CategorySelector(
     onRenameCategory: ((Category, String) -> Unit)? = null,
     showAddButton: Boolean = true,
     transactionType: TransactionType = TransactionType.EXPENSE,
+    vibrationEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -72,7 +75,8 @@ fun CategorySelector(
                                 if (onDeleteCategory != null || onRenameCategory != null) {
                                     showActionMenu = category
                                 }
-                            }
+                            },
+                            vibrationEnabled = vibrationEnabled
                         )
                     }
                 }
@@ -164,8 +168,11 @@ private fun CategoryItem(
     category: Category,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    vibrationEnabled: Boolean = false
 ) {
+    val haptic = LocalHapticFeedback.current
+    
     val animatedBorderWidth by animateDpAsState(
         targetValue = if (isSelected) 2.dp else 1.dp,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -177,7 +184,12 @@ private fun CategoryItem(
             .aspectRatio(1f)
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
-                onClick = onClick,
+                onClick = {
+                    if (vibrationEnabled) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    onClick()
+                },
                 onLongClick = onLongClick
             )
             .background(
