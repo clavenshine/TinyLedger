@@ -172,17 +172,24 @@ class AccountViewModel @Inject constructor(
         icon: String,
         initialBalance: Double,
         color: String,
-        cardNumber: String?
+        cardNumber: String?,
+        creditLimit: Double = 0.0,
+        billDay: Int = 0,
+        repaymentDay: Int = 0
     ) {
         viewModelScope.launch {
             val account = Account(
                 name = name,
                 type = type,
+                attribute = type.attribute,
                 icon = icon,
                 initialBalance = initialBalance,
                 currentBalance = initialBalance,
                 color = color,
-                cardNumber = cardNumber
+                cardNumber = cardNumber,
+                creditLimit = creditLimit,
+                billDay = billDay,
+                repaymentDay = repaymentDay
             )
             accountRepository.addAccount(account)
             hideAddDialog()

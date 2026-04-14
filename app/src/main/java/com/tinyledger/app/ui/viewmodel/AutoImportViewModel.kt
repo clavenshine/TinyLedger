@@ -316,7 +316,7 @@ class AutoImportViewModel @Inject constructor(
     ): Long? {
         val targetType = when {
             csv.source.contains("微信") -> AccountType.WECHAT
-            csv.source.contains("支付宝") -> AccountType.ALIPAY
+            csv.source.contains("支付宝") -> AccountType.HUA_BEI
             else -> null
         } ?: return null
         return accounts.find { it.type == targetType }?.id
@@ -434,7 +434,7 @@ class AutoImportViewModel @Inject constructor(
         val source = sms.source
         val typeMatched = when {
             source == "微信支付" -> accounts.find { it.type == AccountType.WECHAT }
-            source == "支付宝" -> accounts.find { it.type == AccountType.ALIPAY }
+            source == "支付宝" -> accounts.find { it.type == AccountType.HUA_BEI }
             source.contains("银行") || source.contains("行") -> {
                 accounts.filter { it.type == AccountType.BANK }.find { account ->
                     account.name.contains(source) || source.contains(account.name.take(4))

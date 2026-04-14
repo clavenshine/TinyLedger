@@ -783,7 +783,7 @@ class TransactionNotificationService : NotificationListenerService() {
     ): Long? {
         val targetType = when (packageName) {
             "com.tencent.mm" -> AccountType.WECHAT
-            "com.eg.android.AlipayGphone" -> AccountType.ALIPAY
+            "com.eg.android.AlipayGphone" -> AccountType.HUA_BEI
             else -> return null
         }
         return accounts.find { it.type == targetType }?.id

@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import com.tinyledger.app.domain.model.Account
+import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.AccountType
+import com.tinyledger.app.domain.model.getAccountTypesByAttribute
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.model.accountColors
@@ -178,8 +180,8 @@ fun AccountsScreen(
     if (uiState.showAddDialog) {
         AddAccountDialog(
             onDismiss = { viewModel.hideAddDialog() },
-            onConfirm = { name, type, icon, balance, color, cardNumber ->
-                viewModel.addAccount(name, type, icon, balance, color, cardNumber)
+            onConfirm = { name, type, icon, balance, color, cardNumber, creditLimit, billDay, repaymentDay ->
+                viewModel.addAccount(name, type, icon, balance, color, cardNumber, creditLimit, billDay, repaymentDay)
             }
         )
     }
@@ -816,22 +818,36 @@ private fun EmptyAccountsView() {
 @Composable
 private fun AddAccountDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, AccountType, String, Double, String, String?) -> Unit
+    onConfirm: (String, AccountType, String, Double, String, String?, Double, Int, Int) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
+    var selectedAttribute by remember { mutableStateOf(AccountAttribute.CASH) }
     var selectedType by remember { mutableStateOf(AccountType.BANK) }
     var initialBalance by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(accountColors[0]) }
     var cardNumber by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    
+    // Credit account fields
+    var creditLimit by remember { mutableStateOf("") }
+    var billDay by remember { mutableStateOf("1") }
+    var repaymentDay by remember { mutableStateOf("10") }
+    
+    // Update selectedType when attribute changes
+    LaunchedEffect(selectedAttribute) {
+        val types = getAccountTypesByAttribute(selectedAttribute)
+        selectedType = types.firstOrNull() ?: AccountType.BANK
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -840,6 +856,25 @@ private fun AddAccountDialog(
                 text = "添加账户",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
+            
+            // 账户属性选择 - 胶囊按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AccountAttribute.entries.forEach { attr ->
+                    FilterChip(
+                        selected = selectedAttribute == attr,
+                        onClick = { selectedAttribute = attr },
+                        label = { Text(attr.displayName, fontSize = 14.sp) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            selectedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
 
             OutlinedTextField(
                 value = name,
@@ -868,7 +903,7 @@ private fun AddAccountDialog(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    AccountType.entries.forEach { type ->
+                    getAccountTypesByAttribute(selectedAttribute).forEach { type ->
                         DropdownMenuItem(
                             text = { Text(type.displayName) },
                             onClick = {
@@ -891,14 +926,53 @@ private fun AddAccountDialog(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
-
-            OutlinedTextField(
-                value = cardNumber,
-                onValueChange = { cardNumber = it.takeLast(4) },
-                label = { Text("卡号后4位(可选)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            
+            // 信用账户额外字段
+            if (selectedAttribute == AccountAttribute.CREDIT) {
+                OutlinedTextField(
+                    value = creditLimit,
+                    onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("信用额度") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = billDay,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
+                        },
+                        label = { Text("账单日") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    
+                    OutlinedTextField(
+                        value = repaymentDay,
+                        onValueChange = { 
+                            if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
+                        },
+                        label = { Text("还款日") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            } else {
+                OutlinedTextField(
+                    value = cardNumber,
+                    onValueChange = { cardNumber = it.takeLast(4) },
+                    label = { Text("卡号后4位(可选)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
 
             // 颜色选择 - 两边对齐
             Text(
@@ -948,7 +1022,10 @@ private fun AddAccountDialog(
                                 selectedType.icon,
                                 initialBalance.toDoubleOrNull() ?: 0.0,
                                 selectedColor,
-                                cardNumber.takeIf { it.isNotBlank() }
+                                cardNumber.takeIf { it.isNotBlank() },
+                                creditLimit.toDoubleOrNull() ?: 0.0,
+                                billDay.toIntOrNull() ?: 1,
+                                repaymentDay.toIntOrNull() ?: 10
                             )
                         }
                     },

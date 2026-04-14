@@ -859,9 +859,16 @@ private fun getAccountTypeIcon(type: AccountType): androidx.compose.ui.graphics.
     return when (type) {
         AccountType.BANK -> Icons.Default.AccountBalance
         AccountType.WECHAT -> Icons.Default.Chat
-        AccountType.ALIPAY -> Icons.Default.Payment
         AccountType.CASH -> Icons.Default.Wallet
-        AccountType.OTHER -> Icons.Default.AccountBalanceWallet
+        AccountType.YUEBAO -> Icons.Default.AccountBalanceWallet
+        AccountType.OTHER -> Icons.Default.HelpOutline
+        // Credit account types
+        AccountType.CREDIT_CARD -> Icons.Default.CreditCard
+        AccountType.HUA_BEI -> Icons.Default.Payment
+        AccountType.JIE_BEI -> Icons.Default.Payments
+        AccountType.JD_BAITIAO -> Icons.Default.ShoppingBag
+        AccountType.MEITUAN_YUEFU -> Icons.Default.Restaurant
+        AccountType.DOUYIN_YUEFU -> Icons.Default.VideoLibrary
     }
 }
 
@@ -1067,7 +1074,7 @@ private fun inferAccountFromOcrText(text: String, accounts: List<Account>): Long
         text.containsAny("微信支付", "微信", "零钱", "微信红包") ->
             accounts.find { it.type == AccountType.WECHAT }?.id
         text.containsAny("支付宝", "余额宝", "花呗", "蚂蚁") ->
-            accounts.find { it.type == AccountType.ALIPAY }?.id
+            accounts.find { it.type == AccountType.HUA_BEI }?.id
         text.containsAny("银行", "储蓄卡", "借记卡", "信用卡", "工商", "建设",
             "农业", "中国银行", "招商", "交通", "邮储", "民生",
             "光大", "兴业", "浦发", "中信") ->
