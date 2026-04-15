@@ -60,6 +60,10 @@ class TransactionRepositoryImpl @Inject constructor(
         return transactionDao.getTransactionById(id)?.toDomain()
     }
 
+    override suspend fun getTransactionByRelatedId(relatedId: Long): Transaction? {
+        return transactionDao.getTransactionByRelatedId(relatedId)?.toDomain()
+    }
+
     override suspend fun insertTransaction(transaction: Transaction): Long {
         val id = transactionDao.insertTransaction(transaction.toEntity())
         // 保存后立即更新账户余额
@@ -94,39 +98,62 @@ class TransactionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateDualTransaction(fromTransaction: Transaction, toTransaction: Transaction) {
+        // 查找旧记录以识别之前关联的账户
+        val oldFrom = fromTransaction.id.let { transactionDao.getTransactionById(it) }
+        val oldTo = toTransaction.id.let { transactionDao.getTransactionById(it) }
+        
         // 更新两笔交易
         transactionDao.updateTransaction(fromTransaction.toEntity())
         transactionDao.updateTransaction(toTransaction.toEntity())
         
-        // 更新两个账户的余额
+        // 更新新账户的余额
         fromTransaction.accountId?.let { updateAccountBalanceById(it) }
         toTransaction.accountId?.let { updateAccountBalanceById(it) }
+        
+        // 更新旧账户的余额（如果账户发生了变化）
+        oldFrom?.accountId?.let { oldId ->
+            if (oldId != fromTransaction.accountId) updateAccountBalanceById(oldId)
+        }
+        oldTo?.accountId?.let { oldId ->
+            if (oldId != toTransaction.accountId) updateAccountBalanceById(oldId)
+        }
     }
 
     override suspend fun deleteTransaction(id: Long) {
-        // 删除前获取账户ID，以便删除后更新余额
+        // 查找要删除的交易
         val transaction = transactionDao.getTransactionById(id)
         val accountId = transaction?.accountId
+        
+        // 删除关联的双记录交易（如果存在）
+        transaction?.relatedTransactionId?.let { relatedId ->
+            val relatedTx = transactionDao.getTransactionById(relatedId)
+            val relatedAccountId = relatedTx?.accountId
+            transactionDao.deleteTransactionById(relatedId)
+            relatedAccountId?.let { updateAccountBalanceById(it) }
+        }
+        
+        // 也检查是否有另一笔交易指向这笔（反向关联）
+        val reverseRelated = transactionDao.getTransactionByRelatedId(id)
+        if (reverseRelated != null) {
+            val reverseAccountId = reverseRelated.accountId
+            transactionDao.deleteTransactionById(reverseRelated.id)
+            reverseAccountId?.let { updateAccountBalanceById(it) }
+        }
+        
+        // 删除主交易
         transactionDao.deleteTransactionById(id)
-        // 删除后立即更新账户余额
         accountId?.let { updateAccountBalanceById(it) }
     }
 
-    // 根据账户ID计算并更新余额：期初 + 收入 - 支出
+    // 根据账户ID计算并更新余额
+    // 统一逻辑：期初余额 + 所有正数金额（收入） - 所有负数金额的绝对值（支出）
+    // 对于信用账户，期初余额通常为0或负数（负债），还款（正数）会增加余额
     private suspend fun updateAccountBalanceById(accountId: Long) {
         val account = accountDao.getAccountById(accountId) ?: return
         
-        val calculatedBalance = if (account.attribute == "credit") {
-            // 信用账户：期初余额 - 支出（支出增加负债）
-            // 注意：信用账户的 currentBalance 为负数表示负债
-            val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
-            account.initialBalance - totalExpense
-        } else {
-            // 现金账户：期初余额 + 收入 - 支出
-            val totalIncome = transactionDao.getTotalIncomeByAccountId(accountId).first()
-            val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
-            account.initialBalance + totalIncome - totalExpense
-        }
+        val totalIncome = transactionDao.getTotalIncomeByAccountId(accountId).first()
+        val totalExpense = transactionDao.getTotalExpenseByAccountId(accountId).first()
+        val calculatedBalance = account.initialBalance + totalIncome - totalExpense
         
         accountDao.updateBalance(accountId, calculatedBalance)
     }

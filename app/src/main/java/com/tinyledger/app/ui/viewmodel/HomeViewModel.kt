@@ -56,11 +56,9 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 transactionRepository.getTransactionsByDateRange(startDate, endDate),
-                transactionRepository.getTotalByTypeAndDateRange(TransactionType.INCOME.value, startDate, endDate),
-                transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
                 transactionRepository.getAllTransactions(),  // 获取所有交易，然后按日期过滤
                 preferencesRepository.getSettings()
-            ) { monthTransactions, income, expense, allTransactions, settings ->
+            ) { monthTransactions, allTransactions, settings ->
                 // 动态计算今日日期范围（每次发射时重新计算）
                 val todayStart = DateUtils.getTodayStart()
                 val todayEnd = DateUtils.getTodayEnd()
@@ -70,15 +68,21 @@ class HomeViewModel @Inject constructor(
                     tx.date in todayStart..todayEnd
                 }.sortedByDescending { it.date }
 
-                val todayInc = todayTx.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
-                val todayExp = todayTx.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-                val dailyAvg = if (dayOfMonth > 0) expense / dayOfMonth else 0.0
+                // Calculate monthly totals using sign-based amounts
+                val monthlyInc = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
+                val monthlyExp = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
+
+                // Calculate today totals using sign-based amounts
+                val todayInc = todayTx.filter { it.amount > 0 }.sumOf { it.amount }
+                val todayExp = todayTx.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
+
+                val dailyAvg = if (dayOfMonth > 0) monthlyExp / dayOfMonth else 0.0
 
                 HomeUiState(
                     recentTransactions = monthTransactions.take(10),
                     todayTransactions = todayTx,
-                    monthlyIncome = income,
-                    monthlyExpense = expense,
+                    monthlyIncome = monthlyInc,
+                    monthlyExpense = monthlyExp,
                     todayIncome = todayInc,
                     todayExpense = todayExp,
                     dailyAvgExpense = dailyAvg,
@@ -131,16 +135,10 @@ class HomeViewModel @Inject constructor(
     }
     
     // 计算账户余额 = 期初余额 + 收入 - 支出
+    // 统一逻辑：期初余额 + 正数金额（收入） - 负数金额绝对值（支出）
     private suspend fun calculateAccountBalance(account: com.tinyledger.app.domain.model.Account): Double {
-        return if (account.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT) {
-            // 信用账户：期初余额 - 支出（支出增加负债）
-            val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
-            account.initialBalance - totalExpense
-        } else {
-            // 现金账户：期初余额 + 收入 - 支出
-            val totalIncome = transactionRepository.getTotalIncomeByAccountId(account.id).first()
-            val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
-            account.initialBalance + totalIncome - totalExpense
-        }
+        val totalIncome = transactionRepository.getTotalIncomeByAccountId(account.id).first()
+        val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+        return account.initialBalance + totalIncome - totalExpense
     }
 }

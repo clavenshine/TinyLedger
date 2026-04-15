@@ -45,6 +45,7 @@ fun HomeScreen(
     onAddTransaction: () -> Unit = {},
     onEditTransaction: (Long) -> Unit = {},
     onNavigateToAccounts: (Int) -> Unit = {}, // 0: 全部, 1: 现金, 2: 信用
+    onNavigateToAutoAccounting: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -109,17 +110,13 @@ fun HomeScreen(
             )
         }
 
-        // ── 今日账单 + 自动记账引导 ──
+        // ── 今日账单 ──
         item {
             TodayBillsCard(
                 todayIncome = uiState.todayIncome,
                 todayExpense = uiState.todayExpense,
                 todayTransactions = uiState.todayTransactions,
                 currencySymbol = uiState.currencySymbol,
-                isAutoAccountingEnabled = isAutoAccountingEnabled,
-                onEnableAutoAccounting = {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                },
                 onEditTransaction = onEditTransaction
             )
         }
@@ -286,7 +283,8 @@ fun HomeScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable { onNavigateToAutoAccounting() },
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -307,11 +305,19 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isAutoAccountingEnabled) "已开启" else "未开启",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isAutoAccountingEnabled) {
+                        Text(
+                            text = "已开启",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = "未开启，点击开启>",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = IOSColors.SystemOrange
+                        )
+                    }
                 }
             }
         }
@@ -471,8 +477,6 @@ private fun TodayBillsCard(
     todayExpense: Double,
     todayTransactions: List<com.tinyledger.app.domain.model.Transaction>,
     currencySymbol: String,
-    isAutoAccountingEnabled: Boolean,
-    onEnableAutoAccounting: () -> Unit,
     onEditTransaction: (Long) -> Unit
 ) {
     Card(
@@ -511,76 +515,17 @@ private fun TodayBillsCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (todayTransactions.isEmpty()) {
-                // 自动记账引导
-                if (!isAutoAccountingEnabled) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // 应用图标行
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        ) {
-                            listOf(
-                                Pair(Icons.Default.Chat, IOSColors.AccountWechat),
-                                Pair(Icons.Default.Payment, IOSColors.AccountAlipay),
-                                Pair(Icons.Default.ShoppingCart, IOSColors.SystemOrange),
-                                Pair(Icons.Default.AccountBalance, IOSColors.Primary)
-                            ).forEach { (icon, color) ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(color.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
-                                }
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFF0F0F0)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-
-                        Text(
-                            text = "花钱收钱一键识别，省时省力解放双手~",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-
-                        Button(
-                            onClick = onEnableAutoAccounting,
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Text("开启自动记账>")
-                        }
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "今天还没有账单哦",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "今天还没有账单哦",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 // 今日交易列表

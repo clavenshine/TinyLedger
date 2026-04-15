@@ -114,26 +114,29 @@ class AddTransactionViewModel @Inject constructor(
                     // 查找关联的另一笔交易
                     val relatedTransaction = tx.relatedTransactionId?.let {
                         transactionRepository.getTransactionById(it)
-                    } ?: run {
-                        // 如果当前交易没有relatedTransactionId，尝试查找指向它的交易
-                        transactionRepository.getTransactionById(transactionId)?.let { currentTx ->
-                            // 需要通过其他方式查找，这里简化处理
-                            null
-                        }
+                    }
+                    
+                    // 如果当前交易没有relatedTransactionId，尝试通过DAO查找指向它的交易
+                    val resolvedRelated = relatedTransaction ?: run {
+                        // 通过relatedTransactionId反向查找
+                        transactionRepository.getTransactionByRelatedId(transactionId)
                     }
                     
                     // 根据金额正负判断哪笔是from，哪笔是to
                     val (fromTx, toTx) = if (tx.amount < 0) {
-                        Pair(tx, relatedTransaction)
+                        Pair(tx, resolvedRelated)
                     } else {
-                        Pair(relatedTransaction, tx)
+                        Pair(resolvedRelated, tx)
                     }
                     
+                    // 直接从数据库加载账户，避免时序问题（accounts列表可能还未加载）
                     val fromAccount = fromTx?.accountId?.let { accountId ->
                         _uiState.value.accounts.find { it.id == accountId }
+                            ?: accountRepository.getAccountById(accountId)
                     }
                     val toAccount = toTx?.accountId?.let { accountId ->
                         _uiState.value.accounts.find { it.id == accountId }
+                            ?: accountRepository.getAccountById(accountId)
                     }
                     
                     _uiState.update { state ->
@@ -150,9 +153,10 @@ class AddTransactionViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    // 普通收支交易
+                    // 普通收支交易 - 直接从数据库加载账户
                     val selectedAccount = tx.accountId?.let { accountId ->
                         _uiState.value.accounts.find { it.id == accountId }
+                            ?: accountRepository.getAccountById(accountId)
                     }
                     _uiState.update { state ->
                         state.copy(
@@ -409,30 +413,49 @@ class AddTransactionViewModel @Inject constructor(
                     val fromAccount = state.selectedFromAccount!!
                     val toAccount = state.selectedToAccount!!
                     
+                    // 解析双记录的ID和关联ID
+                    val (fromId, toId) = if (state.isEditing && editingTransactionId != null) {
+                        val existingTx = transactionRepository.getTransactionById(editingTransactionId!!)
+                        // editingTransactionId 可能是 from 或 to 记录，需要判断
+                        if (existingTx != null && existingTx.amount < 0) {
+                            // 当前编辑的是 from（出账）记录
+                            val resolvedToId = existingTx.relatedTransactionId
+                                ?: transactionRepository.getTransactionByRelatedId(editingTransactionId!!)?.id
+                                ?: 0L
+                            Pair(editingTransactionId!!, resolvedToId)
+                        } else {
+                            // 当前编辑的是 to（入账）记录
+                            val resolvedFromId = existingTx?.relatedTransactionId
+                                ?: transactionRepository.getTransactionByRelatedId(editingTransactionId!!)?.id
+                                ?: 0L
+                            Pair(resolvedFromId, editingTransactionId!!.toLong())
+                        }
+                    } else {
+                        Pair(0L, 0L)
+                    }
+                    
                     // 出账账户：负数金额
                     val fromTransaction = Transaction(
-                        id = if (state.isEditing && editingTransactionId != null) editingTransactionId!! else 0,
+                        id = fromId,
                         type = state.transactionType,
                         category = category,
                         amount = -amount, // 负数表示出账
                         note = state.note.ifBlank { null },
                         date = state.date,
-                        accountId = fromAccount.id
+                        accountId = fromAccount.id,
+                        relatedTransactionId = toId // 保留关联链接
                     )
                     
                     // 入账账户：正数金额
                     val toTransaction = Transaction(
-                        id = if (state.isEditing) {
-                            // 查找关联的第二笔交易ID
-                            val existingTransaction = transactionRepository.getTransactionById(editingTransactionId!!)
-                            existingTransaction?.relatedTransactionId ?: 0
-                        } else 0,
+                        id = toId,
                         type = state.transactionType,
                         category = category,
                         amount = amount, // 正数表示入账
                         note = state.note.ifBlank { null },
                         date = state.date,
-                        accountId = toAccount.id
+                        accountId = toAccount.id,
+                        relatedTransactionId = fromId // 保留关联链接
                     )
                     
                     if (state.isEditing && editingTransactionId != null) {

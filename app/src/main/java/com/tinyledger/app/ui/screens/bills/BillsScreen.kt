@@ -620,8 +620,8 @@ private fun CalendarView(
                             val isToday = isCurrentMonth && day == todayDay
                             val hasTransactions = dailyTransactionMap.containsKey(day)
                             val dayTransactions = dailyTransactionMap[day] ?: emptyList()
-                            val hasExpense = dayTransactions.any { it.type == TransactionType.EXPENSE }
-                            val hasIncome = dayTransactions.any { it.type == TransactionType.INCOME }
+                            val hasExpense = dayTransactions.any { it.amount < 0 }
+                            val hasIncome = dayTransactions.any { it.amount > 0 }
 
                             Box(
                                 modifier = Modifier
@@ -649,9 +649,9 @@ private fun CalendarView(
                                     .clickable { onDayClick(day) },
                                 contentAlignment = Alignment.Center
                             ) {
-                                val dayExpense = dayTransactions.filter { it.type == TransactionType.EXPENSE }
-                                    .sumOf { it.amount }
-                                val dayIncome = dayTransactions.filter { it.type == TransactionType.INCOME }
+                                val dayExpense = dayTransactions.filter { it.amount < 0 }
+                                    .sumOf { kotlin.math.abs(it.amount) }
+                                val dayIncome = dayTransactions.filter { it.amount > 0 }
                                     .sumOf { it.amount }
                                 val netAmount = dayIncome - dayExpense
 

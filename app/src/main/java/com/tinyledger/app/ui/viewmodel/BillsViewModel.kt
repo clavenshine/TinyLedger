@@ -78,11 +78,9 @@ class BillsViewModel @Inject constructor(
                 val (startDate, endDate) = DateUtils.getMonthStartEnd(params.year, params.month)
                 combine(
                     transactionRepository.getTransactionsByDateRange(startDate, endDate),
-                    transactionRepository.getTotalByTypeAndDateRange(TransactionType.INCOME.value, startDate, endDate),
-                    transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
                     _searchKeyword,
                     preferencesRepository.getSettings()
-                ) { monthTransactions, income, expense, keyword, settings ->
+                ) { monthTransactions, keyword, settings ->
                     // Build daily map
                     val dailyMap = mutableMapOf<Int, MutableList<Transaction>>()
                     val cal = Calendar.getInstance()
@@ -104,14 +102,25 @@ class BillsViewModel @Inject constructor(
                         .filter { transaction ->
                             when (params.filterType) {
                                 FilterType.ALL -> true
-                                FilterType.INCOME -> transaction.type == TransactionType.INCOME
-                                FilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE
+                                FilterType.INCOME -> transaction.type == TransactionType.INCOME ||
+                                    ((transaction.type == TransactionType.TRANSFER || transaction.type == TransactionType.LENDING) && transaction.amount > 0)
+                                FilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE ||
+                                    ((transaction.type == TransactionType.TRANSFER || transaction.type == TransactionType.LENDING) && transaction.amount < 0)
                             }
                         }
                         .filter { transaction ->
                             if (keyword.isBlank()) true
                             else transaction.note?.contains(keyword, ignoreCase = true) == true
                         }
+
+                    // Calculate monthly totals using sign-based amounts
+                    // Positive amounts = income, negative absolute amounts = expense
+                    val calculatedIncome = monthTransactions
+                        .filter { it.amount > 0 }
+                        .sumOf { it.amount }
+                    val calculatedExpense = monthTransactions
+                        .filter { it.amount < 0 }
+                        .sumOf { kotlin.math.abs(it.amount) }
 
                     BillsUiState(
                         transactions = monthTransactions,
@@ -124,9 +133,9 @@ class BillsViewModel @Inject constructor(
                         selectedYear = params.year,
                         selectedMonth = params.month,
                         selectedDay = params.day,
-                        monthlyIncome = income,
-                        monthlyExpense = expense,
-                        monthlyBalance = income - expense,
+                        monthlyIncome = calculatedIncome,
+                        monthlyExpense = calculatedExpense,
+                        monthlyBalance = calculatedIncome - calculatedExpense,
                         dailyTransactionMap = dailyMap,
                         selectedDayTransactions = dayTx
                     )

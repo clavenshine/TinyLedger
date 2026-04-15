@@ -68,18 +68,12 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 combine(
-                    transactionRepository.getTotalByTypeAndDateRange(
-                        TransactionType.INCOME.value,
-                        startDate,
-                        endDate
-                    ),
-                    transactionRepository.getTotalByTypeAndDateRange(
-                        TransactionType.EXPENSE.value,
-                        startDate,
-                        endDate
-                    ),
+                    transactionRepository.getTransactionsByDateRange(startDate, endDate),
                     transactionRepository.getExpenseByCategory(startDate, endDate)
-                ) { income, expense, expenseMap ->
+                ) { monthTransactions, expenseMap ->
+                    // Calculate totals using sign-based amounts
+                    val income = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
+                    val expense = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
                     val totalExpense = expense
                     val categoryAmounts = expenseMap.map { (categoryId, amount) ->
                         CategoryAmount(

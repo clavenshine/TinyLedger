@@ -105,8 +105,10 @@ class SearchViewModel @Inject constructor(
                             // Filter by type
                             when (filters.filterType) {
                                 SearchFilterType.ALL -> true
-                                SearchFilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE
-                                SearchFilterType.INCOME -> transaction.type == TransactionType.INCOME
+                                SearchFilterType.EXPENSE -> transaction.type == TransactionType.EXPENSE ||
+                                    ((transaction.type == TransactionType.TRANSFER || transaction.type == TransactionType.LENDING) && transaction.amount < 0)
+                                SearchFilterType.INCOME -> transaction.type == TransactionType.INCOME ||
+                                    ((transaction.type == TransactionType.TRANSFER || transaction.type == TransactionType.LENDING) && transaction.amount > 0)
                                 SearchFilterType.TRANSFER -> transaction.type == TransactionType.TRANSFER
                                 SearchFilterType.LENDING -> transaction.type == TransactionType.LENDING
                             }

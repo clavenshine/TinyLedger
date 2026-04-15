@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.tinyledger.app.ui.screens.accounts.AccountsScreen
+import com.tinyledger.app.ui.screens.autoaccounting.AutoAccountingScreen
 import com.tinyledger.app.ui.screens.automation.AutoImportScreen
 import com.tinyledger.app.ui.screens.automation.ImportSource
 import com.tinyledger.app.ui.screens.bills.BillsScreen
@@ -69,6 +70,9 @@ fun AppNavHost(
                 },
                 onNavigateToAccounts = { tabIndex ->
                     navController.navigate(Screen.Accounts.createRoute(tabIndex))
+                },
+                onNavigateToAutoAccounting = {
+                    navController.navigate(Screen.AutoAccounting.route)
                 }
             )
         }
@@ -168,6 +172,9 @@ fun AppNavHost(
                         ImportType.ALIPAY -> Screen.AutoImport.createRoute("alipay")
                     }
                     navController.navigate(route)
+                },
+                onNavigateToAutoAccounting = {
+                    navController.navigate(Screen.AutoAccounting.route)
                 }
             )
         }
@@ -214,6 +221,14 @@ fun AppNavHost(
 
         composable(Screen.Help.route) {
             HelpScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.AutoAccounting.route) {
+            AutoAccountingScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -11,6 +11,7 @@ interface TransactionRepository {
     fun searchTransactions(keyword: String): Flow<List<Transaction>>
     fun searchTransactionsFull(keyword: String): Flow<List<Transaction>>
     suspend fun getTransactionById(id: Long): Transaction?
+    suspend fun getTransactionByRelatedId(relatedId: Long): Transaction?
     suspend fun insertTransaction(transaction: Transaction): Long
     suspend fun insertDualTransaction(fromTransaction: Transaction, toTransaction: Transaction): Pair<Long, Long>
     suspend fun updateTransaction(transaction: Transaction)

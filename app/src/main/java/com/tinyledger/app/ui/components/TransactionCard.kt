@@ -34,9 +34,16 @@ fun TransactionCard(
     modifier: Modifier = Modifier,
     flat: Boolean = false
 ) {
-    val isIncome = transaction.type == TransactionType.INCOME
+    // Use sign-based amount display: positive = income (+), negative = expense (-)
+    // For TRANSFER/LENDING, amount is already signed (positive for inflow, negative for outflow)
+    val isIncome = when (transaction.type) {
+        TransactionType.INCOME -> true
+        TransactionType.EXPENSE -> false
+        TransactionType.TRANSFER, TransactionType.LENDING -> transaction.amount > 0
+    }
     val amountColor = if (isIncome) IncomeGreen else ExpenseRed
     val amountPrefix = if (isIncome) "+" else "-"
+    val displayAmount = kotlin.math.abs(transaction.amount)
 
     Card(
         modifier = modifier
@@ -100,7 +107,7 @@ fun TransactionCard(
 
             // Amount
             Text(
-                text = "$amountPrefix${CurrencyUtils.format(transaction.amount, currencySymbol)}",
+                text = "$amountPrefix${CurrencyUtils.format(displayAmount, currencySymbol)}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = amountColor

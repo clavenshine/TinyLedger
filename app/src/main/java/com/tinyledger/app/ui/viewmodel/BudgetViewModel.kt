@@ -88,9 +88,11 @@ class BudgetViewModel @Inject constructor(
 
                 combine(
                     budgetFlow,
-                    transactionRepository.getTotalByTypeAndDateRange(TransactionType.EXPENSE.value, startDate, endDate),
+                    transactionRepository.getTransactionsByDateRange(startDate, endDate),
                     preferencesRepository.getSettings()
-                ) { budget, expense, settings ->
+                ) { budget, transactions, settings ->
+                    // Calculate expense using sign-based amounts (all negative amounts)
+                    val expense = transactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
                     Triple(budget, expense, settings)
                 }.collectLatest { (budget, expense, settings) ->
                     val categoryBudgetsFlow = if (budget != null) {

@@ -936,9 +936,14 @@ private fun TransactionItem(
     currencySymbol: String
 ) {
     val dateFormat = remember { SimpleDateFormat("MM-dd", Locale.getDefault()) }
-    val isExpense = transaction.type == TransactionType.EXPENSE
+    val isExpense = when (transaction.type) {
+        TransactionType.EXPENSE -> true
+        TransactionType.INCOME -> false
+        TransactionType.TRANSFER, TransactionType.LENDING -> transaction.amount < 0
+    }
     val amountColor = if (isExpense) IOSColors.SystemRed else IOSColors.SystemGreen
     val amountPrefix = if (isExpense) "-" else "+"
+    val displayAmount = kotlin.math.abs(transaction.amount)
 
     Row(
         modifier = Modifier
@@ -974,7 +979,7 @@ private fun TransactionItem(
 
         // 金额
         Text(
-            text = "$amountPrefix$currencySymbol ${CurrencyUtils.formatAmount(transaction.amount)}",
+            text = "$amountPrefix$currencySymbol ${CurrencyUtils.formatAmount(displayAmount)}",
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Medium,
                 color = amountColor
@@ -1066,7 +1071,7 @@ private fun AddAccountDialog(
                     FilterChip(
                         selected = selectedAttribute == attr,
                         onClick = { selectedAttribute = attr },
-                        label = { Text(attr.displayName, fontSize = 14.sp) },
+                        label = { Text(attr.displayName, fontSize = 18.sp, fontWeight = FontWeight.Medium) },
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
@@ -1156,33 +1161,57 @@ private fun AddAccountDialog(
                 OutlinedTextField(
                     value = creditLimit,
                     onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("信用额度") },
+                    label = { Text("信用额度", fontSize = 16.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 
+                // 账单日和还款日 - 同一行显示
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 账单日 - 滚轮选择器
-                    NumberPickerWithLabel(
-                        label = "账单日",
-                        value = billDay.toIntOrNull() ?: 1,
-                        range = 1..31,
-                        onValueChange = { billDay = it.toString() },
-                        modifier = Modifier.weight(1f)
-                    )
+                    // 账单日 - 缩小宽度
+                    Column(
+                        modifier = Modifier.weight(0.45f),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "账单日",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        NumberPickerWithLabel(
+                            label = "",
+                            value = billDay.toIntOrNull() ?: 1,
+                            range = 1..31,
+                            onValueChange = { billDay = it.toString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     
-                    // 还款日 - 滚轮选择器
-                    NumberPickerWithLabel(
-                        label = "还款日",
-                        value = repaymentDay.toIntOrNull() ?: 10,
-                        range = 1..31,
-                        onValueChange = { repaymentDay = it.toString() },
-                        modifier = Modifier.weight(1f)
-                    )
+                    // 还款日 - 缩小宽度
+                    Column(
+                        modifier = Modifier.weight(0.45f),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "还款日",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        NumberPickerWithLabel(
+                            label = "",
+                            value = repaymentDay.toIntOrNull() ?: 10,
+                            range = 1..31,
+                            onValueChange = { repaymentDay = it.toString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             } else {
                 // 现金账户：卡号后4位
@@ -1360,37 +1389,61 @@ private fun EditAccountDialog(
                 OutlinedTextField(
                     value = creditLimit,
                     onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
-                    label = { Text("信用额度") },
+                    label = { Text("信用额度", fontSize = 16.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 
+                // 账单日和还款日 - 同一行显示
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = billDay,
-                        onValueChange = { 
-                            if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
-                        },
-                        label = { Text("账单日") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                    // 账单日 - 缩小宽度
+                    Column(
+                        modifier = Modifier.weight(0.45f),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "账单日",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        OutlinedTextField(
+                            value = billDay,
+                            onValueChange = { 
+                                if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
                     
-                    OutlinedTextField(
-                        value = repaymentDay,
-                        onValueChange = { 
-                            if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
-                        },
-                        label = { Text("还款日") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                    // 还款日 - 缩小宽度
+                    Column(
+                        modifier = Modifier.weight(0.45f),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "还款日",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        OutlinedTextField(
+                            value = repaymentDay,
+                            onValueChange = { 
+                                if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
                 }
             } else {
                 OutlinedTextField(

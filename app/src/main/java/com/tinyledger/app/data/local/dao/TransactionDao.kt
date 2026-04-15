@@ -49,7 +49,7 @@ interface TransactionDao {
     @Query("SELECT SUM(amount) FROM transactions WHERE type = :type AND date BETWEEN :startDate AND :endDate")
     fun getTotalByTypeAndDateRange(type: Int, startDate: Long, endDate: Long): Flow<Double?>
 
-    @Query("SELECT category, SUM(amount) as total FROM transactions WHERE type = 0 AND date BETWEEN :startDate AND :endDate GROUP BY category")
+    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE amount < 0 AND date BETWEEN :startDate AND :endDate GROUP BY category")
     fun getExpenseByCategory(startDate: Long, endDate: Long): Flow<List<CategoryTotal>>
 
     // 按账户ID查询所有交易记录

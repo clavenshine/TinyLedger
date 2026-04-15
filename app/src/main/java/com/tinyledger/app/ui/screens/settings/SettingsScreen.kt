@@ -44,6 +44,7 @@ import com.tinyledger.app.ui.viewmodel.UpdateCheckViewModel
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToAutoImport: (ImportType) -> Unit = {},
+    onNavigateToAutoAccounting: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
 ) {
@@ -186,6 +187,17 @@ fun SettingsScreen(
                         subtitle = "导入支付宝导出的 CSV / xlsx 账单文件",
                         onClick = { onNavigateToAutoImport(ImportType.ALIPAY) }
                     )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    
+                    // 截屏数据导入
+                    IosSettingsItem(
+                        icon = Icons.Default.Image,
+                        iconTint = IOSColors.SystemPurple,
+                        title = "截屏数据导入",
+                        subtitle = "从截屏识别收支记录",
+                        onClick = { /* TODO: Navigate to screenshot import */ }
+                    )
                 }
             }
             
@@ -193,41 +205,20 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
             
-            // 智能记账
+            // 系统设置
             item {
-                SettingsSection(title = "智能记账")
+                SettingsSection(title = "系统设置")
             }
             
             item {
                 IosSettingsCard {
-                    // 通知监听自动记账
-                    NotificationListenerItem(
-                        hasPermission = hasNotificationPermission,
-                        enabled = notificationEnabled,
-                        onToggle = { newEnabled ->
-                            if (!hasNotificationPermission) {
-                                // 跳转系统通知使用权设置页
-                                try {
-                                    context.startActivity(
-                                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                    )
-                                } catch (_: Exception) {}
-                            } else {
-                                notificationEnabled = newEnabled
-                                TransactionNotificationService.setEnabled(context, newEnabled)
-                            }
-                        },
-                        onGoToSettings = {
-                            try {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                )
-                            } catch (_: Exception) {}
-                        }
+                    // 自动记账设置入口
+                    IosSettingsItem(
+                        icon = Icons.Default.AutoFixHigh,
+                        iconTint = IOSColors.SystemOrange,
+                        title = "自动记账",
+                        subtitle = "通知监听、权限管理、后台锁定",
+                        onClick = onNavigateToAutoAccounting
                     )
                 }
             }
