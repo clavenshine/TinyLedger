@@ -46,6 +46,7 @@ fun ProfileScreen(
     onNavigateToScreenshotAccounting: () -> Unit = {},
     onNavigateToAccounts: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
+    onNavigateToAutoAccounting: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -56,23 +57,11 @@ fun ProfileScreen(
     var showVersionInfoDialog by remember { mutableStateOf(false) }
     var lastDownloadClickTime by remember { mutableLongStateOf(0L) }
 
-    var notificationEnabled by remember {
-        mutableStateOf(TransactionNotificationService.isEnabled(context))
-    }
-    var hasNotificationPermission by remember {
-        mutableStateOf(TransactionNotificationService.hasPermission(context))
-    }
     var soundEnabled by remember {
         mutableStateOf(TransactionNotificationService.isSoundEnabled(context))
     }
     var vibrationEnabled by remember {
         mutableStateOf(TransactionNotificationService.isVibrationEnabled(context))
-    }
-    var seamlessEnabled by remember {
-        mutableStateOf(TransactionNotificationService.isSeamlessEnabled(context))
-    }
-    LaunchedEffect(Unit) {
-        hasNotificationPermission = TransactionNotificationService.hasPermission(context)
     }
 
     // Version update check
@@ -154,9 +143,9 @@ fun ProfileScreen(
             }
         }
 
-        // Smart accounting section
+        // System settings section
         item {
-            SectionTitle("智能记账")
+            SectionTitle("系统设置")
         }
 
         item {
@@ -168,86 +157,13 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column {
-                    // Notification listener auto-accounting
+                    // Auto-accounting entry
                     ProfileSettingsItem(
-                        icon = Icons.Default.NotificationsActive,
+                        icon = Icons.Default.AutoFixHigh,
                         iconTint = IOSColors.SystemOrange,
-                        title = "通知自动记账",
-                        subtitle = if (hasNotificationPermission && notificationEnabled) "已开启" else "未开启",
-                        trailing = {
-                            if (hasNotificationPermission) {
-                                Switch(
-                                    checked = notificationEnabled,
-                                    onCheckedChange = { newEnabled ->
-                                        notificationEnabled = newEnabled
-                                        TransactionNotificationService.setEnabled(context, newEnabled)
-                                        if (!newEnabled) {
-                                            seamlessEnabled = false
-                                            TransactionNotificationService.setSeamlessEnabled(context, false)
-                                        }
-                                    }
-                                )
-                            } else {
-                                TextButton(onClick = {
-                                    try {
-                                        context.startActivity(
-                                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            }
-                                        )
-                                    } catch (_: Exception) {}
-                                }) {
-                                    Text("去授权", color = IOSColors.SystemOrange)
-                                }
-                            }
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // Seamless auto-accounting
-                    ProfileSettingsItem(
-                        icon = Icons.Default.AutoAwesome,
-                        iconTint = MaterialTheme.colorScheme.primary,
-                        title = "无感自动记账",
-                        subtitle = if (seamlessEnabled) "自动完成记账，无需确认" else "捕获交易后需手动确认",
-                        trailing = {
-                            Switch(
-                                checked = seamlessEnabled,
-                                enabled = hasNotificationPermission && notificationEnabled,
-                                onCheckedChange = { newEnabled ->
-                                    seamlessEnabled = newEnabled
-                                    TransactionNotificationService.setSeamlessEnabled(context, newEnabled)
-                                }
-                            )
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // Allow background running
-                    ProfileSettingsItem(
-                        icon = Icons.Default.BatteryChargingFull,
-                        iconTint = IOSColors.SystemGreen,
-                        title = "允许后台运行",
-                        subtitle = "保持自动记账持续工作",
-                        onClick = {
-                            try {
-                                val intent = Intent()
-                                intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                                intent.data = android.net.Uri.parse("package:${context.packageName}")
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                try {
-                                    context.startActivity(
-                                        Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                    )
-                                } catch (_: Exception) {}
-                            }
-                        }
+                        title = "自动记账",
+                        subtitle = "通知监听、权限管理、后台锁定",
+                        onClick = onNavigateToAutoAccounting
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -286,17 +202,6 @@ fun ProfileScreen(
                                 }
                             )
                         }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // Screenshot accounting
-                    ProfileSettingsItem(
-                        icon = Icons.Default.Screenshot,
-                        iconTint = IOSColors.SystemTeal,
-                        title = "截屏记账",
-                        subtitle = "选择支付截图自动识别金额",
-                        onClick = onNavigateToScreenshotAccounting
                     )
                 }
             }
@@ -398,6 +303,17 @@ fun ProfileScreen(
                         title = "导入支付宝账单",
                         subtitle = "导入支付宝导出的 CSV / xlsx 账单文件",
                         onClick = { onNavigateToAutoImport(ImportType.ALIPAY) }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // 截屏数据导入
+                    ProfileSettingsItem(
+                        icon = Icons.Default.Screenshot,
+                        iconTint = IOSColors.SystemTeal,
+                        title = "截屏数据导入",
+                        subtitle = "选择支付截图自动识别金额",
+                        onClick = onNavigateToScreenshotAccounting
                     )
                 }
             }

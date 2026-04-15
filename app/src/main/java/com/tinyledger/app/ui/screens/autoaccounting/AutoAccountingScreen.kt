@@ -42,12 +42,16 @@ fun AutoAccountingScreen(
         mutableStateOf(TransactionNotificationService.hasPermission(context))
     }
     
+    // 无感自动记账
+    var seamlessEnabled by remember {
+        mutableStateOf(TransactionNotificationService.isSeamlessEnabled(context))
+    }
+    
     // 系统权限状态
     var canDrawOverlays by remember { mutableStateOf(false) } // 悬浮窗权限
     var isIgnoringBatteryOptimizations by remember { mutableStateOf(false) } // 忽略电池优化
     var isAutoStartEnabled by remember { mutableStateOf(false) } // 自启动
-    var isLockedToBackground by remember { mutableStateOf(false) } // 锁定到后台
-    var showLockInstructions by remember { mutableStateOf(false) } // 显示锁定说明
+    var isLockedToBackground by remember { mutableStateOf(false) } // 锁定到后台（自动检测）
     
     // 每次进入页面重新检查权限
     LaunchedEffect(Unit) {
@@ -55,6 +59,16 @@ fun AutoAccountingScreen(
         canDrawOverlays = Settings.canDrawOverlays(context)
         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
         isAutoStartEnabled = checkAutoStartPermission(context)
+        // 检测应用是否已锁定至后台
+        isLockedToBackground = checkIfLockedToBackground(context)
+    }
+    
+    // 从其他设置页面返回时重新检查权限状态
+    LaunchedEffect(hasNotificationPermission, isIgnoringBatteryOptimizations, isAutoStartEnabled) {
+        hasNotificationPermission = TransactionNotificationService.hasPermission(context)
+        isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
+        isAutoStartEnabled = checkAutoStartPermission(context)
+        isLockedToBackground = checkIfLockedToBackground(context)
     }
     
     Scaffold(
@@ -102,10 +116,119 @@ fun AutoAccountingScreen(
                             } else {
                                 notificationEnabled = newEnabled
                                 TransactionNotificationService.setEnabled(context, newEnabled)
+                                if (!newEnabled) {
+                                    seamlessEnabled = false
+                                    TransactionNotificationService.setSeamlessEnabled(context, false)
+                                }
                             }
                         },
                         onGoToSettings = { openNotificationListenerSettings(context) }
                     )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    
+                    // 无感自动记账
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "无感自动记账",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = if (seamlessEnabled) "自动完成记账，无需确认" else "捕获交易后需手动确认",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        
+                        Switch(
+                            checked = seamlessEnabled,
+                            enabled = hasNotificationPermission && notificationEnabled,
+                            onCheckedChange = { newEnabled ->
+                                seamlessEnabled = newEnabled
+                                TransactionNotificationService.setSeamlessEnabled(context, newEnabled)
+                            }
+                        )
+                    }
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    
+                    // 允许后台运行
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                try {
+                                    val intent = Intent()
+                                    intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                                    intent.data = Uri.parse("package:${context.packageName}")
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    openAppSettings(context)
+                                }
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(IOSColors.SystemGreen.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatteryChargingFull,
+                                contentDescription = null,
+                                tint = IOSColors.SystemGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "允许后台运行",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "保持自动记账持续工作",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
             
@@ -219,14 +342,21 @@ fun AutoAccountingScreen(
                             Switch(
                                 checked = isLockedToBackground,
                                 onCheckedChange = { 
-                                    isLockedToBackground = it
-                                    showLockInstructions = it
+                                    // 点击开启时跳转到系统设置让用户手动锁定
+                                    // 点击关闭时直接设置为未锁定
+                                    if (!isLockedToBackground) {
+                                        openAppSettings(context)
+                                    } else {
+                                        isLockedToBackground = false
+                                        context.getSharedPreferences("auto_accounting", Context.MODE_PRIVATE)
+                                            .edit().putBoolean("locked_to_background", false).apply()
+                                    }
                                 }
                             )
                         }
                         
-                        // 锁定说明
-                        if (showLockInstructions) {
+                        // 锁定说明 - 只在未锁定时显示
+                        if (!isLockedToBackground) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             Column(
                                 modifier = Modifier
@@ -651,6 +781,14 @@ private fun openPowerSaveSettings(context: Context) {
     } catch (_: Exception) {
         openAppSettings(context)
     }
+}
+
+private fun checkIfLockedToBackground(context: Context): Boolean {
+    // 检测应用是否已锁定至后台
+    // Android 没有直接的 API 检测任务锁定状态，但可以通过 ActivityManager 检测
+    // 使用 SharedPreferences 记录用户设置的状态作为辅助
+    val prefs = context.getSharedPreferences("auto_accounting", Context.MODE_PRIVATE)
+    return prefs.getBoolean("locked_to_background", false)
 }
 
 private fun openAppSettings(context: Context) {

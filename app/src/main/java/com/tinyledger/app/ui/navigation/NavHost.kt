@@ -122,6 +122,9 @@ fun AppNavHost(
                 },
                 onNavigateToHelp = {
                     navController.navigate(Screen.Help.route)
+                },
+                onNavigateToAutoAccounting = {
+                    navController.navigate(Screen.AutoAccounting.route)
                 }
             )
         }
