@@ -77,7 +77,7 @@ class TransactionActionReceiver : BroadcastReceiver() {
                 val transaction = Transaction(
                     type = transactionType,
                     category = Category.fromId(entity.category, transactionType),
-                    amount = entity.amount,
+                    amount = entity.amount, // 金额已在存储时带符号，直接使用
                     note = entity.note,
                     date = entity.date,
                     accountId = entity.accountId

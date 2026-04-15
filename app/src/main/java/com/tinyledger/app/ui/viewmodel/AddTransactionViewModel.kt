@@ -163,7 +163,7 @@ class AddTransactionViewModel @Inject constructor(
                             transactionType = tx.type,
                             categories = categories,
                             selectedCategory = tx.category,
-                            amount = tx.amount.toString(),
+                            amount = kotlin.math.abs(tx.amount).toString(), // 显示绝对值，输入框永远为正数
                             note = tx.note ?: "",
                             date = tx.date,
                             isEditing = true,
@@ -416,8 +416,16 @@ class AddTransactionViewModel @Inject constructor(
                     // 解析双记录的ID和关联ID
                     val (fromId, toId) = if (state.isEditing && editingTransactionId != null) {
                         val existingTx = transactionRepository.getTransactionById(editingTransactionId!!)
-                        // editingTransactionId 可能是 from 或 to 记录，需要判断
-                        if (existingTx != null && existingTx.amount < 0) {
+
+                        // 检查原记录是否是双记录类型
+                        val wasDualRecord = existingTx != null &&
+                            (existingTx.type == TransactionType.TRANSFER || existingTx.type == TransactionType.LENDING)
+
+                        if (!wasDualRecord) {
+                            // 从单记录切换到双记录：删除旧的单记录，创建新的双记录
+                            transactionRepository.deleteTransaction(editingTransactionId!!)
+                            Pair(0L, 0L) // 使用0L表示新记录
+                        } else if (existingTx != null && existingTx.amount < 0) {
                             // 当前编辑的是 from（出账）记录
                             val resolvedToId = existingTx.relatedTransactionId
                                 ?: transactionRepository.getTransactionByRelatedId(editingTransactionId!!)?.id
@@ -458,28 +466,60 @@ class AddTransactionViewModel @Inject constructor(
                         relatedTransactionId = fromId // 保留关联链接
                     )
                     
-                    if (state.isEditing && editingTransactionId != null) {
+                    if (state.isEditing && editingTransactionId != null && fromId != 0L && toId != 0L) {
+                        // 编辑现有的双记录（fromId和toId都有效时才更新）
                         transactionRepository.updateDualTransaction(fromTransaction, toTransaction)
                     } else {
+                        // 新建双记录（包括从单记录切换过来的情况）
                         transactionRepository.insertDualTransaction(fromTransaction, toTransaction)
                     }
                 } else {
                     // 普通收支：单条记录
+                    // 核心数据逻辑：支出存为负数（资金流出），收入存为正数（资金流入）
+                    val signedAmount = if (state.transactionType == TransactionType.EXPENSE) -amount else amount
                     val accountId = state.selectedAccount?.id
-                    
-                    val transaction = Transaction(
-                        id = editingTransactionId ?: 0,
-                        type = state.transactionType,
-                        category = category,
-                        amount = amount,
-                        note = state.note.ifBlank { null },
-                        date = state.date,
-                        accountId = accountId
-                    )
 
                     if (state.isEditing && editingTransactionId != null) {
-                        transactionRepository.updateTransaction(transaction)
+                        // 编辑模式：检查是否从双记录类型切换到单记录类型
+                        val existingTx = transactionRepository.getTransactionById(editingTransactionId!!)
+                        val wasDualRecord = existingTx != null &&
+                            (existingTx.type == TransactionType.TRANSFER || existingTx.type == TransactionType.LENDING)
+
+                        if (wasDualRecord) {
+                            // 从双记录切换到单记录：删除旧的关联记录，创建新的单记录
+                            transactionRepository.deleteTransaction(editingTransactionId!!)
+                            val transaction = Transaction(
+                                type = state.transactionType,
+                                category = category,
+                                amount = signedAmount,
+                                note = state.note.ifBlank { null },
+                                date = state.date,
+                                accountId = accountId
+                            )
+                            transactionRepository.insertTransaction(transaction)
+                        } else {
+                            // 原来就是单记录，正常更新
+                            val transaction = Transaction(
+                                id = editingTransactionId ?: 0,
+                                type = state.transactionType,
+                                category = category,
+                                amount = signedAmount,
+                                note = state.note.ifBlank { null },
+                                date = state.date,
+                                accountId = accountId
+                            )
+                            transactionRepository.updateTransaction(transaction)
+                        }
                     } else {
+                        // 新建模式
+                        val transaction = Transaction(
+                            type = state.transactionType,
+                            category = category,
+                            amount = signedAmount,
+                            note = state.note.ifBlank { null },
+                            date = state.date,
+                            accountId = accountId
+                        )
                         transactionRepository.insertTransaction(transaction)
                     }
                 }

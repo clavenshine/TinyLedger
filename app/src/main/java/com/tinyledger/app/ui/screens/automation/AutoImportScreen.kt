@@ -3,7 +3,10 @@ package com.tinyledger.app.ui.screens.automation
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -209,6 +212,9 @@ fun AutoImportScreen(
 
                     // SMS 模式：时间范围选择
                     if (!isCsvMode) {
+                        // 权限检查卡片
+                        SmsPermissionCheckCard(context = context)
+
                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             DateRangeSelector(
                                 label = "记录时间范围",
@@ -1088,6 +1094,116 @@ private fun SmsReadStatsCard(stats: SmsReadStats) {
                             style = diagValue,
                             color = if (highlight) IOSColors.SystemGreen else diagColor
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 短信导入权限检查卡片
+// ══════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SmsPermissionCheckCard(context: android.content.Context) {
+    // 检查各项权限状态
+    val hasReadSms = remember {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+    val hasReceiveSms = remember {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
+    }
+    val hasNotificationAccess = remember {
+        TransactionNotificationService.hasPermission(context)
+    }
+    val hasOverlayPermission = remember {
+        Settings.canDrawOverlays(context)
+    }
+
+    // 所有权限都已授予时不显示
+    if (hasReadSms && hasReceiveSms && hasNotificationAccess && hasOverlayPermission) {
+        return
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = IOSColors.SystemRed.copy(alpha = 0.08f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = IOSColors.SystemRed
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "部分权限未授权，短信导入可能不全或异常",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    color = IOSColors.SystemRed
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 权限列表
+            val permissionItems = buildList {
+                if (!hasReadSms) add("读取短信与彩信" to {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    })
+                })
+                if (!hasReceiveSms) add("接收短信与彩信" to {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    })
+                })
+                if (!hasNotificationAccess) add("通知类短信" to {
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                })
+                if (!hasOverlayPermission) add("后台弹出界面" to {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    })
+                })
+            }
+
+            permissionItems.forEach { (label, action) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = IOSColors.SystemRed.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = action,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("去设置", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

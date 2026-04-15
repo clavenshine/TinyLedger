@@ -107,7 +107,7 @@ class TransactionNotificationHelper @Inject constructor(
         val isIncome = transaction.type == TransactionType.INCOME
         val amountPrefix = if (isIncome) "+" else "-"
         val typeLabel = if (isIncome) "收入" else "支出"
-        val amountText = "$amountPrefix¥${String.format("%.2f", transaction.amount)}"
+        val amountText = "$amountPrefix¥${String.format("%.2f", kotlin.math.abs(transaction.amount))}"
         val categoryName = transaction.category.name
 
         // 构建确认操作 PendingIntent

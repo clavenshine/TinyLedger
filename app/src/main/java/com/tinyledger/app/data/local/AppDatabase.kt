@@ -41,9 +41,17 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 核心数据逻辑变更：支出金额从正数转为负数存储
+        // type=0 表示 EXPENSE，将所有正数的支出金额转为负数
+        database.execSQL("UPDATE transactions SET amount = -amount WHERE type = 0 AND amount > 0")
+    }
+}
+
 @Database(
     entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

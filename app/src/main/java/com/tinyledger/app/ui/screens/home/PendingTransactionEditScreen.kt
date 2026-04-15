@@ -41,7 +41,7 @@ fun PendingTransactionEditScreen(
                     val transactionType = TransactionType.fromInt(e.type)
                     val category = Category.fromId(e.category, transactionType)
                     viewModel.setTransactionType(transactionType)
-                    viewModel.setAmount(e.amount.toString())
+                    viewModel.setAmount(kotlin.math.abs(e.amount).toString()) // 显示绝对值，输入框永远为正数
                     viewModel.setNote(e.note ?: "")
                     viewModel.setDate(e.date)
                     viewModel.selectCategory(category)

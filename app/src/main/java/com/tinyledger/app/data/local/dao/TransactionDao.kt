@@ -49,7 +49,7 @@ interface TransactionDao {
     @Query("SELECT SUM(amount) FROM transactions WHERE type = :type AND date BETWEEN :startDate AND :endDate")
     fun getTotalByTypeAndDateRange(type: Int, startDate: Long, endDate: Long): Flow<Double?>
 
-    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE amount < 0 AND date BETWEEN :startDate AND :endDate GROUP BY category")
+    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE (amount < 0 OR (type = 0 AND amount > 0)) AND date BETWEEN :startDate AND :endDate GROUP BY category")
     fun getExpenseByCategory(startDate: Long, endDate: Long): Flow<List<CategoryTotal>>
 
     // 按账户ID查询所有交易记录
@@ -60,12 +60,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE accountId = :accountId AND type = :type ORDER BY date DESC")
     fun getTransactionsByAccountIdAndType(accountId: Long, type: Int): Flow<List<TransactionEntity>>
 
-    // 按账户ID计算收入总额（包括所有正数金额的交易）
-    @Query("SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
+    // 按账户ID计算收入总额（正数金额且非支出类型的交易，兼容迁移前数据）
+    @Query("SELECT COALESCE(SUM(CASE WHEN amount > 0 AND type != 0 THEN amount ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
     fun getTotalIncomeByAccountId(accountId: Long): Flow<Double>
 
-    // 按账户ID计算支出总额（包括所有负数金额的绝对值）
-    @Query("SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
+    // 按账户ID计算支出总额（负数金额或支出类型正数金额的绝对值，兼容迁移前数据）
+    @Query("SELECT COALESCE(SUM(CASE WHEN amount < 0 OR (type = 0 AND amount > 0) THEN ABS(amount) ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
     fun getTotalExpenseByAccountId(accountId: Long): Flow<Double>
 
     // 迁移分类：将旧分类ID更新为新分类ID

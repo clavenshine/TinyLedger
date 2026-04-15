@@ -114,12 +114,12 @@ class BillsViewModel @Inject constructor(
                         }
 
                     // Calculate monthly totals using sign-based amounts
-                    // Positive amounts = income, negative absolute amounts = expense
+                    // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
                     val calculatedIncome = monthTransactions
-                        .filter { it.amount > 0 }
+                        .filter { it.amount > 0 && it.type != TransactionType.EXPENSE }
                         .sumOf { it.amount }
                     val calculatedExpense = monthTransactions
-                        .filter { it.amount < 0 }
+                        .filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }
                         .sumOf { kotlin.math.abs(it.amount) }
 
                     BillsUiState(
@@ -135,7 +135,7 @@ class BillsViewModel @Inject constructor(
                         selectedDay = params.day,
                         monthlyIncome = calculatedIncome,
                         monthlyExpense = calculatedExpense,
-                        monthlyBalance = calculatedIncome - calculatedExpense,
+                        monthlyBalance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
                         dailyTransactionMap = dailyMap,
                         selectedDayTransactions = dayTx
                     )

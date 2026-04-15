@@ -69,12 +69,13 @@ class HomeViewModel @Inject constructor(
                 }.sortedByDescending { it.date }
 
                 // Calculate monthly totals using sign-based amounts
-                val monthlyInc = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
-                val monthlyExp = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
+                // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
+                val monthlyInc = monthTransactions.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
+                val monthlyExp = monthTransactions.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
 
                 // Calculate today totals using sign-based amounts
-                val todayInc = todayTx.filter { it.amount > 0 }.sumOf { it.amount }
-                val todayExp = todayTx.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
+                val todayInc = todayTx.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
+                val todayExp = todayTx.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
 
                 val dailyAvg = if (dayOfMonth > 0) monthlyExp / dayOfMonth else 0.0
 

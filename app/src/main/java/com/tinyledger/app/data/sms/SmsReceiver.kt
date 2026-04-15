@@ -129,7 +129,7 @@ class SmsReceiver : BroadcastReceiver() {
                         val transaction = Transaction(
                             type = parseResult.type,
                             category = category,
-                            amount = parseResult.amount,
+                            amount = if (parseResult.type == TransactionType.EXPENSE) -parseResult.amount else parseResult.amount, // 支出存负数，收入存正数
                             note = "银行短信: ${body.take(40)}",
                             date = System.currentTimeMillis(),
                             accountId = null

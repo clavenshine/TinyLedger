@@ -262,7 +262,7 @@ class AutoImportViewModel @Inject constructor(
                                 val transaction = Transaction(
                                     type = csv.type,
                                     category = category,
-                                    amount = csv.amount,
+                                    amount = if (csv.type == TransactionType.EXPENSE) -csv.amount else csv.amount, // 支出存负数，收入存正数
                                     note = buildCsvNote(csv),
                                     date = csv.date,
                                     accountId = accountId
@@ -283,7 +283,7 @@ class AutoImportViewModel @Inject constructor(
                                 val transaction = Transaction(
                                     type = sms.type ?: TransactionType.EXPENSE,
                                     category = category,
-                                    amount = sms.amount ?: 0.0,
+                                    amount = if ((sms.type ?: TransactionType.EXPENSE) == TransactionType.EXPENSE) -(sms.amount ?: 0.0) else sms.amount ?: 0.0, // 支出存负数，收入存正数
                                     note = buildNote(sms),
                                     date = sms.date,
                                     accountId = accountId

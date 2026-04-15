@@ -543,7 +543,9 @@ class SmsReader @Inject constructor(
         // ── 第一阶段：从标准 URI 读取 SMS ──
         // Only query the main URI which includes all SMS (inbox + sent)
         val standardUris = listOf(
-            Telephony.Sms.CONTENT_URI
+            Telephony.Sms.CONTENT_URI,
+            Uri.parse("content://sms/icc"),   // SIM卡短信（卡1）
+            Uri.parse("content://sms/icc2"),  // SIM卡短信（卡2/双卡设备）
         )
 
         for (smsUri in standardUris) {
@@ -572,17 +574,22 @@ class SmsReader @Inject constructor(
         }
 
         // ── 第二阶段：探测其他可能存储 SMS 的 URI ──
-        // Only probe non-standard URIs if Phase 1 found nothing
+        // 当 Phase 1 没有找到所有主要银行的短信时，探测非标准 URI
         // 国产 ROM (MIUI/ColorOS/HarmonyOS) 可能把通知类短信存在不同位置
-        if (transactions.isEmpty()) {
+        val foundBanks = bankHits.keys
+        val majorBanks = setOf("建设银行", "工商银行", "农业银行", "中国银行", "招商银行", "中信银行")
+        val missingMajorBanks = majorBanks - foundBanks
+        if (missingMajorBanks.isNotEmpty() || transactions.isEmpty()) {
             val probeUris = listOf(
+                "content://sms/inbox",
+                "content://sms/sent",
                 "content://mms-sms",
                 "content://mms-sms/conversations",
                 "content://mms-sms/complete-conversations",
-                "content://sms/icc",
-                "content://sms/icc2",
                 "content://mms",
                 "content://mms/inbox",
+                "content://telephony/sms",
+                "content://telephony/sms/inbox",
             )
 
             for (uriStr in probeUris) {
@@ -791,9 +798,23 @@ class SmsReader @Inject constructor(
             "${Telephony.Sms.ADDRESS} LIKE '%$num%'"
         }
 
-        // Combine bank address filter with optional time filter
+        // 内容关键词过滤（覆盖发送者号码异常的情况，如小米 HyperOS）
+        val bodyKeywords = listOf(
+            "建设银行", "建行", "CCB",
+            "工商银行", "工行", "ICBC",
+            "农业银行", "农行", "中国银行", "中行",
+            "招商银行", "招行", "交通银行", "交行",
+            "中信银行", "中信", "浦发银行", "民生银行",
+            "兴业银行", "平安银行", "光大银行", "广发银行",
+            "邮政储蓄", "邮储"
+        )
+        val bodyFilter = bodyKeywords.joinToString(" OR ") { kw ->
+            "${Telephony.Sms.BODY} LIKE '%$kw%'"
+        }
+
+        // 合并：地址匹配 OR 内容匹配
         val selection = buildString {
-            append("($addressFilter)")
+            append("(($addressFilter) OR ($bodyFilter))")
             if (afterTime > 0) {
                 append(" AND ${Telephony.Sms.DATE} > ?")
             }

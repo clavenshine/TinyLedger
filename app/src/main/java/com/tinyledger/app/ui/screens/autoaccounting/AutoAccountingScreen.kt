@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.ui.theme.IOSColors
 
@@ -41,6 +44,9 @@ fun AutoAccountingScreen(
     var hasNotificationPermission by remember {
         mutableStateOf(TransactionNotificationService.hasPermission(context))
     }
+    var hasNotificationListenerPermission by remember {
+        mutableStateOf(TransactionNotificationService.hasPermission(context))
+    }
     
     // 无感自动记账
     var seamlessEnabled by remember {
@@ -52,10 +58,13 @@ fun AutoAccountingScreen(
     var isIgnoringBatteryOptimizations by remember { mutableStateOf(false) } // 忽略电池优化
     var isAutoStartEnabled by remember { mutableStateOf(false) } // 自启动
     var isLockedToBackground by remember { mutableStateOf(false) } // 锁定到后台（自动检测）
+    var showLockConfirmDialog by remember { mutableStateOf(false) }
+    var pendingLockConfirm by remember { mutableStateOf(false) }
     
     // 每次进入页面重新检查权限
     LaunchedEffect(Unit) {
         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
+        hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
         canDrawOverlays = Settings.canDrawOverlays(context)
         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
         isAutoStartEnabled = checkAutoStartPermission(context)
@@ -66,9 +75,28 @@ fun AutoAccountingScreen(
     // 从其他设置页面返回时重新检查权限状态
     LaunchedEffect(hasNotificationPermission, isIgnoringBatteryOptimizations, isAutoStartEnabled) {
         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
+        hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
         isAutoStartEnabled = checkAutoStartPermission(context)
         isLockedToBackground = checkIfLockedToBackground(context)
+    }
+    
+    // 检测从系统设置返回时触发锁定确认对话框
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                // 刷新通知使用权状态
+                hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
+                // 处理锁定确认
+                if (pendingLockConfirm) {
+                    showLockConfirmDialog = true
+                    pendingLockConfirm = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     
     Scaffold(
@@ -248,9 +276,21 @@ fun AutoAccountingScreen(
                         icon = Icons.Default.Notifications,
                         iconTint = IOSColors.SystemIndigo,
                         title = "通知权限",
-                        subtitle = "允许应用发送通知",
+                        subtitle = "允许应用发送通知提醒",
                         enabled = checkNotificationPermission(context),
                         onToggle = { openNotificationSettings(context) }
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    
+                    // 通知使用权（核心）
+                    PermissionItem(
+                        icon = Icons.Default.NotificationsActive,
+                        iconTint = IOSColors.SystemOrange,
+                        title = "通知使用权（核心）",
+                        subtitle = "监听银行短信通知，实现自动记账",
+                        enabled = hasNotificationListenerPermission,
+                        onToggle = { openNotificationListenerSettings(context) }
                     )
                     
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -342,9 +382,9 @@ fun AutoAccountingScreen(
                             Switch(
                                 checked = isLockedToBackground,
                                 onCheckedChange = { 
-                                    // 点击开启时跳转到系统设置让用户手动锁定
-                                    // 点击关闭时直接设置为未锁定
                                     if (!isLockedToBackground) {
+                                        // 标记等待确认，用户返回后会弹出确认对话框
+                                        pendingLockConfirm = true
                                         openAppSettings(context)
                                     } else {
                                         isLockedToBackground = false
@@ -426,6 +466,32 @@ fun AutoAccountingScreen(
                     }
                 }
             }
+        }
+        
+        // 后台锁定确认对话框
+        if (showLockConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showLockConfirmDialog = false },
+                title = { Text("确认锁定状态") },
+                text = { Text("您是否已在任务管理器中锁定了小小记账本？") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        isLockedToBackground = true
+                        context.getSharedPreferences("auto_accounting", Context.MODE_PRIVATE)
+                            .edit().putBoolean("locked_to_background", true).apply()
+                        showLockConfirmDialog = false
+                    }) {
+                        Text("已锁定")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showLockConfirmDialog = false
+                    }) {
+                        Text("尚未锁定")
+                    }
+                }
+            )
         }
     }
 }

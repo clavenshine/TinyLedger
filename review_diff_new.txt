@@ -1,0 +1,690 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 210f0ac..3be4e90 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -15,8 +15,8 @@ android {
+         applicationId = "com.tinyledger.app"
+         minSdk = 26
+         targetSdk = 34
+-        versionCode = 20503  // = 2*10000 + 5*100 + 3 (for v2.5.3)
+-        versionName = "2.5.3"
++        versionCode = 20504  // = 2*10000 + 5*100 + 4 (for v2.5.4)
++        versionName = "2.5.4"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+         vectorDrawables {
+diff --git a/app/src/main/java/com/tinyledger/app/data/local/AppDatabase.kt b/app/src/main/java/com/tinyledger/app/data/local/AppDatabase.kt
+index baef77f..653f0de 100644
+--- a/app/src/main/java/com/tinyledger/app/data/local/AppDatabase.kt
++++ b/app/src/main/java/com/tinyledger/app/data/local/AppDatabase.kt
+@@ -41,9 +41,17 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
+     }
+ }
+ 
++val MIGRATION_8_9 = object : Migration(8, 9) {
++    override fun migrate(database: SupportSQLiteDatabase) {
++        // 核心数据逻辑变更：支出金额从正数转为负数存储
++        // type=0 表示 EXPENSE，将所有正数的支出金额转为负数
++        database.execSQL("UPDATE transactions SET amount = -amount WHERE type = 0 AND amount > 0")
++    }
++}
++
+ @Database(
+     entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class],
+-    version = 8,
++    version = 9,
+     exportSchema = false
+ )
+ abstract class AppDatabase : RoomDatabase() {
+diff --git a/app/src/main/java/com/tinyledger/app/data/local/dao/TransactionDao.kt b/app/src/main/java/com/tinyledger/app/data/local/dao/TransactionDao.kt
+index b0804a9..e5341a8 100644
+--- a/app/src/main/java/com/tinyledger/app/data/local/dao/TransactionDao.kt
++++ b/app/src/main/java/com/tinyledger/app/data/local/dao/TransactionDao.kt
+@@ -49,7 +49,7 @@ interface TransactionDao {
+     @Query("SELECT SUM(amount) FROM transactions WHERE type = :type AND date BETWEEN :startDate AND :endDate")
+     fun getTotalByTypeAndDateRange(type: Int, startDate: Long, endDate: Long): Flow<Double?>
+ 
+-    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE amount < 0 AND date BETWEEN :startDate AND :endDate GROUP BY category")
++    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE (amount < 0 OR (type = 0 AND amount > 0)) AND date BETWEEN :startDate AND :endDate GROUP BY category")
+     fun getExpenseByCategory(startDate: Long, endDate: Long): Flow<List<CategoryTotal>>
+ 
+     // 按账户ID查询所有交易记录
+diff --git a/app/src/main/java/com/tinyledger/app/data/notification/TransactionActionReceiver.kt b/app/src/main/java/com/tinyledger/app/data/notification/TransactionActionReceiver.kt
+index 08d83d1..a35d814 100644
+--- a/app/src/main/java/com/tinyledger/app/data/notification/TransactionActionReceiver.kt
++++ b/app/src/main/java/com/tinyledger/app/data/notification/TransactionActionReceiver.kt
+@@ -77,7 +77,7 @@ class TransactionActionReceiver : BroadcastReceiver() {
+                 val transaction = Transaction(
+                     type = transactionType,
+                     category = Category.fromId(entity.category, transactionType),
+-                    amount = entity.amount,
++                    amount = entity.amount, // 金额已在存储时带符号，直接使用
+                     note = entity.note,
+                     date = entity.date,
+                     accountId = entity.accountId
+diff --git a/app/src/main/java/com/tinyledger/app/data/notification/TransactionNotificationService.kt b/app/src/main/java/com/tinyledger/app/data/notification/TransactionNotificationService.kt
+index 6666336..8398ba3 100644
+--- a/app/src/main/java/com/tinyledger/app/data/notification/TransactionNotificationService.kt
++++ b/app/src/main/java/com/tinyledger/app/data/notification/TransactionNotificationService.kt
+@@ -73,6 +73,9 @@ class TransactionNotificationService : NotificationListenerService() {
+         "com.google.android.apps.messaging",
+         "com.samsung.android.messaging",
+         "com.miui.notification",
++        "com.miui.sms",                    // 小米某些版本的短信应用
++        "com.xiaomi.sms",                   // 小米可能的变体包名
++        "com.miui.securitycenter",           // 小米安全中心，有时转发通知
+         "com.huawei.message",
+         "com.coloros.smsprovider",
+         "com.iqoo.secure",
+@@ -258,7 +261,7 @@ class TransactionNotificationService : NotificationListenerService() {
+                 val transaction = Transaction(
+                     type = parsed.type,
+                     category = category,
+-                    amount = parsed.amount,
++                    amount = if (parsed.type == TransactionType.EXPENSE) -parsed.amount else parsed.amount, // 支出存负数，收入存正数
+                     note = parsed.note,
+                     date = System.currentTimeMillis(),
+                     accountId = null  // 支付通知无法自动匹配账户
+@@ -480,7 +483,7 @@ class TransactionNotificationService : NotificationListenerService() {
+                         val transaction = Transaction(
+                             type = parsed.type,
+                             category = category,
+-                            amount = parsed.amount,
++                            amount = if (parsed.type == TransactionType.EXPENSE) -parsed.amount else parsed.amount, // 支出存负数，收入存正数
+                             note = parsed.note,
+                             date = System.currentTimeMillis(),
+                             accountId = null  // 银行短信无法自动匹配账户
+diff --git a/app/src/main/java/com/tinyledger/app/data/sms/SmsReceiver.kt b/app/src/main/java/com/tinyledger/app/data/sms/SmsReceiver.kt
+index 21fcd3a..b9249ac 100644
+--- a/app/src/main/java/com/tinyledger/app/data/sms/SmsReceiver.kt
++++ b/app/src/main/java/com/tinyledger/app/data/sms/SmsReceiver.kt
+@@ -129,7 +129,7 @@ class SmsReceiver : BroadcastReceiver() {
+                         val transaction = Transaction(
+                             type = parseResult.type,
+                             category = category,
+-                            amount = parseResult.amount,
++                            amount = if (parseResult.type == TransactionType.EXPENSE) -parseResult.amount else parseResult.amount, // 支出存负数，收入存正数
+                             note = "银行短信: ${body.take(40)}",
+                             date = System.currentTimeMillis(),
+                             accountId = null
+diff --git a/app/src/main/java/com/tinyledger/app/data/sms/SmsTransactionParser.kt b/app/src/main/java/com/tinyledger/app/data/sms/SmsTransactionParser.kt
+index 01a8b7d..19c785d 100644
+--- a/app/src/main/java/com/tinyledger/app/data/sms/SmsTransactionParser.kt
++++ b/app/src/main/java/com/tinyledger/app/data/sms/SmsTransactionParser.kt
+@@ -543,7 +543,9 @@ class SmsReader @Inject constructor(
+         // ── 第一阶段：从标准 URI 读取 SMS ──
+         // Only query the main URI which includes all SMS (inbox + sent)
+         val standardUris = listOf(
+-            Telephony.Sms.CONTENT_URI
++            Telephony.Sms.CONTENT_URI,
++            Uri.parse("content://sms/icc"),   // SIM卡短信（卡1）
++            Uri.parse("content://sms/icc2"),  // SIM卡短信（卡2/双卡设备）
+         )
+ 
+         for (smsUri in standardUris) {
+@@ -572,17 +574,22 @@ class SmsReader @Inject constructor(
+         }
+ 
+         // ── 第二阶段：探测其他可能存储 SMS 的 URI ──
+-        // Only probe non-standard URIs if Phase 1 found nothing
++        // 当 Phase 1 没有找到所有主要银行的短信时，探测非标准 URI
+         // 国产 ROM (MIUI/ColorOS/HarmonyOS) 可能把通知类短信存在不同位置
+-        if (transactions.isEmpty()) {
++        val foundBanks = bankHits.keys
++        val majorBanks = setOf("建设银行", "工商银行", "农业银行", "中国银行", "招商银行", "中信银行")
++        val missingMajorBanks = majorBanks - foundBanks
++        if (missingMajorBanks.isNotEmpty() || transactions.isEmpty()) {
+             val probeUris = listOf(
++                "content://sms/inbox",
++                "content://sms/sent",
+                 "content://mms-sms",
+                 "content://mms-sms/conversations",
+                 "content://mms-sms/complete-conversations",
+-                "content://sms/icc",
+-                "content://sms/icc2",
+                 "content://mms",
+                 "content://mms/inbox",
++                "content://telephony/sms",
++                "content://telephony/sms/inbox",
+             )
+ 
+             for (uriStr in probeUris) {
+@@ -791,9 +798,23 @@ class SmsReader @Inject constructor(
+             "${Telephony.Sms.ADDRESS} LIKE '%$num%'"
+         }
+ 
+-        // Combine bank address filter with optional time filter
++        // 内容关键词过滤（覆盖发送者号码异常的情况，如小米 HyperOS）
++        val bodyKeywords = listOf(
++            "建设银行", "建行", "CCB",
++            "工商银行", "工行", "ICBC",
++            "农业银行", "农行", "中国银行", "中行",
++            "招商银行", "招行", "交通银行", "交行",
++            "中信银行", "中信", "浦发银行", "民生银行",
++            "兴业银行", "平安银行", "光大银行", "广发银行",
++            "邮政储蓄", "邮储"
++        )
++        val bodyFilter = bodyKeywords.joinToString(" OR ") { kw ->
++            "${Telephony.Sms.BODY} LIKE '%$kw%'"
++        }
++
++        // 合并：地址匹配 OR 内容匹配
+         val selection = buildString {
+-            append("($addressFilter)")
++            append("(($addressFilter) OR ($bodyFilter))")
+             if (afterTime > 0) {
+                 append(" AND ${Telephony.Sms.DATE} > ?")
+             }
+diff --git a/app/src/main/java/com/tinyledger/app/di/DatabaseModule.kt b/app/src/main/java/com/tinyledger/app/di/DatabaseModule.kt
+index dfb99e8..36c457b 100644
+--- a/app/src/main/java/com/tinyledger/app/di/DatabaseModule.kt
++++ b/app/src/main/java/com/tinyledger/app/di/DatabaseModule.kt
+@@ -126,7 +126,7 @@ object DatabaseModule {
+             AppDatabase::class.java,
+             "tinyledger_database"
+         )
+-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8)
++        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8, com.tinyledger.app.data.local.MIGRATION_8_9)
+         .build()
+     }
+ 
+diff --git a/app/src/main/java/com/tinyledger/app/ui/screens/autoaccounting/AutoAccountingScreen.kt b/app/src/main/java/com/tinyledger/app/ui/screens/autoaccounting/AutoAccountingScreen.kt
+index ed1e59c..7482938 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/screens/autoaccounting/AutoAccountingScreen.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/screens/autoaccounting/AutoAccountingScreen.kt
+@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.text.font.FontWeight
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.unit.sp
++import androidx.lifecycle.Lifecycle
++import androidx.lifecycle.LifecycleEventObserver
++import androidx.compose.ui.platform.LocalLifecycleOwner
+ import com.tinyledger.app.data.notification.TransactionNotificationService
+ import com.tinyledger.app.ui.theme.IOSColors
+ 
+@@ -41,6 +44,9 @@ fun AutoAccountingScreen(
+     var hasNotificationPermission by remember {
+         mutableStateOf(TransactionNotificationService.hasPermission(context))
+     }
++    var hasNotificationListenerPermission by remember {
++        mutableStateOf(TransactionNotificationService.hasPermission(context))
++    }
+     
+     // 无感自动记账
+     var seamlessEnabled by remember {
+@@ -52,10 +58,13 @@ fun AutoAccountingScreen(
+     var isIgnoringBatteryOptimizations by remember { mutableStateOf(false) } // 忽略电池优化
+     var isAutoStartEnabled by remember { mutableStateOf(false) } // 自启动
+     var isLockedToBackground by remember { mutableStateOf(false) } // 锁定到后台（自动检测）
++    var showLockConfirmDialog by remember { mutableStateOf(false) }
++    var pendingLockConfirm by remember { mutableStateOf(false) }
+     
+     // 每次进入页面重新检查权限
+     LaunchedEffect(Unit) {
+         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
++        hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
+         canDrawOverlays = Settings.canDrawOverlays(context)
+         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
+         isAutoStartEnabled = checkAutoStartPermission(context)
+@@ -66,11 +75,30 @@ fun AutoAccountingScreen(
+     // 从其他设置页面返回时重新检查权限状态
+     LaunchedEffect(hasNotificationPermission, isIgnoringBatteryOptimizations, isAutoStartEnabled) {
+         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
++        hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
+         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
+         isAutoStartEnabled = checkAutoStartPermission(context)
+         isLockedToBackground = checkIfLockedToBackground(context)
+     }
+     
++    // 检测从系统设置返回时触发锁定确认对话框
++    val lifecycleOwner = LocalLifecycleOwner.current
++    DisposableEffect(lifecycleOwner) {
++        val observer = LifecycleEventObserver { _, event ->
++            if (event == Lifecycle.Event.ON_RESUME) {
++                // 刷新通知使用权状态
++                hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
++                // 处理锁定确认
++                if (pendingLockConfirm) {
++                    showLockConfirmDialog = true
++                    pendingLockConfirm = false
++                }
++            }
++        }
++        lifecycleOwner.lifecycle.addObserver(observer)
++        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
++    }
++    
+     Scaffold(
+         topBar = {
+             CenterAlignedTopAppBar(
+@@ -248,13 +276,25 @@ fun AutoAccountingScreen(
+                         icon = Icons.Default.Notifications,
+                         iconTint = IOSColors.SystemIndigo,
+                         title = "通知权限",
+-                        subtitle = "允许应用发送通知",
++                        subtitle = "允许应用发送通知提醒",
+                         enabled = checkNotificationPermission(context),
+                         onToggle = { openNotificationSettings(context) }
+                     )
+                     
+                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                     
++                    // 通知使用权（核心）
++                    PermissionItem(
++                        icon = Icons.Default.NotificationsActive,
++                        iconTint = IOSColors.SystemOrange,
++                        title = "通知使用权（核心）",
++                        subtitle = "监听银行短信通知，实现自动记账",
++                        enabled = hasNotificationListenerPermission,
++                        onToggle = { openNotificationListenerSettings(context) }
++                    )
++                    
++                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
++                    
+                     // 允许应用自动启动
+                     PermissionItem(
+                         icon = Icons.Default.PlayArrow,
+@@ -342,9 +382,9 @@ fun AutoAccountingScreen(
+                             Switch(
+                                 checked = isLockedToBackground,
+                                 onCheckedChange = { 
+-                                    // 点击开启时跳转到系统设置让用户手动锁定
+-                                    // 点击关闭时直接设置为未锁定
+                                     if (!isLockedToBackground) {
++                                        // 标记等待确认，用户返回后会弹出确认对话框
++                                        pendingLockConfirm = true
+                                         openAppSettings(context)
+                                     } else {
+                                         isLockedToBackground = false
+@@ -427,6 +467,32 @@ fun AutoAccountingScreen(
+                 }
+             }
+         }
++        
++        // 后台锁定确认对话框
++        if (showLockConfirmDialog) {
++            AlertDialog(
++                onDismissRequest = { showLockConfirmDialog = false },
++                title = { Text("确认锁定状态") },
++                text = { Text("您是否已在任务管理器中锁定了小小记账本？") },
++                confirmButton = {
++                    TextButton(onClick = {
++                        isLockedToBackground = true
++                        context.getSharedPreferences("auto_accounting", Context.MODE_PRIVATE)
++                            .edit().putBoolean("locked_to_background", true).apply()
++                        showLockConfirmDialog = false
++                    }) {
++                        Text("已锁定")
++                    }
++                },
++                dismissButton = {
++                    TextButton(onClick = {
++                        showLockConfirmDialog = false
++                    }) {
++                        Text("尚未锁定")
++                    }
++                }
++            )
++        }
+     }
+ }
+ 
+diff --git a/app/src/main/java/com/tinyledger/app/ui/screens/automation/AutoImportScreen.kt b/app/src/main/java/com/tinyledger/app/ui/screens/automation/AutoImportScreen.kt
+index 0628b05..1928a5a 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/screens/automation/AutoImportScreen.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/screens/automation/AutoImportScreen.kt
+@@ -3,7 +3,10 @@ package com.tinyledger.app.ui.screens.automation
+ import android.Manifest
+ import android.content.Intent
+ import android.content.pm.PackageManager
++import android.net.Uri
++import android.os.Build
+ import android.provider.Settings
++import android.text.TextUtils
+ import androidx.activity.compose.rememberLauncherForActivityResult
+ import androidx.activity.result.contract.ActivityResultContracts
+ import androidx.compose.animation.*
+@@ -209,6 +212,9 @@ fun AutoImportScreen(
+ 
+                     // SMS 模式：时间范围选择
+                     if (!isCsvMode) {
++                        // 权限检查卡片
++                        SmsPermissionCheckCard(context = context)
++
+                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                             DateRangeSelector(
+                                 label = "记录时间范围",
+@@ -1094,3 +1100,113 @@ private fun SmsReadStatsCard(stats: SmsReadStats) {
+         }
+     }
+ }
++
++// ══════════════════════════════════════════════════════════════════════════════
++// 短信导入权限检查卡片
++// ══════════════════════════════════════════════════════════════════════════════
++
++@Composable
++private fun SmsPermissionCheckCard(context: android.content.Context) {
++    // 检查各项权限状态
++    val hasReadSms = remember {
++        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
++    }
++    val hasReceiveSms = remember {
++        ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
++    }
++    val hasNotificationAccess = remember {
++        TransactionNotificationService.hasPermission(context)
++    }
++    val hasOverlayPermission = remember {
++        Settings.canDrawOverlays(context)
++    }
++
++    // 所有权限都已授予时不显示
++    if (hasReadSms && hasReceiveSms && hasNotificationAccess && hasOverlayPermission) {
++        return
++    }
++
++    Card(
++        modifier = Modifier
++            .fillMaxWidth()
++            .padding(horizontal = 16.dp, vertical = 4.dp),
++        shape = RoundedCornerShape(12.dp),
++        colors = CardDefaults.cardColors(
++            containerColor = IOSColors.SystemRed.copy(alpha = 0.08f)
++        )
++    ) {
++        Column(modifier = Modifier.padding(12.dp)) {
++            Row(
++                verticalAlignment = Alignment.CenterVertically,
++                modifier = Modifier.fillMaxWidth()
++            ) {
++                Icon(
++                    Icons.Default.Warning,
++                    contentDescription = null,
++                    modifier = Modifier.size(20.dp),
++                    tint = IOSColors.SystemRed
++                )
++                Spacer(modifier = Modifier.width(8.dp))
++                Text(
++                    text = "部分权限未授权，短信导入可能不全或异常",
++                    style = MaterialTheme.typography.bodySmall.copy(
++                        fontWeight = FontWeight.SemiBold
++                    ),
++                    color = IOSColors.SystemRed
++                )
++            }
++
++            Spacer(modifier = Modifier.height(8.dp))
++
++            // 权限列表
++            val permissionItems = buildList {
++                if (!hasReadSms) add("读取短信与彩信" to {
++                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
++                        data = Uri.fromParts("package", context.packageName, null)
++                    })
++                })
++                if (!hasReceiveSms) add("接收短信与彩信" to {
++                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
++                        data = Uri.fromParts("package", context.packageName, null)
++                    })
++                })
++                if (!hasNotificationAccess) add("通知类短信" to {
++                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
++                })
++                if (!hasOverlayPermission) add("后台弹出界面" to {
++                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
++                        data = Uri.fromParts("package", context.packageName, null)
++                    })
++                })
++            }
++
++            permissionItems.forEach { (label, action) ->
++                Row(
++                    modifier = Modifier
++                        .fillMaxWidth()
++                        .padding(vertical = 2.dp),
++                    verticalAlignment = Alignment.CenterVertically
++                ) {
++                    Icon(
++                        Icons.Default.Close,
++                        contentDescription = null,
++                        modifier = Modifier.size(14.dp),
++                        tint = IOSColors.SystemRed.copy(alpha = 0.7f)
++                    )
++                    Spacer(modifier = Modifier.width(6.dp))
++                    Text(
++                        text = label,
++                        style = MaterialTheme.typography.labelSmall,
++                        modifier = Modifier.weight(1f)
++                    )
++                    TextButton(
++                        onClick = action,
++                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
++                    ) {
++                        Text("去设置", style = MaterialTheme.typography.labelSmall)
++                    }
++                }
++            }
++        }
++    }
++}
+diff --git a/app/src/main/java/com/tinyledger/app/ui/viewmodel/AddTransactionViewModel.kt b/app/src/main/java/com/tinyledger/app/ui/viewmodel/AddTransactionViewModel.kt
+index 12d34c4..9bcda56 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/viewmodel/AddTransactionViewModel.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/viewmodel/AddTransactionViewModel.kt
+@@ -163,7 +163,7 @@ class AddTransactionViewModel @Inject constructor(
+                             transactionType = tx.type,
+                             categories = categories,
+                             selectedCategory = tx.category,
+-                            amount = tx.amount.toString(),
++                            amount = kotlin.math.abs(tx.amount).toString(), // 显示绝对值，输入框永远为正数
+                             note = tx.note ?: "",
+                             date = tx.date,
+                             isEditing = true,
+@@ -416,8 +416,16 @@ class AddTransactionViewModel @Inject constructor(
+                     // 解析双记录的ID和关联ID
+                     val (fromId, toId) = if (state.isEditing && editingTransactionId != null) {
+                         val existingTx = transactionRepository.getTransactionById(editingTransactionId!!)
+-                        // editingTransactionId 可能是 from 或 to 记录，需要判断
+-                        if (existingTx != null && existingTx.amount < 0) {
++
++                        // 检查原记录是否是双记录类型
++                        val wasDualRecord = existingTx != null &&
++                            (existingTx.type == TransactionType.TRANSFER || existingTx.type == TransactionType.LENDING)
++
++                        if (!wasDualRecord) {
++                            // 从单记录切换到双记录：删除旧的单记录，创建新的双记录
++                            transactionRepository.deleteTransaction(editingTransactionId!!)
++                            Pair(0L, 0L) // 使用0L表示新记录
++                        } else if (existingTx != null && existingTx.amount < 0) {
+                             // 当前编辑的是 from（出账）记录
+                             val resolvedToId = existingTx.relatedTransactionId
+                                 ?: transactionRepository.getTransactionByRelatedId(editingTransactionId!!)?.id
+@@ -458,28 +466,60 @@ class AddTransactionViewModel @Inject constructor(
+                         relatedTransactionId = fromId // 保留关联链接
+                     )
+                     
+-                    if (state.isEditing && editingTransactionId != null) {
++                    if (state.isEditing && editingTransactionId != null && fromId != 0L && toId != 0L) {
++                        // 编辑现有的双记录（fromId和toId都有效时才更新）
+                         transactionRepository.updateDualTransaction(fromTransaction, toTransaction)
+                     } else {
++                        // 新建双记录（包括从单记录切换过来的情况）
+                         transactionRepository.insertDualTransaction(fromTransaction, toTransaction)
+                     }
+                 } else {
+                     // 普通收支：单条记录
++                    // 核心数据逻辑：支出存为负数（资金流出），收入存为正数（资金流入）
++                    val signedAmount = if (state.transactionType == TransactionType.EXPENSE) -amount else amount
+                     val accountId = state.selectedAccount?.id
+-                    
+-                    val transaction = Transaction(
+-                        id = editingTransactionId ?: 0,
+-                        type = state.transactionType,
+-                        category = category,
+-                        amount = amount,
+-                        note = state.note.ifBlank { null },
+-                        date = state.date,
+-                        accountId = accountId
+-                    )
+ 
+                     if (state.isEditing && editingTransactionId != null) {
+-                        transactionRepository.updateTransaction(transaction)
++                        // 编辑模式：检查是否从双记录类型切换到单记录类型
++                        val existingTx = transactionRepository.getTransactionById(editingTransactionId!!)
++                        val wasDualRecord = existingTx != null &&
++                            (existingTx.type == TransactionType.TRANSFER || existingTx.type == TransactionType.LENDING)
++
++                        if (wasDualRecord) {
++                            // 从双记录切换到单记录：删除旧的关联记录，创建新的单记录
++                            transactionRepository.deleteTransaction(editingTransactionId!!)
++                            val transaction = Transaction(
++                                type = state.transactionType,
++                                category = category,
++                                amount = signedAmount,
++                                note = state.note.ifBlank { null },
++                                date = state.date,
++                                accountId = accountId
++                            )
++                            transactionRepository.insertTransaction(transaction)
++                        } else {
++                            // 原来就是单记录，正常更新
++                            val transaction = Transaction(
++                                id = editingTransactionId ?: 0,
++                                type = state.transactionType,
++                                category = category,
++                                amount = signedAmount,
++                                note = state.note.ifBlank { null },
++                                date = state.date,
++                                accountId = accountId
++                            )
++                            transactionRepository.updateTransaction(transaction)
++                        }
+                     } else {
++                        // 新建模式
++                        val transaction = Transaction(
++                            type = state.transactionType,
++                            category = category,
++                            amount = signedAmount,
++                            note = state.note.ifBlank { null },
++                            date = state.date,
++                            accountId = accountId
++                        )
+                         transactionRepository.insertTransaction(transaction)
+                     }
+                 }
+diff --git a/app/src/main/java/com/tinyledger/app/ui/viewmodel/AutoImportViewModel.kt b/app/src/main/java/com/tinyledger/app/ui/viewmodel/AutoImportViewModel.kt
+index f2cc9fc..e28bcae 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/viewmodel/AutoImportViewModel.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/viewmodel/AutoImportViewModel.kt
+@@ -262,7 +262,7 @@ class AutoImportViewModel @Inject constructor(
+                                 val transaction = Transaction(
+                                     type = csv.type,
+                                     category = category,
+-                                    amount = csv.amount,
++                                    amount = if (csv.type == TransactionType.EXPENSE) -csv.amount else csv.amount, // 支出存负数，收入存正数
+                                     note = buildCsvNote(csv),
+                                     date = csv.date,
+                                     accountId = accountId
+@@ -283,7 +283,7 @@ class AutoImportViewModel @Inject constructor(
+                                 val transaction = Transaction(
+                                     type = sms.type ?: TransactionType.EXPENSE,
+                                     category = category,
+-                                    amount = sms.amount ?: 0.0,
++                                    amount = if ((sms.type ?: TransactionType.EXPENSE) == TransactionType.EXPENSE) -(sms.amount ?: 0.0) else sms.amount ?: 0.0, // 支出存负数，收入存正数
+                                     note = buildNote(sms),
+                                     date = sms.date,
+                                     accountId = accountId
+diff --git a/app/src/main/java/com/tinyledger/app/ui/viewmodel/BillsViewModel.kt b/app/src/main/java/com/tinyledger/app/ui/viewmodel/BillsViewModel.kt
+index b771f4c..c58c525 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/viewmodel/BillsViewModel.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/viewmodel/BillsViewModel.kt
+@@ -114,12 +114,12 @@ class BillsViewModel @Inject constructor(
+                         }
+ 
+                     // Calculate monthly totals using sign-based amounts
+-                    // Positive amounts = income, negative absolute amounts = expense
++                    // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
+                     val calculatedIncome = monthTransactions
+-                        .filter { it.amount > 0 }
++                        .filter { it.amount > 0 && it.type != TransactionType.EXPENSE }
+                         .sumOf { it.amount }
+                     val calculatedExpense = monthTransactions
+-                        .filter { it.amount < 0 }
++                        .filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }
+                         .sumOf { kotlin.math.abs(it.amount) }
+ 
+                     BillsUiState(
+@@ -135,7 +135,7 @@ class BillsViewModel @Inject constructor(
+                         selectedDay = params.day,
+                         monthlyIncome = calculatedIncome,
+                         monthlyExpense = calculatedExpense,
+-                        monthlyBalance = calculatedIncome - calculatedExpense,
++                        monthlyBalance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
+                         dailyTransactionMap = dailyMap,
+                         selectedDayTransactions = dayTx
+                     )
+diff --git a/app/src/main/java/com/tinyledger/app/ui/viewmodel/HomeViewModel.kt b/app/src/main/java/com/tinyledger/app/ui/viewmodel/HomeViewModel.kt
+index 91a9de5..caf9349 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/viewmodel/HomeViewModel.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/viewmodel/HomeViewModel.kt
+@@ -69,12 +69,13 @@ class HomeViewModel @Inject constructor(
+                 }.sortedByDescending { it.date }
+ 
+                 // Calculate monthly totals using sign-based amounts
+-                val monthlyInc = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
+-                val monthlyExp = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
++                // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
++                val monthlyInc = monthTransactions.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
++                val monthlyExp = monthTransactions.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
+ 
+                 // Calculate today totals using sign-based amounts
+-                val todayInc = todayTx.filter { it.amount > 0 }.sumOf { it.amount }
+-                val todayExp = todayTx.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
++                val todayInc = todayTx.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
++                val todayExp = todayTx.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
+ 
+                 val dailyAvg = if (dayOfMonth > 0) monthlyExp / dayOfMonth else 0.0
+ 
+diff --git a/app/src/main/java/com/tinyledger/app/ui/viewmodel/StatisticsViewModel.kt b/app/src/main/java/com/tinyledger/app/ui/viewmodel/StatisticsViewModel.kt
+index 9b5faba..5b427f0 100644
+--- a/app/src/main/java/com/tinyledger/app/ui/viewmodel/StatisticsViewModel.kt
++++ b/app/src/main/java/com/tinyledger/app/ui/viewmodel/StatisticsViewModel.kt
+@@ -72,12 +72,25 @@ class StatisticsViewModel @Inject constructor(
+                     transactionRepository.getExpenseByCategory(startDate, endDate)
+                 ) { monthTransactions, expenseMap ->
+                     // Calculate totals using sign-based amounts
+-                    val income = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
+-                    val expense = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
++                    // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
++                    val income = monthTransactions.filter {
++                        it.amount > 0 && it.type != TransactionType.EXPENSE
++                    }.sumOf { it.amount }
++                    val expense = monthTransactions.filter {
++                        it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0)
++                    }.sumOf { kotlin.math.abs(it.amount) }
+                     val totalExpense = expense
+                     val categoryAmounts = expenseMap.map { (categoryId, amount) ->
++                        val resolvedCategory = Category.fromId(categoryId, TransactionType.EXPENSE)
++                        // 如果分类名与ID相同，说明找不到匹配的默认分类，尝试从自定义分类中查找
++                        val category = if (resolvedCategory.name == categoryId) {
++                            Category.getCategoriesByType(TransactionType.EXPENSE)
++                                .find { it.id == categoryId } ?: resolvedCategory
++                        } else {
++                            resolvedCategory
++                        }
+                         CategoryAmount(
+-                            category = Category.fromId(categoryId, TransactionType.EXPENSE),
++                            category = category,
+                             amount = amount,
+                             percentage = if (totalExpense > 0) (amount / totalExpense * 100).toFloat() else 0f
+                         )
+@@ -88,7 +101,7 @@ class StatisticsViewModel @Inject constructor(
+                         selectedMonth = month,
+                         totalIncome = income,
+                         totalExpense = expense,
+-                        balance = income - expense,
++                        balance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
+                         expenseByCategory = categoryAmounts,
+                         currencySymbol = currency,
+                         isLoading = false,

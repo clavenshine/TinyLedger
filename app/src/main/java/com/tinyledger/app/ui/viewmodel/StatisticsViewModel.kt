@@ -72,12 +72,25 @@ class StatisticsViewModel @Inject constructor(
                     transactionRepository.getExpenseByCategory(startDate, endDate)
                 ) { monthTransactions, expenseMap ->
                     // Calculate totals using sign-based amounts
-                    val income = monthTransactions.filter { it.amount > 0 }.sumOf { it.amount }
-                    val expense = monthTransactions.filter { it.amount < 0 }.sumOf { kotlin.math.abs(it.amount) }
+                    // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
+                    val income = monthTransactions.filter {
+                        it.amount > 0 && it.type != TransactionType.EXPENSE
+                    }.sumOf { it.amount }
+                    val expense = monthTransactions.filter {
+                        it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0)
+                    }.sumOf { kotlin.math.abs(it.amount) }
                     val totalExpense = expense
                     val categoryAmounts = expenseMap.map { (categoryId, amount) ->
+                        val resolvedCategory = Category.fromId(categoryId, TransactionType.EXPENSE)
+                        // 如果分类名与ID相同，说明找不到匹配的默认分类，尝试从自定义分类中查找
+                        val category = if (resolvedCategory.name == categoryId) {
+                            Category.getCategoriesByType(TransactionType.EXPENSE)
+                                .find { it.id == categoryId } ?: resolvedCategory
+                        } else {
+                            resolvedCategory
+                        }
                         CategoryAmount(
-                            category = Category.fromId(categoryId, TransactionType.EXPENSE),
+                            category = category,
                             amount = amount,
                             percentage = if (totalExpense > 0) (amount / totalExpense * 100).toFloat() else 0f
                         )
@@ -88,7 +101,7 @@ class StatisticsViewModel @Inject constructor(
                         selectedMonth = month,
                         totalIncome = income,
                         totalExpense = expense,
-                        balance = income - expense,
+                        balance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
                         expenseByCategory = categoryAmounts,
                         currencySymbol = currency,
                         isLoading = false,

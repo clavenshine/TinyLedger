@@ -625,7 +625,7 @@ private fun PendingTransactionsCard(
 
                         // 中间：金额
                         Text(
-                            text = "$amountPrefix$currencySymbol ${String.format("%.2f", transaction.amount)}",
+                            text = "$amountPrefix$currencySymbol ${String.format("%.2f", kotlin.math.abs(transaction.amount))}",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                             color = amountColor,
                             modifier = Modifier.padding(horizontal = 8.dp)

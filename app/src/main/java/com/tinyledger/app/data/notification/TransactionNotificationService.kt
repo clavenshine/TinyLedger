@@ -73,6 +73,9 @@ class TransactionNotificationService : NotificationListenerService() {
         "com.google.android.apps.messaging",
         "com.samsung.android.messaging",
         "com.miui.notification",
+        "com.miui.sms",                    // 小米某些版本的短信应用
+        "com.xiaomi.sms",                   // 小米可能的变体包名
+        "com.miui.securitycenter",           // 小米安全中心，有时转发通知
         "com.huawei.message",
         "com.coloros.smsprovider",
         "com.iqoo.secure",
@@ -258,7 +261,7 @@ class TransactionNotificationService : NotificationListenerService() {
                 val transaction = Transaction(
                     type = parsed.type,
                     category = category,
-                    amount = parsed.amount,
+                    amount = if (parsed.type == TransactionType.EXPENSE) -parsed.amount else parsed.amount, // 支出存负数，收入存正数
                     note = parsed.note,
                     date = System.currentTimeMillis(),
                     accountId = null  // 支付通知无法自动匹配账户
@@ -480,7 +483,7 @@ class TransactionNotificationService : NotificationListenerService() {
                         val transaction = Transaction(
                             type = parsed.type,
                             category = category,
-                            amount = parsed.amount,
+                            amount = if (parsed.type == TransactionType.EXPENSE) -parsed.amount else parsed.amount, // 支出存负数，收入存正数
                             note = parsed.note,
                             date = System.currentTimeMillis(),
                             accountId = null  // 银行短信无法自动匹配账户
