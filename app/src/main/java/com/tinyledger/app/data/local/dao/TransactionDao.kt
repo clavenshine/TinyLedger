@@ -28,6 +28,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getTransactionById(id: Long): TransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE relatedTransactionId = :relatedId")
+    suspend fun getTransactionByRelatedId(relatedId: Long): TransactionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity): Long
 
@@ -57,12 +60,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE accountId = :accountId AND type = :type ORDER BY date DESC")
     fun getTransactionsByAccountIdAndType(accountId: Long, type: Int): Flow<List<TransactionEntity>>
 
-    // 按账户ID计算收入总额
-    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE accountId = :accountId AND type = 1")
+    // 按账户ID计算收入总额（包括所有正数金额的交易）
+    @Query("SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
     fun getTotalIncomeByAccountId(accountId: Long): Flow<Double>
 
-    // 按账户ID计算支出总额
-    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE accountId = :accountId AND type = 0")
+    // 按账户ID计算支出总额（包括所有负数金额的绝对值）
+    @Query("SELECT COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0.0) FROM transactions WHERE accountId = :accountId")
     fun getTotalExpenseByAccountId(accountId: Long): Flow<Double>
 
     // 迁移分类：将旧分类ID更新为新分类ID

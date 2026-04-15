@@ -67,10 +67,40 @@ class TransactionRepositoryImpl @Inject constructor(
         return id
     }
 
+    override suspend fun insertDualTransaction(fromTransaction: Transaction, toTransaction: Transaction): Pair<Long, Long> {
+        // 先保存第一笔交易（fromAccount，负数金额）
+        val fromEntity = fromTransaction.toEntity()
+        val fromId = transactionDao.insertTransaction(fromEntity)
+        
+        // 再保存第二笔交易（toAccount，正数金额），并关联第一笔的ID
+        val toEntity = toTransaction.copy(relatedTransactionId = fromId).toEntity()
+        val toId = transactionDao.insertTransaction(toEntity)
+        
+        // 更新第一笔交易的relatedTransactionId
+        val updatedFromEntity = fromEntity.copy(id = fromId, relatedTransactionId = toId)
+        transactionDao.updateTransaction(updatedFromEntity)
+        
+        // 更新两个账户的余额
+        fromTransaction.accountId?.let { updateAccountBalanceById(it) }
+        toTransaction.accountId?.let { updateAccountBalanceById(it) }
+        
+        return Pair(fromId, toId)
+    }
+
     override suspend fun updateTransaction(transaction: Transaction) {
         transactionDao.updateTransaction(transaction.toEntity())
         // 更新后立即刷新账户余额
         transaction.accountId?.let { updateAccountBalanceById(it) }
+    }
+
+    override suspend fun updateDualTransaction(fromTransaction: Transaction, toTransaction: Transaction) {
+        // 更新两笔交易
+        transactionDao.updateTransaction(fromTransaction.toEntity())
+        transactionDao.updateTransaction(toTransaction.toEntity())
+        
+        // 更新两个账户的余额
+        fromTransaction.accountId?.let { updateAccountBalanceById(it) }
+        toTransaction.accountId?.let { updateAccountBalanceById(it) }
     }
 
     override suspend fun deleteTransaction(id: Long) {
@@ -145,7 +175,8 @@ class TransactionRepositoryImpl @Inject constructor(
             amount = amount,
             note = note,
             date = date,
-            accountId = accountId
+            accountId = accountId,
+            relatedTransactionId = relatedTransactionId
         )
     }
 
@@ -158,6 +189,7 @@ class TransactionRepositoryImpl @Inject constructor(
             note = note,
             date = date,
             accountId = accountId,
+            relatedTransactionId = relatedTransactionId,
             updatedAt = System.currentTimeMillis()
         )
     }

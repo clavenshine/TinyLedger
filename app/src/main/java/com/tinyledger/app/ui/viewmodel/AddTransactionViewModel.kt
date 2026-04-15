@@ -108,21 +108,64 @@ class AddTransactionViewModel @Inject constructor(
             val transaction = transactionRepository.getTransactionById(transactionId)
             transaction?.let { tx ->
                 val categories = Category.getCategoriesByType(tx.type)
-                // 如果有accountId，找到对应的账户
-                val selectedAccount = tx.accountId?.let { accountId ->
-                    _uiState.value.accounts.find { it.id == accountId }
-                }
-                _uiState.update { state ->
-                    state.copy(
-                        transactionType = tx.type,
-                        categories = categories,
-                        selectedCategory = tx.category,
-                        amount = tx.amount.toString(),
-                        note = tx.note ?: "",
-                        date = tx.date,
-                        isEditing = true,
-                        selectedAccount = selectedAccount
-                    )
+                
+                // 检查是否是双记录交易（转账/借贷）
+                if (tx.type == TransactionType.TRANSFER || tx.type == TransactionType.LENDING) {
+                    // 查找关联的另一笔交易
+                    val relatedTransaction = tx.relatedTransactionId?.let {
+                        transactionRepository.getTransactionById(it)
+                    } ?: run {
+                        // 如果当前交易没有relatedTransactionId，尝试查找指向它的交易
+                        transactionRepository.getTransactionById(transactionId)?.let { currentTx ->
+                            // 需要通过其他方式查找，这里简化处理
+                            null
+                        }
+                    }
+                    
+                    // 根据金额正负判断哪笔是from，哪笔是to
+                    val (fromTx, toTx) = if (tx.amount < 0) {
+                        Pair(tx, relatedTransaction)
+                    } else {
+                        Pair(relatedTransaction, tx)
+                    }
+                    
+                    val fromAccount = fromTx?.accountId?.let { accountId ->
+                        _uiState.value.accounts.find { it.id == accountId }
+                    }
+                    val toAccount = toTx?.accountId?.let { accountId ->
+                        _uiState.value.accounts.find { it.id == accountId }
+                    }
+                    
+                    _uiState.update { state ->
+                        state.copy(
+                            transactionType = tx.type,
+                            categories = categories,
+                            selectedCategory = tx.category,
+                            amount = kotlin.math.abs(tx.amount).toString(), // 显示绝对值
+                            note = tx.note ?: "",
+                            date = tx.date,
+                            isEditing = true,
+                            selectedFromAccount = fromAccount,
+                            selectedToAccount = toAccount
+                        )
+                    }
+                } else {
+                    // 普通收支交易
+                    val selectedAccount = tx.accountId?.let { accountId ->
+                        _uiState.value.accounts.find { it.id == accountId }
+                    }
+                    _uiState.update { state ->
+                        state.copy(
+                            transactionType = tx.type,
+                            categories = categories,
+                            selectedCategory = tx.category,
+                            amount = tx.amount.toString(),
+                            note = tx.note ?: "",
+                            date = tx.date,
+                            isEditing = true,
+                            selectedAccount = selectedAccount
+                        )
+                    }
                 }
             }
         }
@@ -361,27 +404,61 @@ class AddTransactionViewModel @Inject constructor(
                     else -> state.selectedCategory!!
                 }
 
-                // For TRANSFER/LENDING, use fromAccount as the primary account
-                val accountId = when (state.transactionType) {
-                    TransactionType.TRANSFER -> state.selectedFromAccount?.id
-                    TransactionType.LENDING -> state.selectedFromAccount?.id
-                    else -> state.selectedAccount?.id
-                }
-
-                val transaction = Transaction(
-                    id = editingTransactionId ?: 0,
-                    type = state.transactionType,
-                    category = category,
-                    amount = amount,
-                    note = state.note.ifBlank { null },
-                    date = state.date,
-                    accountId = accountId
-                )
-
-                if (state.isEditing && editingTransactionId != null) {
-                    transactionRepository.updateTransaction(transaction)
+                // For TRANSFER/LENDING, create dual records
+                if (state.transactionType == TransactionType.TRANSFER || state.transactionType == TransactionType.LENDING) {
+                    val fromAccount = state.selectedFromAccount!!
+                    val toAccount = state.selectedToAccount!!
+                    
+                    // 出账账户：负数金额
+                    val fromTransaction = Transaction(
+                        id = if (state.isEditing && editingTransactionId != null) editingTransactionId!! else 0,
+                        type = state.transactionType,
+                        category = category,
+                        amount = -amount, // 负数表示出账
+                        note = state.note.ifBlank { null },
+                        date = state.date,
+                        accountId = fromAccount.id
+                    )
+                    
+                    // 入账账户：正数金额
+                    val toTransaction = Transaction(
+                        id = if (state.isEditing) {
+                            // 查找关联的第二笔交易ID
+                            val existingTransaction = transactionRepository.getTransactionById(editingTransactionId!!)
+                            existingTransaction?.relatedTransactionId ?: 0
+                        } else 0,
+                        type = state.transactionType,
+                        category = category,
+                        amount = amount, // 正数表示入账
+                        note = state.note.ifBlank { null },
+                        date = state.date,
+                        accountId = toAccount.id
+                    )
+                    
+                    if (state.isEditing && editingTransactionId != null) {
+                        transactionRepository.updateDualTransaction(fromTransaction, toTransaction)
+                    } else {
+                        transactionRepository.insertDualTransaction(fromTransaction, toTransaction)
+                    }
                 } else {
-                    transactionRepository.insertTransaction(transaction)
+                    // 普通收支：单条记录
+                    val accountId = state.selectedAccount?.id
+                    
+                    val transaction = Transaction(
+                        id = editingTransactionId ?: 0,
+                        type = state.transactionType,
+                        category = category,
+                        amount = amount,
+                        note = state.note.ifBlank { null },
+                        date = state.date,
+                        accountId = accountId
+                    )
+
+                    if (state.isEditing && editingTransactionId != null) {
+                        transactionRepository.updateTransaction(transaction)
+                    } else {
+                        transactionRepository.insertTransaction(transaction)
+                    }
                 }
 
                 _uiState.update { it.copy(isSaving = false, saveSuccess = true) }

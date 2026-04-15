@@ -12,7 +12,9 @@ interface TransactionRepository {
     fun searchTransactionsFull(keyword: String): Flow<List<Transaction>>
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun insertTransaction(transaction: Transaction): Long
+    suspend fun insertDualTransaction(fromTransaction: Transaction, toTransaction: Transaction): Pair<Long, Long>
     suspend fun updateTransaction(transaction: Transaction)
+    suspend fun updateDualTransaction(fromTransaction: Transaction, toTransaction: Transaction)
     suspend fun deleteTransaction(id: Long)
     fun getTotalByTypeAndDateRange(type: Int, startDate: Long, endDate: Long): Flow<Double>
     fun getExpenseByCategory(startDate: Long, endDate: Long): Flow<Map<String, Double>>

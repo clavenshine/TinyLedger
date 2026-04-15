@@ -47,6 +47,7 @@ import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.components.CategorySelector
 import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.LendingSubType
+import kotlinx.coroutines.flow.drop
 import com.tinyledger.app.util.DateUtils
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -638,12 +639,16 @@ fun AddTransactionScreen(
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = uiState.date
         )
-        // Auto-close when date is selected
-        LaunchedEffect(datePickerState.selectedDateMillis) {
-            if (showDatePicker && datePickerState.selectedDateMillis != null && datePickerState.selectedDateMillis != uiState.date) {
-                viewModel.setDate(datePickerState.selectedDateMillis!!)
-                showDatePicker = false
-            }
+        // Monitor for actual date changes from user interaction
+        LaunchedEffect(Unit) {
+            snapshotFlow { datePickerState.selectedDateMillis }
+                .drop(1)  // Skip initial value to avoid race condition on first click
+                .collect { selectedMillis ->
+                    if (selectedMillis != null && selectedMillis != uiState.date) {
+                        viewModel.setDate(selectedMillis)
+                        showDatePicker = false
+                    }
+                }
         }
         ModalBottomSheet(
             onDismissRequest = { showDatePicker = false },

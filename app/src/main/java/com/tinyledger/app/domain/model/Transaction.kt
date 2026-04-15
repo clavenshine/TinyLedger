@@ -7,7 +7,8 @@ data class Transaction(
     val amount: Double,
     val note: String?,
     val date: Long,
-    val accountId: Long? = null  // 关联账户ID
+    val accountId: Long? = null,  // 关联账户ID
+    val relatedTransactionId: Long? = null  // 关联的另一笔交易ID（用于转账/借贷）
 )
 
 enum class TransactionType(val value: Int) {
