@@ -49,6 +49,7 @@ fun CategorySelector(
     showAddButton: Boolean = true,
     transactionType: TransactionType = TransactionType.EXPENSE,
     vibrationEnabled: Boolean = false,
+    onNavigateToCategoryManage: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -60,24 +61,43 @@ fun CategorySelector(
         // Non-lazy grid: display all items without scrolling
         // This avoids the crash caused by nesting LazyVerticalGrid inside verticalScroll
         val itemsPerRow = 4
-        categories.chunked(itemsPerRow).forEach { rowItems ->
+        // 将“分类管理”按钮作为最后一个元素加入列表
+        val allItems = if (showAddButton && onAddCategory != null) {
+            categories + listOf(Category("category_manage", "分类管理", "settings", TransactionType.EXPENSE))
+        } else {
+            categories
+        }
+        allItems.chunked(itemsPerRow).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 rowItems.forEach { category ->
                     Box(modifier = Modifier.weight(1f)) {
-                        CategoryItem(
-                            category = category,
-                            isSelected = category == selectedCategory,
-                            onClick = { onCategorySelected(category) },
-                            onLongClick = {
-                                if (onDeleteCategory != null || onRenameCategory != null) {
-                                    showActionMenu = category
+                        if (category.id == "category_manage") {
+                            // 分类管理按钮 - 点击导航到分类管理页面
+                            CategoryManageButton(
+                                onClick = {
+                                    if (onNavigateToCategoryManage != null) {
+                                        onNavigateToCategoryManage()
+                                    } else {
+                                        showAddDialog = true
+                                    }
                                 }
-                            },
-                            vibrationEnabled = vibrationEnabled
-                        )
+                            )
+                        } else {
+                            CategoryItem(
+                                category = category,
+                                isSelected = category == selectedCategory,
+                                onClick = { onCategorySelected(category) },
+                                onLongClick = {
+                                    if (onDeleteCategory != null || onRenameCategory != null) {
+                                        showActionMenu = category
+                                    }
+                                },
+                                vibrationEnabled = vibrationEnabled
+                            )
+                        }
                     }
                 }
                 // Fill empty slots in the last row
@@ -86,25 +106,6 @@ fun CategorySelector(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        // Add category button row - positioned on the right side
-        if (showAddButton && onAddCategory != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Fill empty slots first (left side)
-                repeat(itemsPerRow - 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-                // Add button on the right
-                Box(modifier = Modifier.weight(1f)) {
-                    AddCategoryButton(
-                        onClick = { showAddDialog = true }
-                    )
-                }
-            }
         }
     }
 
@@ -290,6 +291,49 @@ private fun AddCategoryButton(
             style = MaterialTheme.typography.labelSmall,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+/**
+ * “分类管理”按钮 - 放在分类网格最后一个位置
+ * 样式与CategoryItem一致，使用设置图标
+ */
+@Composable
+private fun CategoryManageButton(
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = "分类管理",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "分类管理",
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
         )
     }
 }
@@ -666,8 +710,9 @@ private fun getIconFromName(iconName: String): ImageVector {
         "investment" -> Icons.Default.TrendingUp
         "financial" -> Icons.Default.AccountBalance
         "redpacket" -> Icons.Default.Mail
-        "recover_loan" -> Icons.Default.CallReceived
         "family_living" -> Icons.Default.FamilyRestroom
+        "children" -> Icons.Default.ChildCare
+        "elderly_care" -> Icons.Default.Elderly
         "ic_other" -> Icons.Default.MoreHoriz
         "ic_restaurant" -> Icons.Default.Restaurant
         "ic_directions_bus" -> Icons.Default.DirectionsBus
@@ -685,7 +730,9 @@ private fun getIconFromName(iconName: String): ImageVector {
         "ic_bonus" -> Icons.Default.CardGiftcard
         "ic_financial" -> Icons.Default.AccountBalance
         "ic_redpacket" -> Icons.Default.Mail
-        "ic_recover_loan" -> Icons.Default.CallReceived
+        "ic_family_living" -> Icons.Default.FamilyRestroom
+        "ic_children" -> Icons.Default.ChildCare
+        "ic_elderly_care" -> Icons.Default.Elderly
         else -> Icons.Default.MoreHoriz
     }
 }

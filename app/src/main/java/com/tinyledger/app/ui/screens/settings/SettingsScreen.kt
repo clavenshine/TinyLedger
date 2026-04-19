@@ -3,8 +3,9 @@ package com.tinyledger.app.ui.screens.settings
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
-import android.content.res.Configuration
 import androidx.compose.foundation.*
+import android.content.res.Configuration
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -45,6 +46,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToAutoImport: (ImportType) -> Unit = {},
     onNavigateToAutoAccounting: () -> Unit = {},
+    onNavigateToThemeColor: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
 ) {
@@ -53,7 +55,6 @@ fun SettingsScreen(
     val updateCheckState by updateCheckViewModel.uiState.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
-    var showColorThemeDialog by remember { mutableStateOf(false) }
 
     // 通知监听开关状态（从 SharedPreferences 读取）
     var notificationEnabled by remember {
@@ -110,12 +111,14 @@ fun SettingsScreen(
             item {
                 IosSettingsCard {
                     // 主题颜色
+                    val isSystemDark = isSystemInDarkTheme()
                     IosSettingsItem(
                         icon = Icons.Default.Palette,
                         iconTint = Color(uiState.colorScheme.primaryColor),
                         title = "主题颜色",
-                        subtitle = uiState.settings.colorTheme.displayName,
-                        onClick = { showColorThemeDialog = true }
+                        subtitle = if (isSystemDark) "深色模式已锁定主题" else uiState.settings.colorTheme.displayName,
+                        onClick = { if (!isSystemDark) onNavigateToThemeColor() },
+                        enabled = !isSystemDark
                     )
                     
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -303,19 +306,6 @@ fun SettingsScreen(
         }
     }
 
-    // 主题颜色选择对话框
-    if (showColorThemeDialog) {
-        ColorThemeDialog(
-            currentTheme = uiState.settings.colorTheme,
-            themeMode = uiState.settings.themeMode,
-            onSelect = { theme ->
-                viewModel.updateColorTheme(theme)
-                showColorThemeDialog = false
-            },
-            onDismiss = { showColorThemeDialog = false }
-        )
-    }
-
     // 主题模式对话框
     if (showThemeDialog) {
         IosSelectDialog(
@@ -459,224 +449,6 @@ private fun NotificationListenerItem(
 }
 
 @Composable
-private fun ColorThemeDialog(
-    currentTheme: ColorTheme,
-    themeMode: ThemeMode,
-    onSelect: (ColorTheme) -> Unit,
-    onDismiss: () -> Unit
-) {
-    // 判断当前是否处于深色模式
-    val isSystemDark = (LocalContext.current.resources.configuration.uiMode and
-            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    val isDarkMode = when (themeMode) {
-        ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> isSystemDark
-        ThemeMode.LIGHT -> false
-    }
-
-    // 深色模式下不适合的主题集合
-    val unsuitableThemes = if (isDarkMode) AppColorScheme.darkModeUnsuitableThemes else emptySet()
-    // 分组标签与 ColorTheme 枚举的对应映射（顺序与 ThemeColorPreviews.themes 一致）
-    val previewToTheme: Map<String, ColorTheme> = mapOf(
-        "iOS蓝" to ColorTheme.IOS_BLUE,
-        "优雅紫" to ColorTheme.PURPLE,
-        "自然绿" to ColorTheme.GREEN,
-        "活力橙" to ColorTheme.ORANGE,
-        "少女粉" to ColorTheme.PINK,
-        "清新青" to ColorTheme.TEAL,
-        "深邃靛" to ColorTheme.INDIGO,
-        "经典棕" to ColorTheme.BROWN,
-        "iOS系统" to ColorTheme.IOS_THEME,
-        "华为系统" to ColorTheme.HUAWEI_THEME,
-        "小米系统" to ColorTheme.XIAOMI_THEME,
-        "F1 经典金融" to ColorTheme.F1_FINANCE,
-        "F2 资产增长" to ColorTheme.F2_WEALTH,
-        "F3 冷静智慧" to ColorTheme.F3_RATIONAL,
-        "F4 复古账本" to ColorTheme.F4_VINTAGE,
-        "F5 高端理财" to ColorTheme.F5_PREMIUM,
-        "F6 警示超支" to ColorTheme.F6_ALERT,
-        "F7 清爽商务" to ColorTheme.F7_BUSINESS,
-        "L1 经典存钱" to ColorTheme.L1_SAVINGS,
-        "L2 充满活力" to ColorTheme.L2_VITALITY,
-        "L3 女性向记账" to ColorTheme.L3_BLOSSOM,
-        "L4 治愈旅行" to ColorTheme.L4_HEALING,
-        "L5 梦幻清单" to ColorTheme.L5_DREAM,
-        "L6 冷淡极简" to ColorTheme.L6_MINIMAL,
-        "L7 日常开销" to ColorTheme.L7_DAILY,
-        "M1 纸质账本" to ColorTheme.M1_BLACKWHITE,
-        "M2 柔和黑白" to ColorTheme.M2_SOFTBLACK,
-        "M3 高对比" to ColorTheme.M3_CONTRAST,
-        "M4 红黑冲击" to ColorTheme.M4_REDBLACK,
-        "M5 冷静克制" to ColorTheme.M5_CYANDARK,
-        "M7 传统会计" to ColorTheme.M7_ACCOUNTING,
-        "Y1 科技感" to ColorTheme.Y1_TECH,
-        "Y2 少女心" to ColorTheme.Y2_GIRL,
-        "Y3 梦想基金" to ColorTheme.Y3_DREAM_FUND,
-        "Y4 搞钱" to ColorTheme.Y4_MONEY,
-        "Y5 活力运动" to ColorTheme.Y5_SPORT,
-        "Y7 绿色生活" to ColorTheme.Y7_ECO,
-        "Y8 清爽夏季" to ColorTheme.Y8_SUMMER
-    )
-
-    val groupOrder = listOf("原有", "系统", "商务", "生活", "极简", "渐变")
-    val groupLabel = mapOf(
-        "原有" to "经典配色",
-        "系统" to "系统品牌主题",
-        "商务" to "专业商务型",
-        "生活" to "清新生活型",
-        "极简" to "极简高效型",
-        "渐变" to "年轻渐变型"
-    )
-    val grouped = ThemeColorPreviews.byGroup()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(16.dp),
-        title = {
-            Text(
-                text = "选择主题颜色",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        text = {
-            androidx.compose.foundation.lazy.LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(480.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                groupOrder.forEach { groupKey ->
-                    val previews = (grouped[groupKey] ?: return@forEach).filter { preview ->
-                        val mapped = previewToTheme[preview.name]
-                        mapped == null || mapped !in unsuitableThemes
-                    }
-                    if (previews.isEmpty()) return@forEach
-                    item {
-                        Text(
-                            text = groupLabel[groupKey] ?: groupKey,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = androidx.compose.ui.Modifier.padding(
-                                start = 4.dp, top = 12.dp, bottom = 6.dp
-                            )
-                        )
-                    }
-                    // 每行两列：手动分组为 pairs
-                    val rows = previews.chunked(2)
-                    rows.forEach { rowItems ->
-                        item {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = androidx.compose.ui.Modifier.fillMaxWidth()
-                            ) {
-                                rowItems.forEach { preview ->
-                                    val mapped = previewToTheme[preview.name]
-                                    val isSelected = mapped == currentTheme
-                                    Box(modifier = androidx.compose.ui.Modifier.weight(1f)) {
-                                        ColorThemeItem(
-                                            preview = preview,
-                                            isSelected = isSelected,
-                                            onClick = { mapped?.let { onSelect(it) } }
-                                        )
-                                    }
-                                }
-                                // 如果最后一行只有1项，补空
-                                if (rowItems.size == 1) {
-                                    Box(modifier = androidx.compose.ui.Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-@Composable
-private fun ColorThemeItem(
-    preview: ThemeColorPreview,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) preview.primary else Color.Transparent,
-        label = "border_color"
-    )
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        border = if (isSelected) {
-            BorderStroke(2.dp, borderColor)
-        } else null
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // 颜色预览
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(preview.primary)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(preview.primaryLight)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(preview.secondary)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = preview.name,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                ),
-                color = if (isSelected) preview.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            if (isSelected) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = preview.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun SettingsSection(title: String) {
     Text(
         text = title.uppercase(),
@@ -711,12 +483,13 @@ private fun IosSettingsItem(
     title: String,
     subtitle: String,
     showArrow: Boolean = true,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -724,7 +497,7 @@ private fun IosSettingsItem(
             modifier = Modifier
                 .size(32.dp)
                 .background(
-                    iconTint.copy(alpha = 0.1f),
+                    iconTint.copy(alpha = if (enabled) 0.1f else 0.05f),
                     RoundedCornerShape(8.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -732,7 +505,7 @@ private fun IosSettingsItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = iconTint,
+                tint = if (enabled) iconTint else iconTint.copy(alpha = 0.4f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -742,12 +515,13 @@ private fun IosSettingsItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                 )
             )
         }
@@ -774,6 +548,7 @@ private fun IosSelectDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
                 text = title,
@@ -826,6 +601,7 @@ private fun CurrencyDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
                 text = "货币符号",

@@ -111,7 +111,7 @@ fun StatisticsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(24.dp))
-                                .background(Color.White.copy(alpha = 0.2f))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                                 .padding(4.dp),
                             horizontalArrangement = Arrangement.Center
                         ) {
@@ -120,7 +120,7 @@ fun StatisticsScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(if (!uiState.isYearlyMode) Color.White else Color.Transparent)
+                                    .background(if (!uiState.isYearlyMode) MaterialTheme.colorScheme.surface else Color.Transparent)
                                     .clickable { if (uiState.isYearlyMode) viewModel.exitYearlyMode() }
                                     .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
@@ -138,7 +138,7 @@ fun StatisticsScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(if (uiState.isYearlyMode) Color.White else Color.Transparent)
+                                    .background(if (uiState.isYearlyMode) MaterialTheme.colorScheme.surface else Color.Transparent)
                                     .clickable { if (!uiState.isYearlyMode) viewModel.enterYearlyMode() }
                                     .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
@@ -194,7 +194,7 @@ fun StatisticsScreen(
                                 .padding(horizontal = 2.dp),
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = Color(0xFFF5F5F5) // Light gray consistent across all themes
+                                containerColor = MaterialTheme.colorScheme.surface
                             ),
                             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                         ) {
@@ -209,13 +209,13 @@ fun StatisticsScreen(
                                     value = CurrencyUtils.format(uiState.totalIncome, uiState.currencySymbol),
                                     valueColor = Color(0xFF2E7D32)
                                 )
-                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE0E0E0)))
+                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                                 SummaryColumn(
                                     label = "支出",
                                     value = CurrencyUtils.format(uiState.totalExpense, uiState.currencySymbol),
                                     valueColor = Color(0xFFC62828)
                                 )
-                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color(0xFFE0E0E0)))
+                                Box(modifier = Modifier.width(1.dp).height(40.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                                 SummaryColumn(
                                     label = "结余",
                                     value = CurrencyUtils.format(uiState.balance, uiState.currencySymbol),

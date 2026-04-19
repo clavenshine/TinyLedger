@@ -28,10 +28,7 @@ data class AccountUiState(
     val showAddDialog: Boolean = false,
     val showEditDialog: Boolean = false,
     val selectedAccount: Account? = null,
-    val expandedAccountId: Long? = null, // 当前展开的账户ID
-    val accountTransactions: Map<String, List<Transaction>> = emptyMap(), // accountId -> 月份分组交易
-    val monthlyTransactions: List<MonthlyTransactions> = emptyList(), // 当前展开账户的按月分组
-    val expandedMonths: Set<String> = emptySet() // 展开的月份集合 (格式: accountId_yearMonth)
+    val accountTransactions: Map<Long, List<Transaction>> = emptyMap() // accountId -> transactions
 )
 
 @HiltViewModel
@@ -50,7 +47,7 @@ class AccountViewModel @Inject constructor(
     private fun loadAccounts() {
         viewModelScope.launch {
             combine(
-                accountRepository.getAllAccounts(),
+                accountRepository.getAllAccountsIncludingDisabled(),
                 accountRepository.getTotalBalance()
             ) { accounts, total ->
                 // 计算每个账户的实时余额：期初余额 + 收入 - 支出
@@ -69,9 +66,7 @@ class AccountViewModel @Inject constructor(
                     showAddDialog = _uiState.value.showAddDialog,
                     showEditDialog = _uiState.value.showEditDialog,
                     selectedAccount = _uiState.value.selectedAccount,
-                    expandedAccountId = _uiState.value.expandedAccountId,
-                    monthlyTransactions = _uiState.value.monthlyTransactions,
-                    expandedMonths = _uiState.value.expandedMonths
+                    accountTransactions = _uiState.value.accountTransactions
                 )
             }
         }
@@ -79,85 +74,25 @@ class AccountViewModel @Inject constructor(
 
     // 计算账户余额 = 期初余额 + 收入 - 支出
     private suspend fun calculateAccountBalance(account: Account): Double {
-        return if (account.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT) {
-            // 信用账户：期初余额 - 支出（支出增加负债）
-            var totalExpense = 0.0
-            transactionRepository.getTotalExpenseByAccountId(account.id).first().let { expense ->
-                totalExpense = expense
+        return when (account.attribute) {
+            com.tinyledger.app.domain.model.AccountAttribute.CREDIT -> {
+                // 外部往来账户：期初余额 - 支出（支出增加负债）
+                val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+                account.initialBalance - totalExpense
             }
-            account.initialBalance - totalExpense
-        } else {
-            // 现金账户：期初余额 + 收入 - 支出
-            var totalIncome = 0.0
-            var totalExpense = 0.0
-            
-            transactionRepository.getTotalIncomeByAccountId(account.id).first().let { income ->
-                totalIncome = income
+            com.tinyledger.app.domain.model.AccountAttribute.CREDIT_ACCOUNT -> {
+                // 信用账户：期初余额 + 收入 - 支出
+                val totalIncome = transactionRepository.getTotalIncomeByAccountId(account.id).first()
+                val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+                account.initialBalance + totalIncome - totalExpense
             }
-            transactionRepository.getTotalExpenseByAccountId(account.id).first().let { expense ->
-                totalExpense = expense
-            }
-            
-            account.initialBalance + totalIncome - totalExpense
-        }
-    }
-
-    // 切换账户展开/折叠状态
-    fun toggleAccountExpanded(accountId: Long) {
-        val currentExpanded = _uiState.value.expandedAccountId
-        if (currentExpanded == accountId) {
-            // 折叠
-            _uiState.update { it.copy(
-                expandedAccountId = null,
-                monthlyTransactions = emptyList(),
-                expandedMonths = emptySet()
-            )}
-        } else {
-            // 展开，加载交易明细
-            _uiState.update { it.copy(expandedAccountId = accountId) }
-            loadAccountTransactions(accountId)
-        }
-    }
-
-    // 加载账户的交易明细
-    private fun loadAccountTransactions(accountId: Long) {
-        viewModelScope.launch {
-            transactionRepository.getTransactionsByAccountId(accountId).collect { transactions ->
-                // 按月份分组
-                val grouped = transactions.groupBy { transaction ->
-                    val calendar = java.util.Calendar.getInstance()
-                    calendar.timeInMillis = transaction.date
-                    String.format("%04d-%02d", calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH) + 1)
-                }
-                
-                // 转换为MonthlyTransactions列表
-                val monthlyList = grouped.map { (yearMonth, txns) ->
-                    val parts = yearMonth.split("-")
-                    val year = parts[0].toInt()
-                    val month = parts[1].toInt()
-                    val monthDisplay = "${year}年${month}月"
-                    MonthlyTransactions(
-                        yearMonth = yearMonth,
-                        monthDisplay = monthDisplay,
-                        transactions = txns.sortedByDescending { it.date }
-                    )
-                }.sortedByDescending { it.yearMonth }
-
-                _uiState.update { it.copy(monthlyTransactions = monthlyList) }
+            else -> {
+                // 现金账户：期初余额 + 收入 - 支出
+                val totalIncome = transactionRepository.getTotalIncomeByAccountId(account.id).first()
+                val totalExpense = transactionRepository.getTotalExpenseByAccountId(account.id).first()
+                account.initialBalance + totalIncome - totalExpense
             }
         }
-    }
-
-    // 切换月份展开/折叠
-    fun toggleMonthExpanded(accountId: Long, yearMonth: String) {
-        val key = "${accountId}_$yearMonth"
-        val currentExpanded = _uiState.value.expandedMonths.toMutableSet()
-        if (currentExpanded.contains(key)) {
-            currentExpanded.remove(key)
-        } else {
-            currentExpanded.add(key)
-        }
-        _uiState.update { it.copy(expandedMonths = currentExpanded) }
     }
 
     fun showAddDialog() {
@@ -185,7 +120,10 @@ class AccountViewModel @Inject constructor(
         cardNumber: String?,
         creditLimit: Double = 0.0,
         billDay: Int = 0,
-        repaymentDay: Int = 0
+        repaymentDay: Int = 0,
+        isEnabled: Boolean = true,
+        initialBalanceDate: String = "",
+        purpose: String = ""
     ) {
         viewModelScope.launch {
             val account = Account(
@@ -199,7 +137,10 @@ class AccountViewModel @Inject constructor(
                 cardNumber = cardNumber,
                 creditLimit = creditLimit,
                 billDay = billDay,
-                repaymentDay = repaymentDay
+                repaymentDay = repaymentDay,
+                isDisabled = !isEnabled,
+                initialBalanceDate = initialBalanceDate,
+                purpose = purpose
             )
             accountRepository.addAccount(account)
             hideAddDialog()
@@ -215,7 +156,10 @@ class AccountViewModel @Inject constructor(
         cardNumber: String?,
         creditLimit: Double = 0.0,
         billDay: Int = 0,
-        repaymentDay: Int = 0
+        repaymentDay: Int = 0,
+        initialBalance: Double = 0.0,
+        initialBalanceDate: String = "",
+        purpose: String = ""
     ) {
         viewModelScope.launch {
             val updated = account.copy(
@@ -227,6 +171,9 @@ class AccountViewModel @Inject constructor(
                 creditLimit = creditLimit,
                 billDay = billDay,
                 repaymentDay = repaymentDay,
+                initialBalance = initialBalance,
+                initialBalanceDate = initialBalanceDate,
+                purpose = purpose,
                 updatedAt = System.currentTimeMillis()
             )
             accountRepository.updateAccount(updated)
@@ -244,6 +191,24 @@ class AccountViewModel @Inject constructor(
         viewModelScope.launch {
             accountRepository.deleteAccount(accountId)
             hideEditDialog()
+        }
+    }
+
+    // 切换账户停用状态
+    fun toggleAccountDisabled(accountId: Long, disabled: Boolean) {
+        viewModelScope.launch {
+            accountRepository.toggleAccountDisabled(accountId, disabled)
+        }
+    }
+
+    // 加载账户的交易记录
+    fun loadAccountTransactions(accountId: Long) {
+        viewModelScope.launch {
+            transactionRepository.getTransactionsByAccountId(accountId).collect { transactions ->
+                val currentMap = _uiState.value.accountTransactions.toMutableMap()
+                currentMap[accountId] = transactions.sortedByDescending { it.date }
+                _uiState.update { it.copy(accountTransactions = currentMap) }
+            }
         }
     }
 }

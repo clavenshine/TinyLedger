@@ -169,7 +169,7 @@ fun ScreenshotAccountingScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text("截屏记账", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text("截屏数据导入", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -181,11 +181,11 @@ fun ScreenshotAccountingScreen(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF5F5F5)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
-        containerColor = Color(0xFFF5F5F5),
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         LazyColumn(
@@ -201,9 +201,15 @@ fun ScreenshotAccountingScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(2.dp, Color(0xFFE0E0E0), RoundedCornerShape(12.dp)),
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -225,7 +231,7 @@ fun ScreenshotAccountingScreen(
                         Text(
                             "支持微信、支付宝、银行等支付截图，可识别多条记录",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
-                            color = Color(0xFF757575),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
                     }
@@ -250,7 +256,7 @@ fun ScreenshotAccountingScreen(
                                 .height(30.dp)
                                 .padding(horizontal = 2.dp),
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFF0F0F0)
+                            color = MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize(),
@@ -332,7 +338,9 @@ fun ScreenshotAccountingScreen(
                                         .weight(1f)
                                         .height(100.dp),
                                     shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f))
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                    )
                                 ) {
                                     Box(
                                         modifier = Modifier.fillMaxSize(),
@@ -342,14 +350,14 @@ fun ScreenshotAccountingScreen(
                                             Icon(
                                                 if (label == "微信支付") Icons.Default.Chat else Icons.Default.Payment,
                                                 contentDescription = null,
-                                                tint = Color(0xFFBDBDBD),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                                 modifier = Modifier.size(32.dp)
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
                                                 "${label}截图示例",
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFFBDBDBD)
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                             )
                                         }
                                     }
@@ -397,7 +405,7 @@ fun ScreenshotAccountingScreen(
                                     type = record.type,
                                     category = category,
                                     amount = amount,
-                                    note = record.note.ifBlank { "截屏记账" },
+                                    note = record.note.ifBlank { "截屏数据导入" },
                                     date = record.date,
                                     accountId = record.accountId
                                 )
@@ -432,7 +440,7 @@ fun ScreenshotAccountingScreen(
                                             type = record.type,
                                             category = category,
                                             amount = amount,
-                                            note = record.note.ifBlank { "截屏记账" },
+                                            note = record.note.ifBlank { "截屏数据导入" },
                                             date = record.date,
                                             accountId = record.accountId
                                         ))
@@ -457,7 +465,9 @@ fun ScreenshotAccountingScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp),
@@ -480,7 +490,9 @@ fun ScreenshotAccountingScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
@@ -520,7 +532,7 @@ private fun RecordEditCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (record.saved) IOSColors.SystemGreen.copy(alpha = 0.05f) else Color.White
+            containerColor = if (record.saved) IOSColors.SystemGreen.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -780,6 +792,7 @@ private fun RecordEditCard(
 
     // Account Selector Dialog
     if (showAccountSelector) {
+        val enabledAccounts = accounts.filter { !it.isDisabled }
         AlertDialog(
             onDismissRequest = { showAccountSelector = false },
             title = { Text("选择账户") },
@@ -788,15 +801,15 @@ private fun RecordEditCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (accounts.isEmpty()) {
+                    if (enabledAccounts.isEmpty()) {
                         Text(
-                            "暂无账户，请在\"账户\"管理中添加",
+                            "暂无已启用的账户，请在\"账户\"管理中启用",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)
                         )
                     } else {
-                        accounts.forEach { account ->
+                        enabledAccounts.forEach { account ->
                             ListItem(
                                 headlineContent = { Text(account.name) },
                                 supportingContent = {
@@ -862,13 +875,12 @@ private fun getAccountTypeIcon(type: AccountType): androidx.compose.ui.graphics.
         AccountType.CASH -> Icons.Default.Wallet
         AccountType.YUEBAO -> Icons.Default.AccountBalanceWallet
         AccountType.OTHER -> Icons.Default.HelpOutline
-        // Credit account types
+        // 信用账户类型图标
         AccountType.CREDIT_CARD -> Icons.Default.CreditCard
-        AccountType.HUA_BEI -> Icons.Default.Payment
-        AccountType.JIE_BEI -> Icons.Default.Payments
-        AccountType.JD_BAITIAO -> Icons.Default.ShoppingBag
-        AccountType.MEITUAN_YUEFU -> Icons.Default.Restaurant
-        AccountType.DOUYIN_YUEFU -> Icons.Default.VideoLibrary
+        AccountType.CONSUMPTION_PLATFORM -> Icons.Default.ShoppingBag
+        // 外部往来账户类型图标
+        AccountType.PERSONAL_TRANSACTION -> Icons.Default.Person
+        AccountType.LOAN_LIABILITY -> Icons.Default.AccountBalance
     }
 }
 
@@ -977,9 +989,9 @@ private fun inferCategoryFromOcrText(text: String, type: TransactionType): Categ
             text.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
             text.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
             text.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
-            text.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("recover_loan", TransactionType.INCOME)
+            text.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("collect", TransactionType.LENDING)
             text.containsAny("投资", "理财", "收益", "利息", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-            text.containsAny("转账", "汇款", "转入") -> Category.fromId("income_transfer", TransactionType.INCOME)
+            text.containsAny("转账", "汇款", "转入") -> Category.fromId("transfer", TransactionType.TRANSFER)
             else -> null
         }
     }
@@ -1030,12 +1042,6 @@ private fun inferCategoryFromOcrText(text: String, type: TransactionType): Categ
             "水果", "蔬", "小卖部", "盒马", "零食", "百货") -> Category.fromId("shopping", TransactionType.EXPENSE)
         text.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
             "网费", "物业费", "供暖", "电力", "自来水", "国网") -> Category.fromId("utilities", TransactionType.EXPENSE)
-        text.containsAny("房贷", "按揭", "月供", "公积金", "住房贷款") -> Category.fromId("mortgage", TransactionType.EXPENSE)
-        text.containsAny("信用卡还款", "还信用卡", "信用卡", "账单还款") -> Category.fromId("credit_card_repay", TransactionType.EXPENSE)
-        text.containsAny("花呗", "借呗", "蚂蚁") -> Category.fromId("alipay_repay", TransactionType.EXPENSE)
-        text.containsAny("京东白条", "白条") -> Category.fromId("jd_repay", TransactionType.EXPENSE)
-        text.containsAny("抖音月付", "放心借") -> Category.fromId("douyin_repay", TransactionType.EXPENSE)
-        text.containsAny("转账", "汇款", "转出") -> Category.fromId("account_transfer", TransactionType.EXPENSE)
         text.containsAny("娱乐", "电影", "游戏", "视频", "音乐", "KTV", "网吧",
             "直播", "充值", "会员") -> Category.fromId("entertainment", TransactionType.EXPENSE)
         text.containsAny("医院", "药店", "医疗", "诊所", "挂号", "门诊", "体检",
@@ -1074,7 +1080,7 @@ private fun inferAccountFromOcrText(text: String, accounts: List<Account>): Long
         text.containsAny("微信支付", "微信", "零钱", "微信红包") ->
             accounts.find { it.type == AccountType.WECHAT }?.id
         text.containsAny("支付宝", "余额宝", "花呗", "蚂蚁") ->
-            accounts.find { it.type == AccountType.HUA_BEI }?.id
+            accounts.find { it.type == AccountType.CONSUMPTION_PLATFORM }?.id
         text.containsAny("银行", "储蓄卡", "借记卡", "信用卡", "工商", "建设",
             "农业", "中国银行", "招商", "交通", "邮储", "民生",
             "光大", "兴业", "浦发", "中信") ->
@@ -1176,7 +1182,7 @@ private fun parseScreenshotTextMulti(text: String, accounts: List<Account>): Lis
                 context.contains("淘宝") || context.contains("天猫") -> note = "淘宝购物"
                 context.contains("美团") -> note = "美团消费"
                 context.contains("抖音") -> note = "抖音消费"
-                else -> note = "截屏记账"
+                else -> note = "截屏数据导入"
             }
         }
 

@@ -2,6 +2,7 @@ package com.tinyledger.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.AccountRepository
@@ -57,30 +58,39 @@ class HomeViewModel @Inject constructor(
             combine(
                 transactionRepository.getTransactionsByDateRange(startDate, endDate),
                 transactionRepository.getAllTransactions(),  // 获取所有交易，然后按日期过滤
-                preferencesRepository.getSettings()
-            ) { monthTransactions, allTransactions, settings ->
+                preferencesRepository.getSettings(),
+                accountRepository.getAllAccounts()
+            ) { monthTransactions, allTransactions, settings, accounts ->
+                // 获取现金账户ID集合
+                val cashAccountIds = accounts
+                    .filter { it.attribute == AccountAttribute.CASH }
+                    .map { it.id }.toSet()
+
+                // 仅统计现金账户的交易
+                val cashMonthTransactions = monthTransactions.filter { it.accountId in cashAccountIds }
+
                 // 动态计算今日日期范围（每次发射时重新计算）
                 val todayStart = DateUtils.getTodayStart()
                 val todayEnd = DateUtils.getTodayEnd()
 
-                // 严格按交易日期过滤今日账单
-                val todayTx = allTransactions.filter { tx ->
-                    tx.date in todayStart..todayEnd
-                }.sortedByDescending { it.date }
+                // 严格按交易日期过滤今日账单（仅现金账户）
+                val todayTx = allTransactions
+                    .filter { tx -> tx.date in todayStart..todayEnd && tx.accountId in cashAccountIds }
+                    .sortedByDescending { it.date }
 
-                // Calculate monthly totals using sign-based amounts
+                // Calculate monthly totals using sign-based amounts (仅现金账户)
                 // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
-                val monthlyInc = monthTransactions.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
-                val monthlyExp = monthTransactions.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
+                val monthlyInc = cashMonthTransactions.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
+                val monthlyExp = cashMonthTransactions.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
 
-                // Calculate today totals using sign-based amounts
+                // Calculate today totals using sign-based amounts (仅现金账户)
                 val todayInc = todayTx.filter { it.amount > 0 && it.type != TransactionType.EXPENSE }.sumOf { it.amount }
                 val todayExp = todayTx.filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }.sumOf { kotlin.math.abs(it.amount) }
 
                 val dailyAvg = if (dayOfMonth > 0) monthlyExp / dayOfMonth else 0.0
 
                 HomeUiState(
-                    recentTransactions = monthTransactions.take(10),
+                    recentTransactions = cashMonthTransactions.take(10),
                     todayTransactions = todayTx,
                     monthlyIncome = monthlyInc,
                     monthlyExpense = monthlyExp,

@@ -316,7 +316,7 @@ class AutoImportViewModel @Inject constructor(
     ): Long? {
         val targetType = when {
             csv.source.contains("微信") -> AccountType.WECHAT
-            csv.source.contains("支付宝") -> AccountType.HUA_BEI
+            csv.source.contains("支付宝") -> AccountType.CONSUMPTION_PLATFORM
             else -> null
         } ?: return null
         return accounts.find { it.type == targetType }?.id
@@ -340,9 +340,9 @@ class AutoImportViewModel @Inject constructor(
                 text.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
                 text.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
                 text.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
-                text.containsAny("收回借款", "还款", "还钱") -> Category.fromId("recover_loan", TransactionType.INCOME)
+                text.containsAny("收回借款", "还款", "还钱") -> Category.fromId("collect", TransactionType.LENDING)
                 text.containsAny("投资", "理财", "收益", "利息", "基金", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-                text.containsAny("转账", "汇款", "转入") -> Category.fromId("income_transfer", TransactionType.INCOME)
+                text.containsAny("转账", "汇款", "转入") -> Category.fromId("transfer", TransactionType.TRANSFER)
                 else -> Category.fromId("redpacket", TransactionType.INCOME)
             }
         } else {
@@ -372,18 +372,6 @@ class AutoImportViewModel @Inject constructor(
                 // 水电气网
                 text.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
                     "网费", "物业费", "电力", "自来水", "国网") -> Category.fromId("utilities", TransactionType.EXPENSE)
-                // 房贷支出
-                text.containsAny("房贷", "按揭", "月供", "公积金", "住房贷款") -> Category.fromId("mortgage", TransactionType.EXPENSE)
-                // 信用卡还款
-                text.containsAny("信用卡还款", "还信用卡", "信用卡", "账单还款") -> Category.fromId("credit_card_repay", TransactionType.EXPENSE)
-                // 支付宝还款
-                text.containsAny("花呗", "借呗", "蚂蚁") -> Category.fromId("alipay_repay", TransactionType.EXPENSE)
-                // 京东还款
-                text.containsAny("京东白条", "白条") -> Category.fromId("jd_repay", TransactionType.EXPENSE)
-                // 抖音还款
-                text.containsAny("抖音月付", "放心借") -> Category.fromId("douyin_repay", TransactionType.EXPENSE)
-                // 转账
-                text.containsAny("转账", "汇款", "转出") -> Category.fromId("account_transfer", TransactionType.EXPENSE)
                 // 娱乐
                 text.containsAny("娱乐", "电影", "游戏", "视频", "音乐", "KTV",
                     "充值", "会员") -> Category.fromId("entertainment", TransactionType.EXPENSE)
@@ -434,7 +422,7 @@ class AutoImportViewModel @Inject constructor(
         val source = sms.source
         val typeMatched = when {
             source == "微信支付" -> accounts.find { it.type == AccountType.WECHAT }
-            source == "支付宝" -> accounts.find { it.type == AccountType.HUA_BEI }
+            source == "支付宝" -> accounts.find { it.type == AccountType.CONSUMPTION_PLATFORM }
             source.contains("银行") || source.contains("行") -> {
                 accounts.filter { it.type == AccountType.BANK }.find { account ->
                     account.name.contains(source) || source.contains(account.name.take(4))
@@ -517,9 +505,9 @@ class AutoImportViewModel @Inject constructor(
                 body.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
                 body.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
                 body.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
-                body.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("recover_loan", TransactionType.INCOME)
+                body.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("collect", TransactionType.LENDING)
                 body.containsAny("投资", "理财", "收益", "利息", "基金", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-                body.containsAny("转账", "汇款", "转入") -> Category.fromId("income_transfer", TransactionType.INCOME)
+                body.containsAny("转账", "汇款", "转入") -> Category.fromId("transfer", TransactionType.TRANSFER)
                 else -> Category.fromId("redpacket", TransactionType.INCOME)
             }
         } else {
@@ -549,20 +537,6 @@ class AutoImportViewModel @Inject constructor(
                 // 水电气网
                 body.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
                     "网费", "物业费", "供暖", "电力", "自来水", "国网", "南方电网") -> Category.fromId("utilities", TransactionType.EXPENSE)
-                // 房贷支出
-                body.containsAny("房贷", "按揭", "月供", "公积金", "住房贷款", "商业贷款") -> Category.fromId("mortgage", TransactionType.EXPENSE)
-                // 信用卡还款
-                body.containsAny("信用卡还款", "还信用卡", "信用卡", "账单还款") -> Category.fromId("credit_card_repay", TransactionType.EXPENSE)
-                // 支付宝还款
-                body.containsAny("花呗", "借呗", "蚂蚁") -> Category.fromId("alipay_repay", TransactionType.EXPENSE)
-                // 京东还款
-                body.containsAny("京东白条", "白条") -> Category.fromId("jd_repay", TransactionType.EXPENSE)
-                // 抖音还款
-                body.containsAny("抖音月付", "放心借") -> Category.fromId("douyin_repay", TransactionType.EXPENSE)
-                // 归还借款
-                body.containsAny("归还借款", "还借款", "借出") -> Category.fromId("repay_loan", TransactionType.EXPENSE)
-                // 转账
-                body.containsAny("转账", "汇款", "转出") -> Category.fromId("account_transfer", TransactionType.EXPENSE)
                 // 娱乐
                 body.containsAny("娱乐", "电影", "游戏", "视频", "音乐", "KTV", "网吧",
                     "直播", "充值", "会员", "腾讯视频", "爱奇艺", "优酷", "哔哩哔哩") -> Category.fromId("entertainment", TransactionType.EXPENSE)

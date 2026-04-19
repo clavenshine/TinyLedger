@@ -14,6 +14,7 @@ data class TransactionEntity(
     val date: Long,
     val accountId: Long? = null,  // 关联账户ID
     val relatedTransactionId: Long? = null,  // 关联的另一笔交易ID（用于转账/借贷）
+    val imagePath: String? = null,  // 图片附件路径
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

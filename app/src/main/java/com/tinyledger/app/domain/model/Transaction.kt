@@ -8,7 +8,8 @@ data class Transaction(
     val note: String?,
     val date: Long,
     val accountId: Long? = null,  // 关联账户ID
-    val relatedTransactionId: Long? = null  // 关联的另一笔交易ID（用于转账/借贷）
+    val relatedTransactionId: Long? = null,  // 关联的另一笔交易ID（用于转账/借贷）
+    val imagePath: String? = null  // 图片附件路径
 )
 
 enum class TransactionType(val value: Int) {
@@ -54,10 +55,6 @@ data class Category(
             "investment_expense" to "ic_investment_expense",
             "other" to "ic_other",
             "salary" to "ic_salary",
-            "bonus" to "ic_bonus",
-            "financial" to "ic_financial",
-            "redpacket" to "ic_redpacket",
-            "收回借款" to "ic_recover_loan"
         )
 
         val defaultExpenseCategories = listOf(
@@ -72,19 +69,13 @@ data class Category(
             Category("utilities", "水电气网", "utilities", TransactionType.EXPENSE),
             Category("insurance", "保险", "insurance", TransactionType.EXPENSE),
             Category("travel", "旅游", "travel", TransactionType.EXPENSE),
-            Category("credit_card_repay", "还信用卡", "credit_card_repay", TransactionType.EXPENSE),
-            Category("mortgage", "房贷支出", "mortgage", TransactionType.EXPENSE),
-            Category("repay_loan", "归还借款", "repay_loan", TransactionType.EXPENSE),
-            Category("alipay_repay", "还支付宝", "alipay_repay", TransactionType.EXPENSE),
-            Category("douyin_repay", "抖音还款", "douyin_repay", TransactionType.EXPENSE),
-            Category("jd_repay", "京东还款", "jd_repay", TransactionType.EXPENSE),
-            Category("account_transfer", "账户转账", "account_transfer", TransactionType.EXPENSE),
-            Category("lend", "借出资金", "lend", TransactionType.EXPENSE),
             Category("investment_expense", "支出投资", "investment_expense", TransactionType.EXPENSE),
             Category("accommodation", "住宿", "accommodation", TransactionType.EXPENSE),
             Category("charity", "慈善捐赠", "charity", TransactionType.EXPENSE),
             Category("send_redpacket", "派发红包", "send_redpacket", TransactionType.EXPENSE),
             Category("family_living", "生活开支", "family_living", TransactionType.EXPENSE),
+            Category("children", "子女开支", "children", TransactionType.EXPENSE),
+            Category("elderly_care", "赡养父母", "elderly_care", TransactionType.EXPENSE),
             Category("other", "其他", "other", TransactionType.EXPENSE)
         )
 
@@ -97,8 +88,6 @@ data class Category(
             Category("refund", "收到退款", "refund", TransactionType.INCOME),
             Category("deposit_back", "收回押金", "deposit_back", TransactionType.INCOME),
             Category("redpacket", "红包", "redpacket", TransactionType.INCOME),
-            Category("recover_loan", "收回借款", "收回借款", TransactionType.INCOME),
-            Category("income_transfer", "账户转账", "income_transfer", TransactionType.INCOME),
             Category("reimbursement", "报销款", "reimbursement", TransactionType.INCOME)
         )
 

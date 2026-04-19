@@ -18,7 +18,9 @@ data class AccountEntity(
     val creditLimit: Double = 0.0, // 信用额度
     val billDay: Int = 0, // 账单日 (1-31)
     val repaymentDay: Int = 0, // 还款日 (1-31)
-    val isEnabled: Boolean = true, // 是否启用
+    val isDisabled: Boolean = false, // 是否停用
+    val initialBalanceDate: String = "", // 期初余额日期，格式 yyyy-MM-dd
+    val purpose: String = "", // 用途
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

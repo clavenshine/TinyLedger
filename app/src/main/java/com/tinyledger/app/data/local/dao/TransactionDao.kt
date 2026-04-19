@@ -71,6 +71,14 @@ interface TransactionDao {
     // 迁移分类：将旧分类ID更新为新分类ID
     @Query("UPDATE transactions SET category = :newCategoryId, updatedAt = :timestamp WHERE category = :oldCategoryId")
     suspend fun updateCategoryForTransactions(oldCategoryId: String, newCategoryId: String, timestamp: Long = System.currentTimeMillis())
+
+    // 按账户ID列表和日期范围查询交易
+    @Query("SELECT * FROM transactions WHERE accountId IN (:accountIds) AND date BETWEEN :startDate AND :endDate ORDER BY date DESC")
+    fun getTransactionsByAccountIdsAndDateRange(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<List<TransactionEntity>>
+
+    // 按账户ID列表和日期范围查询支出分类（排除TRANSFER和LENDING类型）
+    @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE (amount < 0 OR (type = 0 AND amount > 0)) AND type != 2 AND type != 3 AND date BETWEEN :startDate AND :endDate AND accountId IN (:accountIds) GROUP BY category")
+    fun getExpenseByCategoryForAccounts(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<List<CategoryTotal>>
 }
 
 data class CategoryTotal(

@@ -3,7 +3,10 @@ package com.tinyledger.app.ui.screens.profile
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -16,13 +19,19 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.BuildConfig
 import com.tinyledger.app.data.notification.TransactionNotificationService
@@ -35,6 +44,7 @@ import com.tinyledger.app.ui.theme.ThemeColorPreviews
 import com.tinyledger.app.ui.viewmodel.SettingsViewModel
 import com.tinyledger.app.util.VersionCheckUtil
 import com.tinyledger.app.util.VersionInfo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,13 +57,14 @@ fun ProfileScreen(
     onNavigateToAccounts: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToAutoAccounting: () -> Unit = {},
+    onNavigateToDarkModeSettings: () -> Unit = {},
+    onNavigateToThemeColor: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
-    var showColorThemeDialog by remember { mutableStateOf(false) }
     var showVersionInfoDialog by remember { mutableStateOf(false) }
     var lastDownloadClickTime by remember { mutableLongStateOf(0L) }
 
@@ -76,7 +87,7 @@ fun ProfileScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5)),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         // Top bar
@@ -91,7 +102,7 @@ fun ProfileScreen(
                     )
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF5F5F5)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -103,7 +114,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Row(
                     modifier = Modifier
@@ -154,7 +165,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     // Auto-accounting entry
@@ -220,14 +231,14 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     ProfileSettingsItem(
                         icon = Icons.Default.AccountBalance,
                         iconTint = IOSColors.Primary,
-                        title = "我的账户",
-                        subtitle = "管理现金账户和信用账户",
+                        title = "全部账户",
+                        subtitle = "管理现金账户和外部往来账户",
                         onClick = onNavigateToAccounts
                     )
                 }
@@ -247,7 +258,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     ProfileSettingsItem(
@@ -274,7 +285,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     ProfileSettingsItem(
@@ -332,7 +343,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     ProfileSettingsItem(
@@ -340,25 +351,25 @@ fun ProfileScreen(
                         iconTint = Color(uiState.colorScheme.primaryColor),
                         title = "主题颜色",
                         subtitle = uiState.settings.colorTheme.displayName,
-                        onClick = { showColorThemeDialog = true }
+                        onClick = onNavigateToThemeColor
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    // 深色模式 - 已隐藏（保留代码以备后用）
-                    // ProfileSettingsItem(
-                    //     icon = Icons.Default.DarkMode,
-                    //     iconTint = IOSColors.SystemIndigo,
-                    //     title = "深色模式",
-                    //     subtitle = when (uiState.settings.themeMode) {
-                    //         ThemeMode.LIGHT -> "关闭"
-                    //         ThemeMode.DARK -> "开启"
-                    //         ThemeMode.SYSTEM -> "跟随系统"
-                    //     },
-                    //     onClick = { showThemeDialog = true }
-                    // )
+                    // 深色模式
+                    ProfileSettingsItem(
+                        icon = Icons.Default.DarkMode,
+                        iconTint = IOSColors.SystemIndigo,
+                        title = "深色模式",
+                        subtitle = when (uiState.settings.themeMode) {
+                            ThemeMode.LIGHT -> "关闭"
+                            ThemeMode.DARK -> "开启"
+                            ThemeMode.SYSTEM -> "跟随系统"
+                        },
+                        onClick = onNavigateToDarkModeSettings
+                    )
 
-                    // HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                     ProfileSettingsItem(
                         icon = Icons.Default.AttachMoney,
@@ -384,7 +395,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
                     ProfileSettingsItem(
@@ -467,18 +478,6 @@ fun ProfileScreen(
         }
     }
 
-    // Color theme dialog
-    if (showColorThemeDialog) {
-        ColorThemeDialog(
-            currentTheme = uiState.settings.colorTheme,
-            onSelect = { theme ->
-                viewModel.updateColorTheme(theme)
-                showColorThemeDialog = false
-            },
-            onDismiss = { showColorThemeDialog = false }
-        )
-    }
-
     // Theme mode dialog
     if (showThemeDialog) {
         ThemeModeDialog(
@@ -508,6 +507,7 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { showVersionInfoDialog = false },
             shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -688,185 +688,6 @@ private fun ProfileSettingsItem(
 }
 
 @Composable
-private fun ColorThemeDialog(
-    currentTheme: ColorTheme,
-    onSelect: (ColorTheme) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val groupedThemes = ThemeColorPreviews.byGroup()
-    val groupOrder = ThemeColorPreviews.groupOrder
-    val groupDescriptions = mapOf(
-        "经典" to "iOS 风格经典配色",
-        "系统" to "跟随手机品牌风格",
-        "商务" to "专业商务，数据可视化",
-        "生活" to "清新自然，轻松记账",
-        "极简" to "高对比度，数字一目了然",
-        "渐变" to "年轻趣味，游戏化记账"
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(20.dp),
-        title = {
-            Column {
-                Text(
-                    text = "选择主题颜色",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "共 ${ThemeColorPreviews.themes.size} 种主题可选",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        text = {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 480.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                groupOrder.forEach { group ->
-                    val themesInGroup = groupedThemes[group] ?: return@forEach
-
-                    // Group header
-                    item {
-                        Column(modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                            Text(
-                                text = group,
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            groupDescriptions[group]?.let { desc ->
-                                Text(
-                                    text = desc,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    // Themes in 3-column grid
-                    val rows = themesInGroup.chunked(3)
-                    rows.forEach { rowItems ->
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowItems.forEach { preview ->
-                                    val isSelected = preview.name == currentTheme.displayName
-                                    val themeColor = ColorTheme.entries.find { it.displayName == preview.name }
-
-                                    CompactThemeItem(
-                                        preview = preview,
-                                        isSelected = isSelected,
-                                        onClick = { themeColor?.let { onSelect(it) } },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                // Fill remaining space if row is not full
-                                repeat(3 - rowItems.size) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
-        }
-    )
-}
-
-@Composable
-private fun CompactThemeItem(
-    preview: ThemeColorPreview,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) preview.primary else Color.Transparent,
-        label = "border_color"
-    )
-
-    Card(
-        modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = preview.background
-        ),
-        border = if (isSelected) BorderStroke(2.dp, borderColor) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Color dots row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(preview.primary)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(preview.primaryLight)
-                )
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(preview.secondary)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = preview.name,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 10.sp
-                ),
-                color = if (isSelected) preview.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = preview.primary,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ThemeModeDialog(
     selectedMode: ThemeMode,
     onSelect: (ThemeMode) -> Unit,
@@ -875,6 +696,7 @@ private fun ThemeModeDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
                 text = "深色模式",
@@ -930,6 +752,7 @@ private fun CurrencyDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = {
             Text(
                 text = "货币符号",

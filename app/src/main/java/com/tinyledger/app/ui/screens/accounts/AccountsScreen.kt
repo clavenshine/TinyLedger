@@ -5,7 +5,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,20 +24,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import com.tinyledger.app.domain.model.Account
@@ -64,18 +61,16 @@ fun AccountsScreen(
     currencySymbol: String = "¥",
     initialTab: Int = 0, // 0: 全部, 1: 现金, 2: 信用
     onNavigateBack: () -> Unit = {},
+    onNavigateToAccountDetail: (Long) -> Unit = {},
     onNavigateToRepay: (Account) -> Unit = {},
+    onNavigateToAddAccount: () -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
     // Tab state - use initialTab parameter
-    var selectedTab by remember { mutableStateOf(initialTab) } // 0: 全部, 1: 现金, 2: 信用
-    val tabs = listOf("全部账户", "现金账户", "信用账户")
-    
-    // 删除确认对话框状态
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    var accountToDelete by remember { mutableStateOf<Account?>(null) }
+    var selectedTab by remember { mutableStateOf(initialTab) } // 0: 现金, 1: 信用, 2: 外部往来, 3: 停用账户
+    val tabs = listOf("现金账户", "信用账户", "外部往来", "停用账户")
     
     // 卡片进入动画计数器
     var animationKey by remember { mutableStateOf(0) }
@@ -89,37 +84,22 @@ fun AccountsScreen(
     
     // 根据tab筛选账户
     val filteredAccountsWithBalance = when (selectedTab) {
-        0 -> uiState.accountsWithBalance // 全部
-        1 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CASH } // 现金
-        2 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CREDIT } // 信用
+        0 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CASH && !it.first.isDisabled } // 现金
+        1 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CREDIT_ACCOUNT && !it.first.isDisabled } // 信用
+        2 -> uiState.accountsWithBalance.filter { it.first.attribute == AccountAttribute.CREDIT && !it.first.isDisabled } // 外部往来
+        3 -> uiState.accountsWithBalance.filter { it.first.isDisabled } // 停用账户
         else -> uiState.accountsWithBalance
     }
     
     // 计算筛选后的总额
     val filteredTotalBalance = filteredAccountsWithBalance.sumOf { it.second }
 
-    // 删除确认对话框
-    if (showDeleteConfirmDialog && accountToDelete != null) {
-        DeleteConfirmDialog(
-            accountName = accountToDelete!!.name,
-            onDismiss = {
-                showDeleteConfirmDialog = false
-                accountToDelete = null
-            },
-            onConfirm = {
-                viewModel.deleteAccount(accountToDelete!!.id)
-                showDeleteConfirmDialog = false
-                accountToDelete = null
-            }
-        )
-    }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "我的账户",
+                        "全部账户",
                         style = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = FontWeight.SemiBold
                         )
@@ -130,13 +110,30 @@ fun AccountsScreen(
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
-                containerColor = MaterialTheme.colorScheme.primary,
-                shape = CircleShape
+        bottomBar = {
+            // 底部固定“新建账户”按钮
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "添加账户")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onNavigateToAddAccount() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "新建账户",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     ) { paddingValues ->
@@ -166,7 +163,7 @@ fun AccountsScreen(
                             containerColor = if (selectedTab == index) 
                                 MaterialTheme.colorScheme.primary 
                             else 
-                                Color.White
+                                MaterialTheme.colorScheme.surface
                         ),
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = if (selectedTab == index) 8.dp else 4.dp
@@ -181,7 +178,7 @@ fun AccountsScreen(
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (selectedTab == index) 
-                                    Color.White 
+                                    MaterialTheme.colorScheme.onPrimary 
                                 else 
                                     MaterialTheme.colorScheme.onSurface
                             )
@@ -196,13 +193,16 @@ fun AccountsScreen(
             
             // 总资产卡片 - 根据选中tab显示不同余额
             val displayBalance = when (selectedTab) {
-                0 -> uiState.accountsWithBalance.sumOf { it.second } // 全部账户
-                1 -> uiState.accountsWithBalance
-                    .filter { it.first.attribute == AccountAttribute.CASH }
+                0 -> uiState.accountsWithBalance
+                    .filter { it.first.attribute == AccountAttribute.CASH && !it.first.isDisabled }
                     .sumOf { it.second } // 现金账户
+                1 -> uiState.accountsWithBalance
+                    .filter { it.first.attribute == AccountAttribute.CREDIT_ACCOUNT && !it.first.isDisabled }
+                    .sumOf { it.second } // 信用账户
                 2 -> uiState.accountsWithBalance
-                    .filter { it.first.attribute == AccountAttribute.CREDIT }
-                    .sumOf { it.second } // 信用账户（负数显示）
+                    .filter { it.first.attribute == AccountAttribute.CREDIT && !it.first.isDisabled }
+                    .sumOf { it.second } // 外部往来账户
+                3 -> 0.0 // 停用账户不显示总额
                 else -> 0.0
             }
             
@@ -234,19 +234,14 @@ fun AccountsScreen(
                                 initialOffsetX = -30f
                             )
                     ) {
-                        SwipeableAccountCard(
+                        AccountCardSimple(
                             account = account,
                             calculatedBalance = calculatedBalance,
                             currencySymbol = currencySymbol,
-                            isExpanded = uiState.expandedAccountId == account.id,
-                            monthlyTransactions = if (uiState.expandedAccountId == account.id) uiState.monthlyTransactions else emptyList(),
-                            expandedMonths = uiState.expandedMonths,
-                            onCardClick = { viewModel.toggleAccountExpanded(account.id) },
-                            onMonthClick = { yearMonth -> viewModel.toggleMonthExpanded(account.id, yearMonth) },
-                            onEdit = { viewModel.showEditDialog(account) },
-                            onDelete = {
-                                accountToDelete = account
-                                showDeleteConfirmDialog = true
+                            showDisabledBadge = selectedTab == 3, // 停用账户标签页显示"已停用"标识
+                            onClick = {
+                                // 点击账户卡片，跳转到账户详情页面
+                                onNavigateToAccountDetail(account.id)
                             },
                             onRepay = {
                                 onNavigateToRepay(account)
@@ -287,23 +282,25 @@ fun AccountsScreen(
         }
     }
 
-    // 添加账户对话框
-    if (uiState.showAddDialog) {
-        AddAccountDialog(
-            onDismiss = { viewModel.hideAddDialog() },
-            onConfirm = { name, type, icon, balance, color, cardNumber, creditLimit, billDay, repaymentDay ->
-                viewModel.addAccount(name, type, icon, balance, color, cardNumber, creditLimit, billDay, repaymentDay)
-            }
-        )
-    }
-
     // 编辑账户对话框
     if (uiState.showEditDialog && uiState.selectedAccount != null) {
         EditAccountDialog(
             account = uiState.selectedAccount!!,
             onDismiss = { viewModel.hideEditDialog() },
-            onConfirm = { name, type, icon, color, cardNumber, creditLimit, billDay, repaymentDay ->
-                viewModel.updateAccount(uiState.selectedAccount!!, name, type, icon, color, cardNumber, creditLimit, billDay, repaymentDay)
+            onConfirm = { name, type, icon, color, cardNumber, creditLimit, billDay, repaymentDay, initialBalance, initialBalanceDate ->
+                viewModel.updateAccount(
+                    uiState.selectedAccount!!, 
+                    name, 
+                    type, 
+                    icon, 
+                    color, 
+                    cardNumber, 
+                    creditLimit, 
+                    billDay, 
+                    repaymentDay,
+                    initialBalance,
+                    initialBalanceDate
+                )
             },
             onDelete = { viewModel.deleteAccount(uiState.selectedAccount!!.id) },
             hasUnsettledDebt = uiState.selectedAccount!!.attribute == AccountAttribute.CREDIT && 
@@ -313,255 +310,133 @@ fun AccountsScreen(
 }
 
 @Composable
-private fun SwipeableAccountCard(
+private fun AccountCardSimple(
     account: Account,
     calculatedBalance: Double,
     currencySymbol: String,
-    isExpanded: Boolean,
-    monthlyTransactions: List<MonthlyTransactions>,
-    expandedMonths: Set<String>,
-    onCardClick: () -> Unit,
-    onMonthClick: (String) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    showDisabledBadge: Boolean = false,
+    onClick: () -> Unit,
     onRepay: () -> Unit = {} // 信用还款回调
 ) {
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var swipeDirection by remember { mutableStateOf(0) } // 0=无滑动, -1=左滑(显示删除), 1=右滑(显示编辑)
-    var cardWidth by remember { mutableIntStateOf(0) }
-    
-    // 计算阈值：屏幕宽度的10%
-    val threshold10 = (cardWidth * 0.1f).roundToInt()
-    // 滑动目标偏移：屏幕宽度的15%
-    val targetOffset = (cardWidth * 0.15f).roundToInt().coerceAtLeast(1)
-
-    // 动画过渡到目标位置
-    val animatedOffset by animateFloatAsState(
-        targetValue = when (swipeDirection) {
-            -1 -> (-targetOffset).toFloat() // 左滑显示右侧删除按钮
-            1 -> targetOffset.toFloat()      // 右滑显示左侧编辑按钮
-            else -> offsetX
-        },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "swipe_offset"
-    )
-
-    // 当明细展开时，重置滑动状态
-    LaunchedEffect(isExpanded) {
-        if (isExpanded) {
-            swipeDirection = 0
-            offsetX = 0f
-        }
-    }
-
-    Box(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .onSizeChanged { cardWidth = it.width }
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        // 左侧滑动背景（编辑按钮，向右滑时显示）
-        if (swipeDirection == 1) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFFF9500)), // 橙色
-                contentAlignment = Alignment.CenterStart
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.padding(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .width((cardWidth * 0.15f).dp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 0.dp, bottomStart = 0.dp, topEnd = 12.dp, bottomEnd = 12.dp))
-                        .clickable {
-                            onEdit()
-                            swipeDirection = 0
-                            offsetX = 0f
-                        },
-                    contentAlignment = Alignment.CenterStart
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(start = 12.dp)
+                    // 账户图标
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color(android.graphics.Color.parseColor(account.color))),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "编辑",
+                            imageVector = getAccountIcon(account.type.icon),
+                            contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // 账户信息
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = account.name,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                            if (!account.cardNumber.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(${account.cardNumber.takeLast(4)})",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
                         Text(
-                            "编辑",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium
+                            text = account.type.displayName,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
+                    }
+
+                    // 余额
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "$currencySymbol ${CurrencyUtils.formatAmount(calculatedBalance)}",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (calculatedBalance >= 0) IOSColors.SystemGreen else IOSColors.SystemRed
+                            )
+                        )
+                        
+                        // 信用账户还款按钮
+                        if (account.attribute == AccountAttribute.CREDIT && calculatedBalance < 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Button(
+                                onClick = {
+                                    // 阻止事件冒泡，不触发卡片点击
+                                    onRepay()
+                                },
+                                modifier = Modifier.height(24.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = IOSColors.SystemRed.copy(alpha = 0.1f),
+                                    contentColor = IOSColors.SystemRed
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "还款",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
-
-        // 右侧滑动背景（删除按钮，向左滑时显示）
-        if (swipeDirection == -1) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(IOSColors.SystemRed), // 红色
-                contentAlignment = Alignment.CenterEnd
-            ) {
+            
+            // 已停用标识 - 右上角
+            if (showDisabledBadge) {
                 Box(
                     modifier = Modifier
-                        .width((cardWidth * 0.15f).dp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp, topEnd = 0.dp, bottomEnd = 0.dp))
-                        .clickable {
-                            onDelete()
-                            swipeDirection = 0
-                            offsetX = 0f
-                        },
-                    contentAlignment = Alignment.CenterEnd
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(end = 12.dp)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
                     ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "删除",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "删除",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelMedium
+                            text = "已停用",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
-                }
-            }
-        }
-
-        // 主卡片（可滑动）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth() // 确保覆盖背景
-                .offset { IntOffset(animatedOffset.roundToInt(), 0) }
-                .pointerInput(isExpanded) {
-                    // 如果明细已展开，禁用滑动
-                    if (isExpanded) return@pointerInput
-                    
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (swipeDirection == 0) {
-                                // 根据滑动方向决定显示哪个操作按钮
-                                if (offsetX < -threshold10) {
-                                    // 向左滑，显示删除
-                                    swipeDirection = -1
-                                    offsetX = (-targetOffset).toFloat()
-                                } else if (offsetX > threshold10) {
-                                    // 向右滑，显示编辑
-                                    swipeDirection = 1
-                                    offsetX = targetOffset.toFloat()
-                                } else {
-                                    // 未超过阈值，重置
-                                    offsetX = 0f
-                                }
-                            } else {
-                                // 已有操作按钮显示，根据当前位置判断是否关闭
-                                if (swipeDirection == -1 && offsetX >= -threshold10) {
-                                    swipeDirection = 0
-                                    offsetX = 0f
-                                } else if (swipeDirection == 1 && offsetX <= threshold10) {
-                                    swipeDirection = 0
-                                    offsetX = 0f
-                                }
-                            }
-                        },
-                        onDragCancel = {
-                            if (swipeDirection == 0) {
-                                offsetX = 0f
-                            }
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (swipeDirection != 0) {
-                                // 已显示操作按钮时，可以拖动关闭
-                                val newOffset = offsetX + dragAmount
-                                if (swipeDirection == -1) {
-                                    // 左滑显示删除，只能向右拖关闭
-                                    if (newOffset >= -targetOffset) {
-                                        offsetX = newOffset.coerceAtMost(0f)
-                                        if (newOffset >= -threshold10) {
-                                            swipeDirection = 0
-                                            offsetX = 0f
-                                        }
-                                    }
-                                } else {
-                                    // 右滑显示编辑，只能向左拖关闭
-                                    if (newOffset <= targetOffset) {
-                                        offsetX = newOffset.coerceAtLeast(0f)
-                                        if (newOffset <= threshold10) {
-                                            swipeDirection = 0
-                                            offsetX = 0f
-                                        }
-                                    }
-                                }
-                            } else {
-                                // 正常滑动
-                                val newOffset = offsetX + dragAmount
-                                // 允许左右双向滑动
-                                offsetX = newOffset.coerceIn((-targetOffset).toFloat(), targetOffset.toFloat())
-                            }
-                        }
-                    )
-                }
-        ) {
-            Column {
-                AccountCard(
-                    account = account,
-                    calculatedBalance = calculatedBalance,
-                    currencySymbol = currencySymbol,
-                    isExpanded = isExpanded,
-                    onClick = {
-                        // 如果正在显示操作按钮，忽略点击并关闭
-                        if (swipeDirection != 0) {
-                            swipeDirection = 0
-                            offsetX = 0f
-                        } else {
-                            onCardClick()
-                        }
-                    },
-                    onRepay = onRepay
-                )
-
-                // 展开的交易明细
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    TransactionDetailsSection(
-                        monthlyTransactions = monthlyTransactions,
-                        expandedMonths = expandedMonths,
-                        accountId = account.id,
-                        accountAttribute = account.attribute,
-                        currencySymbol = currencySymbol,
-                        onMonthClick = onMonthClick,
-                        onContainerClick = {
-                            // 点击明细区域时，关闭滑动状态
-                            if (swipeDirection != 0) {
-                                swipeDirection = 0
-                                offsetX = 0f
-                            }
-                        }
-                    )
                 }
             }
         }
@@ -616,379 +491,6 @@ private fun TotalBalanceCard(
 }
 
 @Composable
-private fun AccountCard(
-    account: Account,
-    calculatedBalance: Double,
-    currencySymbol: String,
-    isExpanded: Boolean,
-    onClick: () -> Unit,
-    onRepay: () -> Unit = {}
-) {
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 300),
-        label = "arrow_rotation"
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 账户图标
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color(android.graphics.Color.parseColor(account.color))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = getAccountIcon(account.type.icon),
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // 账户信息
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = account.name,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                        if (!account.cardNumber.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "(${account.cardNumber.takeLast(4)})",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                        }
-                    }
-                    Text(
-                        text = account.type.displayName,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-
-                // 余额
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "$currencySymbol ${CurrencyUtils.formatAmount(calculatedBalance)}",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (calculatedBalance >= 0) IOSColors.SystemGreen else IOSColors.SystemRed
-                        )
-                    )
-                    
-                    // 信用账户还款按钮
-                    if (account.attribute == AccountAttribute.CREDIT && calculatedBalance < 0) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(
-                            onClick = {
-                                // 阻止事件冒泡，不触发卡片点击
-                                onRepay()
-                            },
-                            modifier = Modifier.height(24.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = IOSColors.SystemRed.copy(alpha = 0.1f),
-                                contentColor = IOSColors.SystemRed
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "还款",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // 展开/折叠箭头
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "收起" else "展开",
-                    modifier = Modifier.rotate(rotationAngle),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // 滑动提示
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "← 向左滑动删除账户    向右滑动编辑账户 →",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TransactionDetailsSection(
-    monthlyTransactions: List<MonthlyTransactions>,
-    expandedMonths: Set<String>,
-    accountId: Long,
-    accountAttribute: AccountAttribute = AccountAttribute.CASH,
-    currencySymbol: String,
-    onMonthClick: (String) -> Unit,
-    onContainerClick: () -> Unit = {}
-) {
-    // Sub-tab state for credit accounts
-    var selectedSubTab by remember { mutableStateOf(0) } // 0: 全部, 1: 消费, 2: 还款
-    val subTabs = if (accountAttribute == AccountAttribute.CREDIT) {
-        listOf("全部", "消费", "还款")
-    } else {
-        listOf("全部")
-    }
-    
-    // Filter transactions based on selected sub-tab
-    val filteredMonthlyTransactions = remember(monthlyTransactions, selectedSubTab, accountAttribute) {
-        if (accountAttribute != AccountAttribute.CREDIT || selectedSubTab == 0) {
-            monthlyTransactions
-        } else {
-            monthlyTransactions.map { monthly ->
-                val filteredTransactions = monthly.transactions.filter { transaction ->
-                    when (selectedSubTab) {
-                        1 -> transaction.category.id != "credit_repay" // 消费：非还款类别
-                        2 -> transaction.category.id == "credit_repay" // 还款：还款类别
-                        else -> true
-                    }
-                }
-                monthly.copy(transactions = filteredTransactions)
-            }.filter { it.transactions.isNotEmpty() } // 移除空的月份
-        }
-    }
-    
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clickable(onClick = onContainerClick) // 点击明细区域关闭滑动
-    ) {
-        Text(
-            text = "收支明细",
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.Medium
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        // Sub-tabs for credit accounts
-        if (accountAttribute == AccountAttribute.CREDIT) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                subTabs.forEachIndexed { index, title ->
-                    FilterChip(
-                        selected = selectedSubTab == index,
-                        onClick = { selectedSubTab = index },
-                        label = { Text(title, fontSize = 13.sp) },
-                        modifier = Modifier.weight(1f),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-            }
-        }
-
-        if (filteredMonthlyTransactions.isEmpty()) {
-            Text(
-                text = "暂无交易记录",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                ),
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-        } else {
-            filteredMonthlyTransactions.forEach { monthly ->
-                MonthSection(
-                    monthly = monthly,
-                    isExpanded = expandedMonths.contains("${accountId}_${monthly.yearMonth}"),
-                    accountId = accountId,
-                    currencySymbol = currencySymbol,
-                    onClick = { onMonthClick(monthly.yearMonth) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MonthSection(
-    monthly: MonthlyTransactions,
-    isExpanded: Boolean,
-    accountId: Long,
-    currencySymbol: String,
-    onClick: () -> Unit
-) {
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isExpanded) 90f else 0f,
-        animationSpec = tween(durationMillis = 200),
-        label = "arrow_rotation"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        // 月份标题行
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .rotate(rotationAngle),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = monthly.monthDisplay,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Medium
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "${monthly.transactions.size}笔",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            }
-        }
-
-        // 交易明细列表
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 28.dp, top = 4.dp)
-            ) {
-                monthly.transactions.forEach { transaction ->
-                    TransactionItem(
-                        transaction = transaction,
-                        currencySymbol = currencySymbol
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TransactionItem(
-    transaction: Transaction,
-    currencySymbol: String
-) {
-    val dateFormat = remember { SimpleDateFormat("MM-dd", Locale.getDefault()) }
-    val isExpense = when (transaction.type) {
-        TransactionType.EXPENSE -> true
-        TransactionType.INCOME -> false
-        TransactionType.TRANSFER, TransactionType.LENDING -> transaction.amount < 0
-    }
-    val amountColor = if (isExpense) IOSColors.SystemRed else IOSColors.SystemGreen
-    val amountPrefix = if (isExpense) "-" else "+"
-    val displayAmount = kotlin.math.abs(transaction.amount)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 日期
-        Text(
-            text = dateFormat.format(Date(transaction.date)),
-            style = MaterialTheme.typography.bodySmall.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            modifier = Modifier.width(44.dp)
-        )
-
-        // 分类图标
-        Icon(
-            imageVector = getCategoryIcon(transaction.category.icon),
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = amountColor
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // 分类名称
-        Text(
-            text = transaction.category.name,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
-        )
-
-        // 金额
-        Text(
-            text = "$amountPrefix$currencySymbol ${CurrencyUtils.formatAmount(displayAmount)}",
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Medium,
-                color = amountColor
-            )
-        )
-    }
-}
-
-@Composable
 private fun EmptyAccountsView() {
     Column(
         modifier = Modifier
@@ -1022,7 +524,7 @@ private fun EmptyAccountsView() {
 @Composable
 private fun AddAccountDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, AccountType, String, Double, String, String?, Double, Int, Int) -> Unit
+    onConfirm: (String, AccountType, String, Double, String, String?, Double, Int, Int, String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var selectedAttribute by remember { mutableStateOf(AccountAttribute.CASH) }
@@ -1037,10 +539,38 @@ private fun AddAccountDialog(
     var billDay by remember { mutableStateOf("1") }
     var repaymentDay by remember { mutableStateOf("10") }
     
+    // 期初余额日期
+    var initialBalanceDate by remember { mutableStateOf("") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    
     // Update selectedType when attribute changes
     LaunchedEffect(selectedAttribute) {
         val types = getAccountTypesByAttribute(selectedAttribute)
         selectedType = types.firstOrNull() ?: AccountType.BANK
+    }
+    
+    // 日期选择器
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = System.currentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        initialBalanceDate = sdf.format(java.util.Date(millis))
+                    }
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 
     ModalBottomSheet(
@@ -1123,32 +653,71 @@ private fun AddAccountDialog(
                 }
             }
 
-            // 期初余额 - 允许负数（信用账户）
-            OutlinedTextField(
-                value = initialBalance,
-                onValueChange = { input ->
-                    val filtered = input.filter { char -> char.isDigit() || char == '.' || char == '-' }
-                    initialBalance = if (selectedAttribute == AccountAttribute.CREDIT) {
-                        if (filtered.length > 1 && filtered[0] != '-')
-                            filtered.filter { char -> char.isDigit() || char == '.' }
-                        else
-                            filtered
-                    } else {
-                        filtered.filter { char -> char.isDigit() || char == '.' }
-                    }
-                },
-                label = { Text("期初余额", fontSize = 16.sp) },
+            // 期初余额 + 期初余额日期（同一行）
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 期初余额输入框
+                OutlinedTextField(
+                    value = initialBalance,
+                    onValueChange = { input ->
+                        val filtered = input.filter { char -> char.isDigit() || char == '.' || char == '-' }
+                        initialBalance = if (selectedAttribute == AccountAttribute.CREDIT || selectedAttribute == AccountAttribute.CREDIT_ACCOUNT) {
+                            // 信用账户和外部往来账户允许填负数
+                            if (filtered.length > 1 && filtered[0] != '-')
+                                filtered.filter { char -> char.isDigit() || char == '.' }
+                            else
+                                filtered
+                        } else {
+                            // 现金账户只允许正数
+                            filtered.filter { char -> char.isDigit() || char == '.' }
+                        }
+                    },
+                    label = { Text("期初余额") },
+                    modifier = Modifier.weight(0.5f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = LocalTextStyle.current.copy(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 )
-            )
+                
+                // 期初余额日期选择按钮
+                OutlinedTextField(
+                    value = initialBalanceDate,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("期初日期") },
+                    modifier = Modifier.weight(0.5f),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(Icons.Default.DateRange, contentDescription = "选择日期")
+                        }
+                    },
+                    enabled = true
+                )
+            }
             
-            // 信用账户额外字段
-            if (selectedAttribute == AccountAttribute.CREDIT) {
+            // 信用账户和外部往来账户期初余额提示
+            if (selectedAttribute == AccountAttribute.CREDIT || selectedAttribute == AccountAttribute.CREDIT_ACCOUNT) {
+                Text(
+                    text = if (selectedAttribute == AccountAttribute.CREDIT_ACCOUNT) 
+                        "期初余额可以为负数，表示欠款" 
+                    else 
+                        "期初余额用正数表示应收回债权，用负数表示应当归还的欠款",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                )
+            }
+            
+            // 信用账户额外字段（账单日、还款日、信用额度）
+            if (selectedAttribute == AccountAttribute.CREDIT_ACCOUNT) {
                 // 卡号后4位
                 OutlinedTextField(
                     value = cardNumber,
@@ -1254,34 +823,109 @@ private fun AddAccountDialog(
                 }
             }
 
-            // 按钮
+            // 按钮 - 立体感设计，适配浅色/深色模式
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text("取消")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                TextButton(
-                    onClick = {
-                        if (name.isNotBlank()) {
-                            onConfirm(
-                                name,
-                                selectedType,
-                                selectedType.icon,
-                                initialBalance.toDoubleOrNull() ?: 0.0,
-                                selectedColor,
-                                cardNumber.takeIf { it.isNotBlank() },
-                                creditLimit.toDoubleOrNull() ?: 0.0,
-                                billDay.toIntOrNull() ?: 1,
-                                repaymentDay.toIntOrNull() ?: 10
+                // 取消按钮 - 灰色立体
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onDismiss)
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(12.dp),
+                            spotColor = Color(0xFF6B7280).copy(alpha = 0.3f)
+                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFF9FAFB),  // 浅灰顶部
+                                    Color(0xFFE5E7EB)   // 深灰底部
+                                )
                             )
-                        }
-                    },
-                    enabled = name.isNotBlank()
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = Color(0xFFD1D5DB).copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("添加")
+                    Text(
+                        text = "取消",
+                        color = Color(0xFF374151),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 14.dp)
+                    )
+                }
+
+                // 添加按钮 - 蓝色立体
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(
+                            onClick = {
+                                if (name.isNotBlank()) {
+                                    onConfirm(
+                                        name,
+                                        selectedType,
+                                        selectedType.icon,
+                                        initialBalance.toDoubleOrNull() ?: 0.0,
+                                        selectedColor,
+                                        cardNumber.takeIf { it.isNotBlank() },
+                                        creditLimit.toDoubleOrNull() ?: 0.0,
+                                        billDay.toIntOrNull() ?: 1,
+                                        repaymentDay.toIntOrNull() ?: 10,
+                                        initialBalanceDate
+                                    )
+                                }
+                            },
+                            enabled = name.isNotBlank()
+                        )
+                        .shadow(
+                            elevation = 10.dp,
+                            shape = RoundedCornerShape(12.dp),
+                            spotColor = Color(0xFF3B82F6).copy(alpha = 0.5f)
+                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = if (name.isNotBlank()) {
+                                    listOf(
+                                        Color(0xFF60A5FA),  // 亮蓝顶部
+                                        Color(0xFF3B82F6)   // 深蓝底部
+                                    )
+                                } else {
+                                    listOf(
+                                        Color(0xFF9CA3AF),  // 灰色顶部
+                                        Color(0xFF6B7280)   // 深灰底部
+                                    )
+                                }
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.4f),
+                                    Color.White.copy(alpha = 0.1f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "添加",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 14.dp)
+                    )
                 }
             }
         }
@@ -1290,16 +934,21 @@ private fun AddAccountDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditAccountDialog(
+fun EditAccountDialog(
     account: Account,
     onDismiss: () -> Unit,
-    onConfirm: (String, AccountType, String, String, String?, Double, Int, Int) -> Unit,
+    onConfirm: (String, AccountType, String, String, String?, Double, Int, Int, Double, String) -> Unit,
     onDelete: () -> Unit,
     hasUnsettledDebt: Boolean = false
 ) {
     var name by remember { mutableStateOf(account.name) }
     var selectedColor by remember { mutableStateOf(account.color) }
     var cardNumber by remember { mutableStateOf(account.cardNumber ?: "") }
+    
+    // 期初余额和日期
+    var initialBalance by remember { mutableStateOf(account.initialBalance.toString()) }
+    var initialBalanceDate by remember { mutableStateOf(account.initialBalanceDate) }
+    var showDatePicker by remember { mutableStateOf(false) }
     
     // Credit account fields
     var creditLimit by remember { mutableStateOf(account.creditLimit.toString().takeIf { account.creditLimit > 0 } ?: "") }
@@ -1345,6 +994,34 @@ private fun EditAccountDialog(
             }
         )
     }
+    
+    // 日期选择器
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = if (initialBalanceDate.isNotBlank()) {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).parse(initialBalanceDate)?.time
+            } else {
+                System.currentTimeMillis()
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                        initialBalanceDate = sdf.format(java.util.Date(millis))
+                    }
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1383,6 +1060,53 @@ private fun EditAccountDialog(
                     Icon(getAccountIcon(account.type.icon), contentDescription = null)
                 }
             )
+            
+            // 期初余额 + 期初余额日期（同一行）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 期初余额输入框
+                OutlinedTextField(
+                    value = initialBalance,
+                    onValueChange = { input ->
+                        val filtered = input.filter { char -> char.isDigit() || char == '.' || char == '-' }
+                        initialBalance = if (account.attribute == AccountAttribute.CREDIT || account.attribute == AccountAttribute.CREDIT_ACCOUNT) {
+                            if (filtered.length > 1 && filtered[0] != '-')
+                                filtered.filter { char -> char.isDigit() || char == '.' }
+                            else
+                                filtered
+                        } else {
+                            filtered.filter { char -> char.isDigit() || char == '.' }
+                        }
+                    },
+                    label = { Text("期初余额") },
+                    modifier = Modifier.weight(0.5f),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    textStyle = LocalTextStyle.current.copy(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                
+                // 期初余额日期选择按钮
+                OutlinedTextField(
+                    value = initialBalanceDate,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("期初日期") },
+                    modifier = Modifier.weight(0.5f),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(Icons.Default.DateRange, contentDescription = "选择日期")
+                        }
+                    },
+                    enabled = true
+                )
+            }
             
             // 信用账户字段
             if (account.attribute == AccountAttribute.CREDIT) {
@@ -1481,33 +1205,52 @@ private fun EditAccountDialog(
                 }
             }
 
-            // 按钮
+            // 按钮 - 美化版，有立体感和精致感
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextButton(
-                    onClick = {
-                        if (hasUnsettledDebt) {
-                            showDebtWarning = true
-                        } else {
-                            showDeleteConfirm = true
-                        }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = IOSColors.SystemRed)
+                // 取消按钮 - 精致立体感
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(onClick = onDismiss)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("删除账户")
+                    Text(
+                        text = "取消",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Row {
-                    TextButton(onClick = onDismiss) {
-                        Text("取消")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(
-                        onClick = {
-                            if (name.isNotBlank()) {
+                
+                // 保存按钮 - 精致立体感
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .then(
+                            if (name.isNotBlank()) Modifier.clickable {
                                 onConfirm(
                                     name,
                                     account.type,
@@ -1516,14 +1259,47 @@ private fun EditAccountDialog(
                                     cardNumber.takeIf { it.isNotBlank() },
                                     creditLimit.toDoubleOrNull() ?: 0.0,
                                     billDay.toIntOrNull() ?: 1,
-                                    repaymentDay.toIntOrNull() ?: 10
+                                    repaymentDay.toIntOrNull() ?: 10,
+                                    initialBalance.toDoubleOrNull() ?: 0.0,
+                                    initialBalanceDate
                                 )
-                            }
-                        },
-                        enabled = name.isNotBlank()
-                    ) {
-                        Text("保存")
-                    }
+                            } else Modifier
+                        )
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = if (name.isNotBlank()) {
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.95f),
+                                        MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    listOf(
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                                    )
+                                }
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (name.isNotBlank())
+                                androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f)
+                            else
+                                androidx.compose.ui.graphics.Color.Transparent,
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "保存",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = if (name.isNotBlank())
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
                 }
             }
         }
@@ -1605,116 +1381,6 @@ private fun getCategoryIcon(iconName: String): ImageVector {
         "reimbursement" -> Icons.Default.RequestPage
         else -> Icons.Default.Receipt
     }
-}
-
-// 删除确认对话框 - 带10秒倒计时，按钮居中
-@Composable
-private fun DeleteConfirmDialog(
-    accountName: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    var countdown by remember { mutableIntStateOf(10) }
-    var isConfirmEnabled by remember { mutableStateOf(false) }
-    
-    // 启动倒计时
-    LaunchedEffect(Unit) {
-        while (countdown > 0) {
-            kotlinx.coroutines.delay(1000)
-            countdown--
-        }
-        isConfirmEnabled = true
-    }
-    
-    AlertDialog(
-        onDismissRequest = { },
-        title = {
-            Text(
-                text = "删除账户",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold
-                )
-            )
-        },
-        text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "确定要删除「$accountName」吗？",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // 倒计时显示
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isConfirmEnabled) IOSColors.SystemRed 
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (isConfirmEnabled) "✓" else "$countdown",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (isConfirmEnabled) Color.White 
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = if (isConfirmEnabled) "可以确认删除" else "请等待 ${countdown} 秒",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            // 确认按钮和取消按钮居中放置
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = onDismiss,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "取消",
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                TextButton(
-                    onClick = onConfirm,
-                    enabled = isConfirmEnabled,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        disabledContentColor = Color.Gray,
-                        contentColor = IOSColors.SystemRed
-                    )
-                ) {
-                    Text(
-                        text = "确认删除",
-                        fontWeight = FontWeight.Bold,
-                        color = if (isConfirmEnabled) IOSColors.SystemRed else Color.Gray
-                    )
-                }
-            }
-        },
-        dismissButton = {
-            // 空置，因为按钮已移到confirmButton中居中
-        }
-    )
 }
 
 // 带标签的数字滚轮选择器

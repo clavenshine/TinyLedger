@@ -25,6 +25,12 @@ class AccountRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun getAllAccountsIncludingDisabled(): Flow<List<Account>> {
+        return accountDao.getAllAccountsIncludingDisabled().map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
     override suspend fun getAccountById(id: Long): Account? {
         return accountDao.getAccountById(id)?.toDomain()
     }
@@ -53,6 +59,10 @@ class AccountRepositoryImpl @Inject constructor(
         return accountDao.getCreditTotalBalance().map { it ?: 0.0 }
     }
 
+    override fun getCreditAccountTotalBalance(): Flow<Double> {
+        return accountDao.getCreditAccountTotalBalance().map { it ?: 0.0 }
+    }
+
     override suspend fun addAccount(account: Account): Long {
         return accountDao.insertAccount(account.toEntity())
     }
@@ -69,6 +79,15 @@ class AccountRepositoryImpl @Inject constructor(
 
     override suspend fun updateAccountBalance(accountId: Long, balance: Double) {
         accountDao.updateBalance(accountId, balance)
+    }
+
+    override suspend fun toggleAccountDisabled(accountId: Long, disabled: Boolean) {
+        val account = accountDao.getAccountById(accountId) ?: return
+        val updated = account.copy(
+            isDisabled = disabled,
+            updatedAt = System.currentTimeMillis()
+        )
+        accountDao.updateAccount(updated)
     }
 
     override suspend fun deleteAccount(accountId: Long) {
@@ -105,7 +124,9 @@ class AccountRepositoryImpl @Inject constructor(
             creditLimit = creditLimit,
             billDay = billDay,
             repaymentDay = repaymentDay,
-            isEnabled = isEnabled,
+            isDisabled = isDisabled,
+            initialBalanceDate = initialBalanceDate,
+            purpose = purpose,
             createdAt = createdAt,
             updatedAt = updatedAt
         )
@@ -125,7 +146,9 @@ class AccountRepositoryImpl @Inject constructor(
             creditLimit = creditLimit,
             billDay = billDay,
             repaymentDay = repaymentDay,
-            isEnabled = isEnabled,
+            isDisabled = isDisabled,
+            initialBalanceDate = initialBalanceDate,
+            purpose = purpose,
             createdAt = createdAt,
             updatedAt = updatedAt
         )

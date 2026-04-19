@@ -182,18 +182,21 @@ object ThemeColorPreviews {
         ThemeColorPreview("传统会计", Color(0xFF388E3C), Color(0xFF4CAF50), Color(0xFF1B5E20), Color(0xFFFFFFFF), "极简"),
 
         // 年轻渐变型
-        ThemeColorPreview("科技未来", Color(0xFF667EEA), Color(0xFF764BA2), Color(0xFF2D3748), Color(0xFFF7FAFC), "渐变"),
         ThemeColorPreview("少女心",   Color(0xFFFF9A9E), Color(0xFFFECFEF), Color(0xFFFF6B6B), Color(0xFFFFF0F5), "渐变"),
         ThemeColorPreview("梦想基金", Color(0xFF84FAB0), Color(0xFF8FD3F4), Color(0xFF00B4DB), Color(0xFFE0F7FA), "渐变"),
         ThemeColorPreview("搞钱日记", Color(0xFFFFD200), Color(0xFFF7971E), Color(0xFFFF6F00), Color(0xFFFFFFFF), "渐变"),
         ThemeColorPreview("活力运动", Color(0xFFFA709A), Color(0xFFFEE140), Color(0xFFFF4B1F), Color(0xFFFFFBEB), "渐变"),
         ThemeColorPreview("绿色生活", Color(0xFFA8E063), Color(0xFF56AB2F), Color(0xFFC8E6C9), Color(0xFFF1F8E9), "渐变"),
-        ThemeColorPreview("清爽夏季", Color(0xFF4FACFE), Color(0xFF00F2FE), Color(0xFF4FC3F7), Color(0xFFE1F5FE), "渐变")
+        ThemeColorPreview("清爽夏季", Color(0xFF4FACFE), Color(0xFF00F2FE), Color(0xFF4FC3F7), Color(0xFFE1F5FE), "渐变"),
+
+        // 深色模式专属主题
+        ThemeColorPreview("午夜深蓝", Color(0xFF64B5F6), Color(0xFF90CAF9), Color(0xFF81C784), Color(0xFF0D1117), "深色"),
+        ThemeColorPreview("深海墨蓝", Color(0xFF4DD0E1), Color(0xFF80DEEA), Color(0xFFBA68C8), Color(0xFF0A192F), "深色")
     )
 
     // 按分组获取，方便设置页分组展示
     fun byGroup(): Map<String, List<ThemeColorPreview>> = themes.groupBy { it.group }
 
     // 分组显示顺序
-    val groupOrder = listOf("经典", "系统", "商务", "生活", "极简", "渐变")
+    val groupOrder = listOf("经典", "系统", "商务", "生活", "极简", "渐变", "深色")
 }

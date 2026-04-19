@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.DeleteConfirmationDialog
 import com.tinyledger.app.ui.components.TransactionCard
 import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
@@ -44,8 +45,9 @@ import java.util.*
 fun HomeScreen(
     onAddTransaction: () -> Unit = {},
     onEditTransaction: (Long) -> Unit = {},
-    onNavigateToAccounts: (Int) -> Unit = {}, // 0: 全部, 1: 现金, 2: 信用
+    onNavigateToAccounts: (Int) -> Unit = {}, // 0: 现金, 1: 信用, 2: 外部往来
     onNavigateToAutoAccounting: () -> Unit = {},
+    onNavigateToCreditAccounts: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -69,7 +71,7 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5)),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         // ── 顶部标题栏 ──
@@ -93,7 +95,7 @@ fun HomeScreen(
                 },
 
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF5F5F5)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -144,7 +146,7 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .clickable { onNavigateToAccounts(0) }, // 导航到全部账户
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Row(
@@ -195,150 +197,196 @@ fun HomeScreen(
             }
         }
 
-        // ── 底部当前负债 + 净资产 ──
+        // ── 账户卡片区域 ──
         item {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .height(IntrinsicSize.Max),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 信用账户
-                Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(2) }, // 导航到信用账户tab
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                // 第一行：外部往来 + 信用账户
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(IOSColors.SystemRed)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "信用账户",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
-                            )
+                    // 外部往来
+                    Card(
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(2) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(IOSColors.SystemRed)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "外部往来",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                                )
+                            }
+                            val creditAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
+                            val totalCreditBalance = creditAccounts.sumOf { it.second }
+                            if (totalCreditBalance != 0.0) {
+                                Text(
+                                    text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalCreditBalance)}",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (totalCreditBalance < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = "无外部往来",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color(0xFF2E7D32),
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
                         }
-                        val creditAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
-                        val totalCreditBalance = creditAccounts.sumOf { it.second } // 显示负数
-                        if (totalCreditBalance != 0.0) {
+                    }
+
+                    // 信用账户
+                    Card(
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToCreditAccounts() },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF6366F1))
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "信用账户",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                                )
+                            }
+                            val creditAccountAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT_ACCOUNT }
+                            val creditAccountTotal = creditAccountAccounts.sumOf { it.second }
+                            val availableBalance = creditAccountAccounts.sumOf { it.first.creditLimit } + creditAccountTotal
+                            if (creditAccountAccounts.isNotEmpty()) {
+                                Text(
+                                    text = "可用 ${uiState.currencySymbol} ${CurrencyUtils.formatAmount(availableBalance)}",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = "无信用账户",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 第二行：现金账户 + 自动记账
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 现金账户
+                    Card(
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(0) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(IOSColors.SystemGreen)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "现金账户",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                                )
+                            }
+                            val cashAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
+                            val cashTotal = cashAccounts.sumOf { it.second }
                             Text(
-                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalCreditBalance)}",
+                                text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(cashTotal)}",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (totalCreditBalance < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
                                 modifier = Modifier.padding(top = 4.dp)
                             )
-                        } else {
-                            Text(
-                                text = "无信用账户",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                color = Color(0xFF2E7D32),
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
                         }
                     }
-                }
 
-                // 现金账户
-                Card(
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAccounts(1) }, // 导航到现金账户tab
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(IOSColors.SystemGreen)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "现金账户",
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
-                            )
+                    // 自动记账
+                    Card(
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { onNavigateToAutoAccounting() },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isAutoAccountingEnabled) IOSColors.SystemGreen else IOSColors.SystemOrange)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "自动记账",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                                )
+                            }
+                            if (isAutoAccountingEnabled) {
+                                Text(
+                                    text = "已开启",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = "未开启，点击开启>",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                    color = IOSColors.SystemOrange,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
-                        val cashAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
-                        val cashTotal = cashAccounts.sumOf { it.second }
-                        Text(
-                            text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(cashTotal)}",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
                     }
                 }
             }
         }
 
-        // ── 自动记账状态 ──
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clickable { onNavigateToAutoAccounting() },
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isAutoAccountingEnabled) IOSColors.SystemGreen else IOSColors.SystemOrange)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "自动记账",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    if (isAutoAccountingEnabled) {
-                        Text(
-                            text = "已开启",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            text = "未开启，点击开启>",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = IOSColors.SystemOrange
-                        )
-                    }
-                }
-            }
-        }
+
     }
 
     // 删除确认对话框
     if (showDeleteDialog && transactionToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false; transactionToDelete = null },
-            title = { Text("删除记录", fontWeight = FontWeight.Bold) },
-            text = { Text("你确认要删除这条记账记录吗？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    transactionToDelete?.let { viewModel.deleteTransaction(it) }
-                    showDeleteDialog = false; transactionToDelete = null
-                }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false; transactionToDelete = null }) {
-                    Text("取消")
-                }
+        DeleteConfirmationDialog(
+            title = "删除账单记录？",
+            onDismiss = { showDeleteDialog = false; transactionToDelete = null },
+            onConfirm = {
+                transactionToDelete?.let { viewModel.deleteTransaction(it) }
+                showDeleteDialog = false
+                transactionToDelete = null
             }
         )
     }
@@ -419,7 +467,7 @@ private fun MonthSummaryCard(
                         .padding(horizontal = 2.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFF5F5F5) // Light gray consistent across all themes
+                        containerColor = MaterialTheme.colorScheme.surface
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
@@ -448,7 +496,7 @@ private fun MonthSummaryCard(
                             modifier = Modifier
                                 .width(1.dp)
                                 .height(44.dp)
-                                .background(Color(0xFFE0E0E0))
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                         )
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -484,7 +532,7 @@ private fun TodayBillsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -563,7 +611,7 @@ private fun PendingTransactionsCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -683,24 +731,12 @@ private fun PendingTransactionsCard(
 
     // 删除确认对话框
     showDeleteDialog?.let { transactionId ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这条待确认交易记录吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(transactionId)
-                        showDeleteDialog = null
-                    }
-                ) {
-                    Text("确认", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("取消")
-                }
+        DeleteConfirmationDialog(
+            title = "删除待确认记录？",
+            onDismiss = { showDeleteDialog = null },
+            onConfirm = {
+                onDelete(transactionId)
+                showDeleteDialog = null
             }
         )
     }

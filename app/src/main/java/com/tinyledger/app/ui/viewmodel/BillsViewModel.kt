@@ -2,8 +2,10 @@ package com.tinyledger.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.domain.repository.AccountRepository
 import com.tinyledger.app.domain.repository.PreferencesRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
 import com.tinyledger.app.util.DateUtils
@@ -47,7 +49,8 @@ data class BillsUiState(
 @HiltViewModel
 class BillsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val accountRepository: AccountRepository
 ) : ViewModel() {
 
     private val _filterType = MutableStateFlow(FilterType.ALL)
@@ -79,12 +82,20 @@ class BillsViewModel @Inject constructor(
                 combine(
                     transactionRepository.getTransactionsByDateRange(startDate, endDate),
                     _searchKeyword,
-                    preferencesRepository.getSettings()
-                ) { monthTransactions, keyword, settings ->
-                    // Build daily map
+                    preferencesRepository.getSettings(),
+                    accountRepository.getAllAccounts()
+                ) { monthTransactions, keyword, settings, accounts ->
+                    // 获取现金账户ID集合
+                    val cashAccountIds = accounts
+                        .filter { it.attribute == AccountAttribute.CASH }
+                        .map { it.id }.toSet()
+
+                    // 仅显示现金账户的交易
+                    val cashMonthTransactions = monthTransactions.filter { it.accountId in cashAccountIds }
+                    // Build daily map (仅现金账户)
                     val dailyMap = mutableMapOf<Int, MutableList<Transaction>>()
                     val cal = Calendar.getInstance()
-                    monthTransactions.forEach { tx ->
+                    cashMonthTransactions.forEach { tx ->
                         cal.timeInMillis = tx.date
                         val day = cal.get(Calendar.DAY_OF_MONTH)
                         dailyMap.getOrPut(day) { mutableListOf() }.add(tx)
@@ -97,8 +108,8 @@ class BillsViewModel @Inject constructor(
                         emptyList()
                     }
 
-                    // Filtered transactions (for list view)
-                    val filtered = monthTransactions
+                    // Filtered transactions (for list view) - 仅现金账户
+                    val filtered = cashMonthTransactions
                         .filter { transaction ->
                             when (params.filterType) {
                                 FilterType.ALL -> true
@@ -113,17 +124,17 @@ class BillsViewModel @Inject constructor(
                             else transaction.note?.contains(keyword, ignoreCase = true) == true
                         }
 
-                    // Calculate monthly totals using sign-based amounts
+                    // Calculate monthly totals using sign-based amounts (仅现金账户)
                     // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
-                    val calculatedIncome = monthTransactions
+                    val calculatedIncome = cashMonthTransactions
                         .filter { it.amount > 0 && it.type != TransactionType.EXPENSE }
                         .sumOf { it.amount }
-                    val calculatedExpense = monthTransactions
+                    val calculatedExpense = cashMonthTransactions
                         .filter { it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0) }
                         .sumOf { kotlin.math.abs(it.amount) }
 
                     BillsUiState(
-                        transactions = monthTransactions,
+                        transactions = cashMonthTransactions,
                         filteredTransactions = filtered,
                         filterType = params.filterType,
                         searchKeyword = keyword,
@@ -135,7 +146,7 @@ class BillsViewModel @Inject constructor(
                         selectedDay = params.day,
                         monthlyIncome = calculatedIncome,
                         monthlyExpense = calculatedExpense,
-                        monthlyBalance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
+                        monthlyBalance = cashMonthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
                         dailyTransactionMap = dailyMap,
                         selectedDayTransactions = dayTx
                     )

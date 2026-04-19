@@ -30,6 +30,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- 相机和相册权限 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
     <application
         android:name=".TinyLedgerApp"
         android:allowBackup="true"
@@ -48,6 +54,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        
+        <!-- 深色模式设置页面 -->
+        <activity
+            android:name=".ui.screens.settings.DarkModeSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TinyLedger" />
         
         <!-- SMS接收器 - 用于实时监听新短信 -->
         <receiver 

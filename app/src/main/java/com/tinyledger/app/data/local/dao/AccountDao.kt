@@ -6,26 +6,32 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AccountDao {
-    @Query("SELECT * FROM accounts WHERE isEnabled = 1 ORDER BY createdAt DESC")
+    @Query("SELECT * FROM accounts WHERE isDisabled = 0 ORDER BY createdAt DESC")
     fun getAllAccounts(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM accounts ORDER BY createdAt DESC")
+    fun getAllAccountsIncludingDisabled(): Flow<List<AccountEntity>>
 
     @Query("SELECT * FROM accounts WHERE id = :id")
     suspend fun getAccountById(id: Long): AccountEntity?
 
-    @Query("SELECT * FROM accounts WHERE type = :type AND isEnabled = 1")
+    @Query("SELECT * FROM accounts WHERE type = :type AND isDisabled = 0")
     fun getAccountsByType(type: String): Flow<List<AccountEntity>>
 
-    @Query("SELECT * FROM accounts WHERE attribute = :attribute AND isEnabled = 1 ORDER BY createdAt DESC")
+    @Query("SELECT * FROM accounts WHERE attribute = :attribute AND isDisabled = 0 ORDER BY createdAt DESC")
     fun getAccountsByAttribute(attribute: String): Flow<List<AccountEntity>>
 
-    @Query("SELECT SUM(currentBalance) FROM accounts WHERE isEnabled = 1")
+    @Query("SELECT SUM(currentBalance) FROM accounts WHERE isDisabled = 0")
     fun getTotalBalance(): Flow<Double?>
 
-    @Query("SELECT SUM(currentBalance) FROM accounts WHERE attribute = 'cash' AND isEnabled = 1")
+    @Query("SELECT SUM(currentBalance) FROM accounts WHERE attribute = 'cash' AND isDisabled = 0")
     fun getCashTotalBalance(): Flow<Double?>
 
-    @Query("SELECT SUM(currentBalance) FROM accounts WHERE attribute = 'credit' AND isEnabled = 1")
+    @Query("SELECT SUM(currentBalance) FROM accounts WHERE attribute = 'credit' AND isDisabled = 0")
     fun getCreditTotalBalance(): Flow<Double?>
+
+    @Query("SELECT SUM(currentBalance) FROM accounts WHERE attribute = 'credit_account' AND isDisabled = 0")
+    fun getCreditAccountTotalBalance(): Flow<Double?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: AccountEntity): Long
@@ -39,6 +45,6 @@ interface AccountDao {
     @Delete
     suspend fun deleteAccount(account: AccountEntity)
 
-    @Query("UPDATE accounts SET isEnabled = 0, updatedAt = :timestamp WHERE id = :accountId")
+    @Query("UPDATE accounts SET isDisabled = 1, updatedAt = :timestamp WHERE id = :accountId")
     suspend fun disableAccount(accountId: Long, timestamp: Long = System.currentTimeMillis())
 }

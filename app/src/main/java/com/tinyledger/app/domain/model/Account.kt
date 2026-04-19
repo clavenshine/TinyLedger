@@ -14,7 +14,9 @@ data class Account(
     val creditLimit: Double = 0.0,
     val billDay: Int = 0,
     val repaymentDay: Int = 0,
-    val isEnabled: Boolean = true,
+    val isDisabled: Boolean = false,
+    val initialBalanceDate: String = "", // 期初余额日期，格式 yyyy-MM-dd
+    val purpose: String = "", // 用途
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -22,7 +24,8 @@ data class Account(
 @OptIn(kotlin.ExperimentalStdlibApi::class)
 enum class AccountAttribute(val value: String, val displayName: String) {
     CASH("cash", "现金账户"),
-    CREDIT("credit", "信用账户");
+    CREDIT_ACCOUNT("credit_account", "信用账户"),
+    CREDIT("credit", "外部往来");
 
     @OptIn(kotlin.ExperimentalStdlibApi::class)
     companion object {
@@ -40,14 +43,14 @@ enum class AccountType(val value: String, val displayName: String, val icon: Str
     CASH("cash", "现金", "wallet", AccountAttribute.CASH),
     YUEBAO("yuebao", "余额宝", "account_balance_wallet", AccountAttribute.CASH),
     OTHER("other", "其他", "help_outline", AccountAttribute.CASH),
-    
+
     // 信用账户类型
-    CREDIT_CARD("credit_card", "信用卡", "credit_card", AccountAttribute.CREDIT),
-    HUA_BEI("hua_bei", "花呗", "payment", AccountAttribute.CREDIT),
-    JIE_BEI("jie_bei", "借呗", "payments", AccountAttribute.CREDIT),
-    JD_BAITIAO("jd_baitiao", "京东白条", "shopping_bag", AccountAttribute.CREDIT),
-    MEITUAN_YUEFU("meituan_yuefu", "美团月付", "restaurant", AccountAttribute.CREDIT),
-    DOUYIN_YUEFU("douyin_yuefu", "抖音月付", "video_library", AccountAttribute.CREDIT);
+    CREDIT_CARD("credit_card", "信用卡", "credit_card", AccountAttribute.CREDIT_ACCOUNT),
+    CONSUMPTION_PLATFORM("consumption_platform", "消费平台", "shopping_bag", AccountAttribute.CREDIT_ACCOUNT),
+
+    // 外部往来账户类型
+    PERSONAL_TRANSACTION("personal_transaction", "外部个人往来", "person", AccountAttribute.CREDIT),
+    LOAN_LIABILITY("loan_liability", "外部贷款负债", "account_balance", AccountAttribute.CREDIT);
 
     @OptIn(kotlin.ExperimentalStdlibApi::class)
     companion object {

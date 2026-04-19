@@ -48,14 +48,18 @@ enum class ColorTheme(val displayName: String) {
     M7_ACCOUNTING("传统会计"),
 
     // ── Y系列：年轻渐变型 ──────────────────────────────────────────
-    Y1_TECH("科技未来"),
+    // Y1_TECH 已删除
     Y2_GIRL("少女心"),
     Y3_DREAM_FUND("梦想基金"),
     Y4_MONEY("搞钱日记"),
     Y5_SPORT("活力运动"),
     // Y6_CYBER 已删除
     Y7_ECO("绿色生活"),
-    Y8_SUMMER("清爽夏季")
+    Y8_SUMMER("清爽夏季"),
+
+    // ── 深色模式专属主题 ───────────────────────────────────────────
+    DARK_MIDNIGHT("午夜深蓝"),
+    DARK_OCEAN("深海墨蓝")
 }
 
 /**
@@ -85,6 +89,17 @@ data class AppColorScheme(
         val darkModeUnsuitableThemes: Set<ColorTheme> = setOf(
             ColorTheme.M1_BLACKWHITE, // primaryColor=0xFF000000 纸质账本（黑色主色在暗色模式下对比差）
             ColorTheme.M4_REDBLACK,  // 红黑冲击（暗色模式下红色和黑色难以区分）
+            // 所有浅色背景主题（白色/浅色背景在深色模式下会造成强烈对比）
+            ColorTheme.IOS_BLUE, ColorTheme.PURPLE, ColorTheme.GREEN, ColorTheme.ORANGE,
+            ColorTheme.PINK, ColorTheme.TEAL, ColorTheme.INDIGO, ColorTheme.BROWN,
+            ColorTheme.IOS_THEME, ColorTheme.HUAWEI_THEME, ColorTheme.XIAOMI_THEME,
+            ColorTheme.F1_FINANCE, ColorTheme.F2_WEALTH, ColorTheme.F3_RATIONAL,
+            ColorTheme.F4_VINTAGE, ColorTheme.F5_PREMIUM, ColorTheme.F6_ALERT, ColorTheme.F7_BUSINESS,
+            ColorTheme.L1_SAVINGS, ColorTheme.L2_VITALITY, ColorTheme.L3_BLOSSOM,
+            ColorTheme.L4_HEALING, ColorTheme.L5_DREAM, ColorTheme.L6_MINIMAL, ColorTheme.L7_DAILY,
+            ColorTheme.M2_SOFTBLACK, ColorTheme.M3_CONTRAST, ColorTheme.M5_CYANDARK, ColorTheme.M7_ACCOUNTING,
+            ColorTheme.Y2_GIRL, ColorTheme.Y3_DREAM_FUND,
+            ColorTheme.Y4_MONEY, ColorTheme.Y5_SPORT, ColorTheme.Y7_ECO, ColorTheme.Y8_SUMMER
         )
         fun fromTheme(theme: ColorTheme): AppColorScheme = when (theme) {
 
@@ -421,16 +436,6 @@ data class AppColorScheme(
             // ══════════════════════════════════════════════════════════
             // Y系列：年轻渐变型 — 趣味化，游戏化记账
             // ══════════════════════════════════════════════════════════
-            ColorTheme.Y1_TECH -> AppColorScheme(
-                theme = theme,
-                primaryColor      = 0xFF667EEA, // 蓝紫渐变起始
-                primaryLightColor = 0xFF764BA2, // 蓝紫渐变终止
-                secondaryColor    = 0xFF2D3748,
-                accentColor       = 0xFFFFFFFF,
-                backgroundColor   = 0xFFF7FAFC, // 灰白
-                surfaceColor      = 0xFFFFFFFF,
-                textColor         = 0xFF2D3748  // 深蓝灰
-            )
             ColorTheme.Y2_GIRL -> AppColorScheme(
                 theme = theme,
                 primaryColor      = 0xFFFF9A9E, // 粉嫩渐变
@@ -490,6 +495,30 @@ data class AppColorScheme(
                 backgroundColor   = 0xFFE1F5FE, // 淡蓝
                 surfaceColor      = 0xFFFFFFFF,
                 textColor         = 0xFF0277BD  // 深蓝
+            )
+
+            // ══════════════════════════════════════════════════════════
+            // 深色模式专属主题 — 专为深色模式优化的高对比度配色
+            // ══════════════════════════════════════════════════════════
+            ColorTheme.DARK_MIDNIGHT -> AppColorScheme(
+                theme = theme,
+                primaryColor      = 0xFF64B5F6, // 中蓝（提亮适配深色背景）
+                primaryLightColor = 0xFF90CAF9, // 浅蓝
+                secondaryColor    = 0xFF81C784, // 中绿
+                accentColor       = 0xFFFFB74D, // 暖橙
+                backgroundColor   = 0xFF0D1117, // 极深蓝黑（GitHub Dark风格）
+                surfaceColor      = 0xFF161B22, // 深蓝灰表面
+                textColor         = 0xFFE6EDF3  // 浅灰白文字
+            )
+            ColorTheme.DARK_OCEAN -> AppColorScheme(
+                theme = theme,
+                primaryColor      = 0xFF4DD0E1, // 青蓝（海洋风格）
+                primaryLightColor = 0xFF80DEEA, // 浅青
+                secondaryColor    = 0xFFBA68C8, // 淡紫（点缀）
+                accentColor       = 0xFFFF8A65, // 珊瑚橙
+                backgroundColor   = 0xFF0A192F, // 深海蓝黑
+                surfaceColor      = 0xFF112240, // 深海蓝表面
+                textColor         = 0xFFCCD6F6  // 浅蓝白文字
             )
         }
     }

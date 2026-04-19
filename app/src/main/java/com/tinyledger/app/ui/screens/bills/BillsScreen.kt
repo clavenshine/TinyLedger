@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.DeleteConfirmationDialog
 import com.tinyledger.app.ui.components.TransactionCard
 import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.viewmodel.BillsUiState
@@ -55,7 +56,7 @@ fun BillsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5)),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         // Top bar with title and view mode toggle
@@ -94,7 +95,7 @@ fun BillsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF5F5F5)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
@@ -109,7 +110,7 @@ fun BillsScreen(
             ) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 3.dp
                 ) {
                     Row(modifier = Modifier.padding(4.dp)) {
@@ -271,7 +272,7 @@ fun BillsScreen(
                 // Swipe hint text
                 item {
                     Text(
-                        text = "向左滑动明细记录删除，向右滑动明细记录编辑",
+                        text = "向右滑动明细记录删除，向左滑动明细记录编辑",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
@@ -312,24 +313,12 @@ fun BillsScreen(
 
     // Delete confirmation
     showDeleteDialog?.let { transactionId ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这条记录吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteTransaction(transactionId)
-                        showDeleteDialog = null
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("取消")
-                }
+        DeleteConfirmationDialog(
+            title = "删除账单记录？",
+            onDismiss = { showDeleteDialog = null },
+            onConfirm = {
+                viewModel.deleteTransaction(transactionId)
+                showDeleteDialog = null
             }
         )
     }
@@ -476,29 +465,7 @@ private fun SwipeableTransactionCard(
                 .matchParentSize()
                 .clip(RoundedCornerShape(12.dp))
         ) {
-            // Left side — Edit button (visible when swiped right)
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxHeight()
-                    .background(Color(0xFFFF9500))
-                    .clickable {
-                        coroutineScope.launch {
-                            offsetX.animateTo(0f, tween(200))
-                        }
-                        onEdit()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Edit, contentDescription = "编辑", tint = Color.White)
-                    Text("编辑", color = Color.White, fontSize = 12.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Right side — Delete button (visible when swiped left)
+            // Left side — Delete button (visible when swiped right)
             Box(
                 modifier = Modifier
                     .width(actionWidth)
@@ -517,6 +484,28 @@ private fun SwipeableTransactionCard(
                     Text("删除", color = Color.White, fontSize = 12.sp)
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Right side — Edit button (visible when swiped left)
+            Box(
+                modifier = Modifier
+                    .width(actionWidth)
+                    .fillMaxHeight()
+                    .background(Color(0xFFFF9500))
+                    .clickable {
+                        coroutineScope.launch {
+                            offsetX.animateTo(0f, tween(200))
+                        }
+                        onEdit()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Edit, contentDescription = "编辑", tint = Color.White)
+                    Text("编辑", color = Color.White, fontSize = 12.sp)
+                }
+            }
         }
 
         // Foreground card — swipeable
@@ -529,10 +518,10 @@ private fun SwipeableTransactionCard(
                             coroutineScope.launch {
                                 val current = offsetX.value
                                 when {
-                                    // Swiped left enough to show delete
-                                    current < -actionWidthPx / 2 -> offsetX.animateTo(-actionWidthPx, tween(200))
-                                    // Swiped right enough to show edit
+                                    // Swiped right enough to show delete
                                     current > actionWidthPx / 2 -> offsetX.animateTo(actionWidthPx, tween(200))
+                                    // Swiped left enough to show edit
+                                    current < -actionWidthPx / 2 -> offsetX.animateTo(-actionWidthPx, tween(200))
                                     // Snap back
                                     else -> offsetX.animateTo(0f, tween(200))
                                 }
@@ -554,9 +543,8 @@ private fun SwipeableTransactionCard(
                 onClick = {
                     if (offsetX.value != 0f) {
                         coroutineScope.launch { offsetX.animateTo(0f, tween(200)) }
-                    } else {
-                        onEdit()
                     }
+                    // 单纯点击不跳转到编辑页面
                 }
             )
         }
@@ -577,7 +565,7 @@ private fun CalendarView(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .shadow(elevation = 6.dp, shape = RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

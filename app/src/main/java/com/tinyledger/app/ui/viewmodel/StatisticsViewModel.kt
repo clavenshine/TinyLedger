@@ -2,9 +2,11 @@ package com.tinyledger.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.CategoryAmount
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.domain.repository.AccountRepository
 import com.tinyledger.app.domain.repository.PreferencesRepository
 import com.tinyledger.app.domain.repository.TransactionRepository
 import com.tinyledger.app.util.DateUtils
@@ -31,7 +33,8 @@ data class StatisticsUiState(
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val accountRepository: AccountRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StatisticsUiState(isLoading = true))
@@ -66,17 +69,27 @@ class StatisticsViewModel @Inject constructor(
                     // 月度模式：该月第一天到最后一天
                     DateUtils.getMonthStartEnd(year, month)
                 }
-
+            
+                // 先获取现金账户ID列表
+                val cashAccountIds = accountRepository.getAllAccounts().first()
+                    .filter { it.attribute == AccountAttribute.CASH }
+                    .map { it.id }
+            
                 combine(
-                    transactionRepository.getTransactionsByDateRange(startDate, endDate),
-                    transactionRepository.getExpenseByCategory(startDate, endDate)
+                    transactionRepository.getTransactionsByAccountIdsAndDateRange(cashAccountIds, startDate, endDate),
+                    transactionRepository.getExpenseByCategoryForAccounts(cashAccountIds, startDate, endDate)
                 ) { monthTransactions, expenseMap ->
+                    // 排除转账交易（TRANSFER和LENDING类型）
+                    val nonTransferTransactions = monthTransactions.filter { 
+                        it.type != TransactionType.TRANSFER && it.type != TransactionType.LENDING 
+                    }
+                    
                     // Calculate totals using sign-based amounts
                     // 兼容迁移前数据：type=EXPENSE但amount>0的也视为支出
-                    val income = monthTransactions.filter {
+                    val income = nonTransferTransactions.filter {
                         it.amount > 0 && it.type != TransactionType.EXPENSE
                     }.sumOf { it.amount }
-                    val expense = monthTransactions.filter {
+                    val expense = nonTransferTransactions.filter {
                         it.amount < 0 || (it.type == TransactionType.EXPENSE && it.amount > 0)
                     }.sumOf { kotlin.math.abs(it.amount) }
                     val totalExpense = expense
@@ -101,7 +114,7 @@ class StatisticsViewModel @Inject constructor(
                         selectedMonth = month,
                         totalIncome = income,
                         totalExpense = expense,
-                        balance = monthTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
+                        balance = nonTransferTransactions.sumOf { it.amount }, // 结余 = 收入 + 支出（支出为负数）
                         expenseByCategory = categoryAmounts,
                         currencySymbol = currency,
                         isLoading = false,

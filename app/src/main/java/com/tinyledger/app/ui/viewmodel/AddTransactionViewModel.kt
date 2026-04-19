@@ -35,6 +35,8 @@ data class AddTransactionUiState(
     val amount: String = "",
     val note: String = "",
     val date: Long = System.currentTimeMillis(),
+    val imagePath: String? = null,  // 图片附件路径（保留兼容）
+    val imagePaths: List<String> = emptyList(),  // 图片附件路径列表，最多3张
     val isEditing: Boolean = false,
     val isSaving: Boolean = false,
     val saveSuccess: Boolean = false,
@@ -317,6 +319,24 @@ class AddTransactionViewModel @Inject constructor(
         _uiState.update { it.copy(note = note) }
     }
 
+    fun setImage(imagePath: String?) {
+        _uiState.update { it.copy(imagePath = imagePath) }
+    }
+
+    fun addImage(imagePath: String, maxImages: Int = 3) {
+        val currentPaths = _uiState.value.imagePaths
+        if (currentPaths.size >= maxImages) return // 最多maxImages张
+        _uiState.update { it.copy(imagePaths = currentPaths + imagePath) }
+    }
+
+    fun removeImage(index: Int) {
+        val currentPaths = _uiState.value.imagePaths.toMutableList()
+        if (index in currentPaths.indices) {
+            currentPaths.removeAt(index)
+            _uiState.update { it.copy(imagePaths = currentPaths) }
+        }
+    }
+
     fun setDate(date: Long) {
         _uiState.update { it.copy(date = date) }
     }
@@ -372,13 +392,33 @@ class AddTransactionViewModel @Inject constructor(
                     _uiState.update { it.copy(errorMessage = "请选择分类") }
                     return
                 }
-                if (state.accounts.isEmpty()) {
+                if (state.accounts.none { !it.isDisabled }) {
                     _uiState.update { it.copy(errorMessage = "账户未建立，请先建立账户") }
                     return
                 }
                 if (state.selectedAccount == null) {
                     _uiState.update { it.copy(errorMessage = "请选择账户") }
                     return
+                }
+            }
+        }
+
+        // 校验交易日期不能早于已启用账户的期初余额日期
+        val accountsToCheck = when (state.transactionType) {
+            TransactionType.TRANSFER, TransactionType.LENDING -> listOfNotNull(state.selectedFromAccount, state.selectedToAccount)
+            else -> listOfNotNull(state.selectedAccount)
+        }
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        for (account in accountsToCheck) {
+            if (!account.isDisabled && account.initialBalanceDate.isNotEmpty()) {
+                try {
+                    val initialDate = sdf.parse(account.initialBalanceDate)
+                    if (initialDate != null && state.date < initialDate.time) {
+                        _uiState.update { it.copy(errorMessage = "存在期初余额日期之前的记录，请核实") }
+                        return
+                    }
+                } catch (e: Exception) {
+                    // 解析失败则跳过
                 }
             }
         }
@@ -471,7 +511,11 @@ class AddTransactionViewModel @Inject constructor(
                         transactionRepository.updateDualTransaction(fromTransaction, toTransaction)
                     } else {
                         // 新建双记录（包括从单记录切换过来的情况）
-                        transactionRepository.insertDualTransaction(fromTransaction, toTransaction)
+                        val result = transactionRepository.insertDualTransaction(fromTransaction, toTransaction)
+                        if (result.first == -1L || result.second == -1L) {
+                            _uiState.update { it.copy(isSaving = false, errorMessage = "存在期初余额日期之前的记录，请核实") }
+                            return@launch
+                        }
                     }
                 } else {
                     // 普通收支：单条记录
@@ -494,9 +538,14 @@ class AddTransactionViewModel @Inject constructor(
                                 amount = signedAmount,
                                 note = state.note.ifBlank { null },
                                 date = state.date,
-                                accountId = accountId
+                                accountId = accountId,
+                                imagePath = state.imagePath
                             )
-                            transactionRepository.insertTransaction(transaction)
+                            val insertResult = transactionRepository.insertTransaction(transaction)
+                            if (insertResult == -1L) {
+                                _uiState.update { it.copy(isSaving = false, errorMessage = "存在期初余额日期之前的记录，请核实") }
+                                return@launch
+                            }
                         } else {
                             // 原来就是单记录，正常更新
                             val transaction = Transaction(
@@ -506,7 +555,8 @@ class AddTransactionViewModel @Inject constructor(
                                 amount = signedAmount,
                                 note = state.note.ifBlank { null },
                                 date = state.date,
-                                accountId = accountId
+                                accountId = accountId,
+                                imagePath = state.imagePath
                             )
                             transactionRepository.updateTransaction(transaction)
                         }
@@ -518,9 +568,14 @@ class AddTransactionViewModel @Inject constructor(
                             amount = signedAmount,
                             note = state.note.ifBlank { null },
                             date = state.date,
-                            accountId = accountId
+                            accountId = accountId,
+                            imagePath = state.imagePath
                         )
-                        transactionRepository.insertTransaction(transaction)
+                        val insertResult = transactionRepository.insertTransaction(transaction)
+                        if (insertResult == -1L) {
+                            _uiState.update { it.copy(isSaving = false, errorMessage = "存在期初余额日期之前的记录，请核实") }
+                            return@launch
+                        }
                     }
                 }
 

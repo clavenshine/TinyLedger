@@ -154,22 +154,15 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "financial" -> Icons.Default.AccountBalance
         "redpacket" -> Icons.Default.CardGiftcard
         "utilities" -> Icons.Default.ElectricalServices
-        "credit_card_repay" -> Icons.Default.CreditCard
-        "mortgage" -> Icons.Default.House
-        "repay_loan" -> Icons.Default.Payments
-        "alipay_repay" -> Icons.Default.Payment
-        "douyin_repay" -> Icons.Default.Payment
-        "jd_repay" -> Icons.Default.Payment
-        "account_transfer" -> Icons.Default.SwapHoriz
         "dividend" -> Icons.Default.Paid
         "refund" -> Icons.Default.AssignmentReturn
-        "deposit_back" -> Icons.Default.Savings
-        "收回借款" -> Icons.Default.CallReceived
+        "deposit_back" -> Icons.Default.AccountBalanceWallet
         "accommodation" -> Icons.Default.Hotel
         "charity" -> Icons.Default.VolunteerActivism
         "send_redpacket" -> Icons.Default.CardGiftcard
         "family_living" -> Icons.Default.FamilyRestroom
-        "income_transfer" -> Icons.Default.SwapHoriz
+        "children" -> Icons.Default.ChildCare
+        "elderly_care" -> Icons.Default.Elderly
         "reimbursement" -> Icons.Default.RequestPage
         else -> Icons.Default.Category
     }

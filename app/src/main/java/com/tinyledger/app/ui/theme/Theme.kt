@@ -1,11 +1,12 @@
 package com.tinyledger.app.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
+import android.content.res.Configuration
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.tinyledger.app.domain.model.AppColorScheme
@@ -133,16 +134,32 @@ fun TinyLedgerTheme(
     appColorScheme: AppColorScheme = AppColorScheme.fromTheme(ColorTheme.IOS_BLUE),
     content: @Composable () -> Unit
 ) {
+    // 使用 LocalConfiguration 直接检测系统深色模式
+    val configuration = LocalConfiguration.current
+    val systemIsDark = (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    
+    // 深色模式自动切换逻辑：
+    // 1. 当系统处于深色模式时，强制使用深色专属主题
+    // 2. 深色模式下锁定主题选择，不可切换
+    // 3. 系统关闭深色模式后，恢复用户选择的主题
+    val effectiveColorScheme = if (systemIsDark) {
+        // 系统深色模式：强制使用深色专属主题（午夜深蓝）
+        AppColorScheme.fromTheme(ColorTheme.DARK_MIDNIGHT)
+    } else {
+        // 系统浅色模式：使用用户选择的主题
+        appColorScheme
+    }
+    
     val darkTheme = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.SYSTEM -> systemIsDark
     }
 
     val colorScheme = if (darkTheme) {
-        darkColorScheme(appColorScheme)
+        darkColorScheme(effectiveColorScheme)
     } else {
-        lightColorScheme(appColorScheme)
+        lightColorScheme(effectiveColorScheme)
     }
 
     val view = LocalView.current
@@ -155,7 +172,7 @@ fun TinyLedgerTheme(
     }
 
     CompositionLocalProvider(
-        LocalAppColorScheme provides appColorScheme
+        LocalAppColorScheme provides effectiveColorScheme
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

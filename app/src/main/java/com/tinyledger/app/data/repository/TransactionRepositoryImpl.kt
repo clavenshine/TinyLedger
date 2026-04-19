@@ -65,6 +65,19 @@ class TransactionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertTransaction(transaction: Transaction): Long {
+        // 校验交易日期不能早于已启用账户的期初余额日期
+        transaction.accountId?.let { accountId ->
+            val account = accountDao.getAccountById(accountId)
+            if (account != null && !account.isDisabled && account.initialBalanceDate.isNotEmpty()) {
+                try {
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val initialDate = sdf.parse(account.initialBalanceDate)
+                    if (initialDate != null && transaction.date < initialDate.time) {
+                        return -1L // 日期早于期初余额日期，拒绝插入
+                    }
+                } catch (_: Exception) {}
+            }
+        }
         val id = transactionDao.insertTransaction(transaction.toEntity())
         // 保存后立即更新账户余额
         transaction.accountId?.let { updateAccountBalanceById(it) }
@@ -72,6 +85,21 @@ class TransactionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertDualTransaction(fromTransaction: Transaction, toTransaction: Transaction): Pair<Long, Long> {
+        // 校验交易日期不能早于已启用账户的期初余额日期
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        for (tx in listOf(fromTransaction, toTransaction)) {
+            tx.accountId?.let { accountId ->
+                val account = accountDao.getAccountById(accountId)
+                if (account != null && !account.isDisabled && account.initialBalanceDate.isNotEmpty()) {
+                    try {
+                        val initialDate = sdf.parse(account.initialBalanceDate)
+                        if (initialDate != null && tx.date < initialDate.time) {
+                            return Pair(-1L, -1L)
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
         // 先保存第一笔交易（fromAccount，负数金额）
         val fromEntity = fromTransaction.toEntity()
         val fromId = transactionDao.insertTransaction(fromEntity)
@@ -194,6 +222,26 @@ class TransactionRepositoryImpl @Inject constructor(
         transactionDao.updateCategoryForTransactions(oldCategoryId, newCategoryId)
     }
 
+    override fun getTransactionsByAccountIdsAndDateRange(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<List<Transaction>> {
+        return if (accountIds.isEmpty()) {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        } else {
+            transactionDao.getTransactionsByAccountIdsAndDateRange(accountIds, startDate, endDate).map { entities ->
+                entities.map { it.toDomain() }
+            }
+        }
+    }
+
+    override fun getExpenseByCategoryForAccounts(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<Map<String, Double>> {
+        return if (accountIds.isEmpty()) {
+            kotlinx.coroutines.flow.flowOf(emptyMap())
+        } else {
+            transactionDao.getExpenseByCategoryForAccounts(accountIds, startDate, endDate).map { list ->
+                list.associate { it.category to it.total }
+            }
+        }
+    }
+
     private fun TransactionEntity.toDomain(): Transaction {
         return Transaction(
             id = id,
@@ -203,7 +251,8 @@ class TransactionRepositoryImpl @Inject constructor(
             note = note,
             date = date,
             accountId = accountId,
-            relatedTransactionId = relatedTransactionId
+            relatedTransactionId = relatedTransactionId,
+            imagePath = imagePath
         )
     }
 
@@ -217,6 +266,7 @@ class TransactionRepositoryImpl @Inject constructor(
             date = date,
             accountId = accountId,
             relatedTransactionId = relatedTransactionId,
+            imagePath = imagePath,
             updatedAt = System.currentTimeMillis()
         )
     }

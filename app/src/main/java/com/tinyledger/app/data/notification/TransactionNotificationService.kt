@@ -202,6 +202,24 @@ class TransactionNotificationService : NotificationListenerService() {
                 Log.d(TAG, "[通知捕获] 自动记账未开启，跳过 $packageName")
                 return
             }
+            
+            // 过滤淘宝、天猫的非交易类通知
+            if (packageName == "com.taobao.taobao" || packageName == "com.tmall.wireless") {
+                val contentToCheck = "$title $fullContent $subText".lowercase()
+                // 只处理包含交易关键词的通知
+                val hasTransactionKeywords = listOf(
+                    "支付", "付款", "扣款", "消费", "订单", "交易", 
+                    "支出", "到账", "收款", "退款", "金额", "元",
+                    "成功", "完成", "确认"
+                ).any { keyword -> contentToCheck.contains(keyword) }
+                
+                if (!hasTransactionKeywords) {
+                    Log.d(TAG, "[通知捕获] 跳过淘宝/天猫非交易类通知: $appLabel - '${title.take(30)}'")
+                    return
+                }
+                Log.d(TAG, "[通知捕获] 检测到淘宝/天猫交易通知: $appLabel")
+            }
+            
             Log.d(TAG, "[通知捕获] 检测到支付应用: $appLabel ($packageName)")
             handlePaymentNotification(packageName, appLabel, title, text, fullContent, subText)
             return
@@ -620,7 +638,7 @@ class TransactionNotificationService : NotificationListenerService() {
     ): Long? {
         val targetType = when (packageName) {
             "com.tencent.mm" -> AccountType.WECHAT
-            "com.eg.android.AlipayGphone" -> AccountType.HUA_BEI
+            "com.eg.android.AlipayGphone" -> AccountType.CONSUMPTION_PLATFORM
             else -> return null
         }
         return accounts.find { it.type == targetType }?.id

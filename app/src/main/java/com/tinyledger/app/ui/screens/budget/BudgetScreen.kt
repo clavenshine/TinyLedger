@@ -60,11 +60,11 @@ fun BudgetScreen(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF5F5F5)
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
-        containerColor = Color(0xFFF5F5F5)
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -82,7 +82,7 @@ fun BudgetScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.surface
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -100,7 +100,7 @@ fun BudgetScreen(
 
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.surface
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -129,7 +129,7 @@ fun BudgetScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8E8E8))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                         listOf("月预算" to BudgetViewMode.MONTHLY, "年预算" to BudgetViewMode.YEARLY).forEach { (label, mode) ->
@@ -175,7 +175,7 @@ fun BudgetScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Row(
                             modifier = Modifier
@@ -277,7 +277,7 @@ private fun BudgetSummaryCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(
@@ -350,9 +350,9 @@ private fun BudgetSummaryCard(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 StatItem("已支出", "${uiState.currencySymbol} ${String.format("%.2f", uiState.spent)}")
-                Box(modifier = Modifier.width(1.dp).height(36.dp).background(Color(0xFFE8E8E8)))
+                Box(modifier = Modifier.width(1.dp).height(36.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                 StatItem("超额支出", "${uiState.currencySymbol} ${String.format("%.2f", uiState.overBudget)}")
-                Box(modifier = Modifier.width(1.dp).height(36.dp).background(Color(0xFFE8E8E8)))
+                Box(modifier = Modifier.width(1.dp).height(36.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                 StatItem("日均消费", "${uiState.currencySymbol} ${String.format("%.2f", uiState.dailyAvg)}")
             }
         }
