@@ -1,4 +1,4 @@
-# TinyLedger v2.5.6 Release Notes
+# TinyLedger v2.5.7 Release Notes
 
 ## 🆕 新增功能
 
@@ -59,4 +59,4 @@
 ---
 
 **发布日期**: 2026-04-15  
-**APK文件**: TinyLedger-v2.5.6-release.apk
+**APK文件**: TinyLedger-v2.5.7-release.apk
