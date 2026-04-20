@@ -1,6 +1,7 @@
 package com.tinyledger.app.ui.screens.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -92,6 +94,7 @@ fun AddTransactionScreen(
     var imagePickerOption by remember { mutableStateOf("") } // "camera" or "gallery"
     var showPermissionDialog by remember { mutableStateOf(false) }
     var permissionType by remember { mutableStateOf("") } // "camera" or "storage"
+    var pendingCameraPhotoPath by remember { mutableStateOf<String?>(null) } // 保存相机拍照的临时文件路径
 
     // 相机启动器
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -100,20 +103,55 @@ fun AddTransactionScreen(
             if (success) {
                 // 根据交易类型决定最大图片数量
                 val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
-                viewModel.addImage("camera_${System.currentTimeMillis()}.jpg", maxImages)
+                // 将拍照的临时文件复制到应用私有目录
+                val sourcePath = pendingCameraPhotoPath
+                if (sourcePath != null) {
+                    val sourceFile = java.io.File(sourcePath)
+                    if (sourceFile.exists()) {
+                        val timestamp = System.currentTimeMillis()
+                        val index = uiState.imagePaths.size + 1
+                        val fileName = "transaction_${timestamp}_${index}.jpg"
+                        val destFile = java.io.File(context.filesDir, "transaction_images/$fileName")
+                        destFile.parentFile?.mkdirs()
+                        sourceFile.copyTo(destFile, overwrite = true)
+                        sourceFile.delete()
+                        viewModel.addImage(destFile.absolutePath, maxImages)
+                    }
+                }
+                pendingCameraPhotoPath = null
             }
             showImagePicker = false
         }
     )
 
-    // 相册启动器
+    // 相册启动器 - 支持多选
     val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                // 根据交易类型决定最大图片数量
-                val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
-                viewModel.addImage(it.toString(), maxImages)
+        contract = ActivityResultContracts.GetMultipleContents(),
+        onResult = { uris: List<Uri> ->
+            // 根据交易类型决定最大图片数量
+            val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
+            val remaining = maxImages - uiState.imagePaths.size
+            if (remaining > 0 && uris.isNotEmpty()) {
+                val urisToAdd = uris.take(remaining) // 只取剩余可添加的数量
+                urisToAdd.forEachIndexed { i, uri ->
+                    // 将URI的图片复制到应用私有目录
+                    val timestamp = System.currentTimeMillis() + i // 避免文件名冲突
+                    val index = uiState.imagePaths.size + 1
+                    val fileName = "transaction_${timestamp}_${index}.jpg"
+                    val destFile = java.io.File(context.filesDir, "transaction_images/$fileName")
+                    destFile.parentFile?.mkdirs()
+                    try {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        viewModel.addImage(destFile.absolutePath, maxImages)
+                    } catch (e: Exception) {
+                        // 复制失败时回退到URI方式
+                        viewModel.addImage(uri.toString(), maxImages)
+                    }
+                }
             }
             showImagePicker = false
         }
@@ -126,11 +164,13 @@ fun AddTransactionScreen(
             if (isGranted) {
                 // 权限已授予，执行相应操作
                 if (permissionType == "camera") {
+                    val photoFile = java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg")
+                    pendingCameraPhotoPath = photoFile.absolutePath
                     cameraLauncher.launch(
                         androidx.core.content.FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.fileprovider",
-                            java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg")
+                            photoFile
                         )
                     )
                 } else if (permissionType == "storage") {
@@ -189,6 +229,11 @@ fun AddTransactionScreen(
 
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
+            // 如果声音设置已开启，播放“咻”提示音
+            if (com.tinyledger.app.data.notification.TransactionNotificationService.isSoundEnabled(context)) {
+                com.tinyledger.app.data.notification.TransactionNotificationHelper.playWhooshSound()
+                kotlinx.coroutines.delay(300)
+            }
             onNavigateBack()
         }
     }
@@ -224,7 +269,7 @@ fun AddTransactionScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Transaction Type Selector - 4 types
             Card(
@@ -242,7 +287,15 @@ fun AddTransactionScreen(
                     FilterChip(
                         selected = uiState.transactionType == TransactionType.EXPENSE,
                         onClick = { viewModel.setTransactionType(TransactionType.EXPENSE) },
-                        label = { Text("支出", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        label = { 
+                            Text(
+                                "支出", 
+                                fontSize = 16.sp, 
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
@@ -252,7 +305,15 @@ fun AddTransactionScreen(
                     FilterChip(
                         selected = uiState.transactionType == TransactionType.INCOME,
                         onClick = { viewModel.setTransactionType(TransactionType.INCOME) },
-                        label = { Text("收入", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        label = { 
+                            Text(
+                                "收入", 
+                                fontSize = 16.sp, 
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
@@ -262,7 +323,15 @@ fun AddTransactionScreen(
                     FilterChip(
                         selected = uiState.transactionType == TransactionType.TRANSFER,
                         onClick = { viewModel.setTransactionType(TransactionType.TRANSFER) },
-                        label = { Text("转账", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        label = { 
+                            Text(
+                                "转账", 
+                                fontSize = 16.sp, 
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFFFF9800).copy(alpha = 0.2f),
@@ -272,7 +341,15 @@ fun AddTransactionScreen(
                     FilterChip(
                         selected = uiState.transactionType == TransactionType.LENDING,
                         onClick = { viewModel.setTransactionType(TransactionType.LENDING) },
-                        label = { Text("借贷", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                        label = { 
+                            Text(
+                                "借贷", 
+                                fontSize = 16.sp, 
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF9C27B0).copy(alpha = 0.2f),
@@ -622,22 +699,29 @@ fun AddTransactionScreen(
                                         )
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize()) {
-                                            Icon(
-                                                imageVector = Icons.Default.Image,
-                                                contentDescription = "图片$index",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .align(Alignment.Center)
+                                            // 使用 Coil 加载并显示真实图片
+                                            // 判断路径类型：本地文件路径用File对象，URI字符串用Uri
+                                            val imageModel: Any = if (imagePath.startsWith("content://") || imagePath.startsWith("file://")) {
+                                                android.net.Uri.parse(imagePath)
+                                            } else {
+                                                java.io.File(imagePath)
+                                            }
+                                            coil.compose.AsyncImage(
+                                                model = imageModel,
+                                                contentDescription = "图片${index + 1}",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
                                             )
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "删除图片",
-                                                tint = MaterialTheme.colorScheme.error,
+                                            // 删除按钮 - 红色加粗×符号
+                                            Text(
+                                                text = "\u00D7",
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.ExtraBold,
                                                 modifier = Modifier
-                                                    .size(20.dp)
                                                     .align(Alignment.TopEnd)
                                                     .padding(4.dp)
+                                                    .clickable { viewModel.removeImage(index) }
                                             )
                                         }
                                     }
@@ -679,7 +763,7 @@ fun AddTransactionScreen(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(0.dp))
             }
 
             // Note Input - Feature 3: Floating borderless input with gradient border on focus
@@ -772,6 +856,142 @@ fun AddTransactionScreen(
                 }
             }
 
+            // 删除按钮 - 仅编辑模式显示，风格与页面一致
+            if (uiState.isEditing) {
+                var showDeleteConfirm by remember { mutableStateOf(false) }
+                
+                OutlinedButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // 删除确认对话框
+                if (showDeleteConfirm) {
+                    val scale = remember { Animatable(0f) }
+                    LaunchedEffect(Unit) {
+                        scale.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            )
+                        )
+                    }
+                    
+                    Dialog(
+                        onDismissRequest = { showDeleteConfirm = false },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .scale(scale.value)
+                                    .graphicsLayer { shadowElevation = 16f },
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                Brush.radialGradient(
+                                                    colors = listOf(
+                                                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                                                        MaterialTheme.colorScheme.error.copy(alpha = 0.05f)
+                                                    )
+                                                )
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(44.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "删除记账记录",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "删除后将无法恢复，请谨慎操作",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 24.sp
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { showDeleteConfirm = false },
+                                            modifier = Modifier.weight(1f).height(48.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                        ) {
+                                            Text("取消", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                showDeleteConfirm = false
+                                                viewModel.deleteCurrentTransaction()
+                                            },
+                                            modifier = Modifier.weight(1f).height(48.dp),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("确认删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Save Button - Feature 3: Color deepens on press with brief loading animation
             val saveButtonColor by animateColorAsState(
                 targetValue = if (isSaveAnimating || uiState.isSaving)
@@ -835,39 +1055,195 @@ fun AddTransactionScreen(
         }
     }
 
-    // Date Picker Bottom Sheet
+    // Date Picker Bottom Sheet - 自定义日历样式
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = uiState.date
-        )
-        // Monitor for actual date changes from user interaction
-        LaunchedEffect(Unit) {
-            snapshotFlow { datePickerState.selectedDateMillis }
-                .drop(1)  // Skip initial value to avoid race condition on first click
-                .collect { selectedMillis ->
-                    if (selectedMillis != null && selectedMillis != uiState.date) {
-                        viewModel.setDate(selectedMillis)
-                        showDatePicker = false
-                    }
-                }
+        val currentDate = remember { 
+            val cal = Calendar.getInstance()
+            Triple(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
         }
+        
+        // 解析已选择的日期
+        val selectedDateFromState = remember(uiState.date) {
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = uiState.date
+            Triple(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+        }
+        
+        var selectedYear by remember { mutableStateOf(selectedDateFromState.first) }
+        var selectedMonth by remember { mutableStateOf(selectedDateFromState.second) }
+        var selectedDay by remember { mutableStateOf(selectedDateFromState.third) }
+        
         ModalBottomSheet(
             onDismissRequest = { showDatePicker = false },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             windowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = null // 去掉拖拽指示器
+            dragHandle = null
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(bottom = 16.dp)
+                    .padding(16.dp)
             ) {
-                DatePicker(
-                    state = datePickerState,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
+                // 顶部导航栏：年份、月份、左右箭头
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 左箭头
+                    IconButton(onClick = {
+                        if (selectedMonth == 1) {
+                            selectedMonth = 12
+                            selectedYear--
+                        } else {
+                            selectedMonth--
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            contentDescription = "上个月",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    
+                    // 年份和月份
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${selectedYear}年",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                        ) {
+                            Text(
+                                text = "${selectedMonth}月",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+                    }
+                    
+                    // 右箭头
+                    IconButton(onClick = {
+                        if (selectedMonth == 12) {
+                            selectedMonth = 1
+                            selectedYear++
+                        } else {
+                            selectedMonth++
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowRight,
+                            contentDescription = "下个月",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 星期标题
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    listOf("一", "二", "三", "四", "五", "六", "日").forEach { day ->
+                        Text(
+                            text = day,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (day == "六" || day == "日") 
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // 日历网格
+                val cal = Calendar.getInstance()
+                cal.set(selectedYear, selectedMonth - 1, 1)
+                val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
+                val adjustedFirstDay = if (firstDayOfWeek == 0) 6 else firstDayOfWeek - 1
+                val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                
+                val totalCells = adjustedFirstDay + daysInMonth
+                val rows = (totalCells + 6) / 7
+                
+                for (row in 0 until rows) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        for (col in 0..6) {
+                            val cellIndex = row * 7 + col
+                            val day = cellIndex - adjustedFirstDay + 1
+                            
+                            if (day in 1..daysInMonth) {
+                                val isSelected = selectedDay == day
+                                val isToday = currentDate.first == selectedYear && 
+                                             currentDate.second == selectedMonth && 
+                                             currentDate.third == day
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .padding(2.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else Color.Transparent
+                                        )
+                                        .let { modifier ->
+                                            if (isToday && !isSelected) {
+                                                modifier.border(
+                                                    width = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                            } else {
+                                                modifier
+                                            }
+                                        }
+                                        .clickable {
+                                            selectedDay = day
+                                            // 自动确认选择
+                                            val selectedCal = Calendar.getInstance()
+                                            selectedCal.set(selectedYear, selectedMonth - 1, day)
+                                            viewModel.setDate(selectedCal.timeInMillis)
+                                            showDatePicker = false
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$day",
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal
+                                        ),
+                                        color = when {
+                                            isSelected -> MaterialTheme.colorScheme.onPrimary
+                                            isToday -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -934,215 +1310,342 @@ fun AddTransactionScreen(
         )
     }
 
-    // 未添加账户提示对话框 - 精美卡片样式
+    // 未添加账户提示对话框 - 底部弹出式精美样式
     if (showNoAccountDialog) {
-        Dialog(onDismissRequest = { showNoAccountDialog = false }) {
-            Card(
+        ModalBottomSheet(
+            onDismissRequest = { showNoAccountDialog = false },
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = MaterialTheme.colorScheme.surface,
+            dragHandle = null
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp, top = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                Column(
+                // 标题
+                Text(
+                    text = "账户未建立",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                // 图标
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBalanceWallet,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // 说明文字
+                Text(
+                    text = "记账前需要先建立账户\n您可以在账户管理中添加银行卡、微信、支付宝等",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 24.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 去建立账户按钮 - 渐变背景
+                Button(
+                    onClick = {
+                        showNoAccountDialog = false
+                        onNavigateToAccounts()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 8.dp,
+                        pressedElevation = 4.dp
+                    )
                 ) {
-                    // 图标
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(
-                                MaterialTheme.colorScheme.primaryContainer
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    // 标题
+                    Icon(
+                        imageVector = Icons.Default.AddCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "账户未建立",
-                        style = MaterialTheme.typography.headlineSmall,
+                        text = "去建立账户",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
+                }
 
-                    // 说明文字
+                // 返回按钮 - 轮廓样式
+                OutlinedButton(
+                    onClick = { showNoAccountDialog = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    border = BorderStroke(
+                        width = 2.dp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 4.dp,
+                        pressedElevation = 2.dp
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "记账前需要先建立账户\n您可以在账户管理中添加银行卡、微信、支付宝等",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp
+                        text = "返回",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 确认按钮
-                    Button(
-                        onClick = {
-                            showNoAccountDialog = false
-                            onNavigateToAccounts()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "去建立账户",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // 取消按钮
-                    TextButton(
-                        onClick = { showNoAccountDialog = false },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "返回",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
         }
     }
 
-    // 图片选择器弹窗
+    // 图片选择器弹窗 - 美化版
     if (showImagePicker) {
-        Dialog(onDismissRequest = { showImagePicker = false }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        // 弹性抖动动画
+        val scale = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+        
+        Dialog(
+            onDismissRequest = { showImagePicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
             ) {
-                Column(
+                Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "添加图片",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        .fillMaxWidth(0.9f)
+                        .scale(scale.value)
+                        .graphicsLayer {
+                            shadowElevation = 16f
+                        },
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 16.dp
                     )
-                    
-                    // 拍照按钮
-                    Button(
-                        onClick = {
-                            // 检查相机权限
-                            val hasCameraPermission = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.CAMERA
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                            if (hasCameraPermission) {
-                                // 已有权限，直接打开相机
-                                val photoFile = java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg")
-                                val photoUri = androidx.core.content.FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    photoFile
-                                )
-                                cameraLauncher.launch(photoUri)
-                            } else {
-                                // 请求权限
-                                permissionType = "camera"
-                                permissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("拍照", style = MaterialTheme.typography.titleMedium)
-                    }
-                    
-                    // 相册按钮
-                    Button(
-                        onClick = {
-                            // 检查存储权限
-                            val hasStoragePermission = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.READ_EXTERNAL_STORAGE
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                            if (hasStoragePermission) {
-                                // 已有权限，直接打开相册
-                                galleryLauncher.launch("image/*")
-                            } else {
-                                // 请求权限
-                                permissionType = "storage"
-                                permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("从相册选择", style = MaterialTheme.typography.titleMedium)
-                    }
-                    
-                    // 取消按钮
-                    TextButton(
-                        onClick = { showImagePicker = false },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                        // 图标
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(44.dp)
+                            )
+                        }
+                        
+                        // 标题
                         Text(
-                            text = "取消",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "添加图片",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        
+                        // 说明文字
+                        Text(
+                            text = "最多可添加${if (uiState.transactionType == TransactionType.LENDING) 9 else 3}张图片",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 24.sp
+                        )
+                        
+                        // 拍照按钮
+                        Button(
+                            onClick = {
+                                showImagePicker = false
+                                // 检查相机权限
+                                val hasCameraPermission = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.CAMERA
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                                if (hasCameraPermission) {
+                                    // 已有权限，直接打开相机
+                                    val photoFile = java.io.File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg")
+                                    pendingCameraPhotoPath = photoFile.absolutePath
+                                    val photoUri = androidx.core.content.FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        photoFile
+                                    )
+                                    cameraLauncher.launch(photoUri)
+                                } else {
+                                    // 请求权限
+                                    permissionType = "camera"
+                                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 8.dp,
+                                pressedElevation = 4.dp
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("拍照", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        
+                        // 相册按钮
+                        Button(
+                            onClick = {
+                                showImagePicker = false
+                                // 检查存储权限 - 适配Android 13+
+                                val hasStoragePermission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                    // Android 13+ 使用 READ_MEDIA_IMAGES
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_MEDIA_IMAGES
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                } else {
+                                    // Android 12及以下使用 READ_EXTERNAL_STORAGE
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_EXTERNAL_STORAGE
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                }
+
+                                if (hasStoragePermission) {
+                                    // 已有权限，直接打开相册
+                                    galleryLauncher.launch("image/*")
+                                } else {
+                                    // 请求权限
+                                    permissionType = "storage"
+                                    val permission = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                        Manifest.permission.READ_MEDIA_IMAGES
+                                    } else {
+                                        Manifest.permission.READ_EXTERNAL_STORAGE
+                                    }
+                                    permissionLauncher.launch(permission)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 8.dp,
+                                pressedElevation = 4.dp
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("从相册选择", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        
+                        // 取消按钮
+                        OutlinedButton(
+                            onClick = { showImagePicker = false },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Text(
+                                text = "取消",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }

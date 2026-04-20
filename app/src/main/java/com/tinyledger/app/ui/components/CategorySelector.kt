@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
@@ -60,8 +61,8 @@ fun CategorySelector(
     Column(modifier = modifier) {
         // Non-lazy grid: display all items without scrolling
         // This avoids the crash caused by nesting LazyVerticalGrid inside verticalScroll
-        val itemsPerRow = 4
-        // 将“分类管理”按钮作为最后一个元素加入列表
+        val itemsPerRow = 5  // 每行5个图标
+        // 将"分类管理"按钮作为最后一个元素加入列表
         val allItems = if (showAddButton && onAddCategory != null) {
             categories + listOf(Category("category_manage", "分类管理", "settings", TransactionType.EXPENSE))
         } else {
@@ -174,15 +175,9 @@ private fun CategoryItem(
 ) {
     val haptic = LocalHapticFeedback.current
     
-    val animatedBorderWidth by animateDpAsState(
-        targetValue = if (isSelected) 2.dp else 1.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "border_width"
-    )
-    
     Column(
         modifier = Modifier
-            .aspectRatio(1f)
+            .aspectRatio(0.85f)  // 调整高宽比，给文字更多空间
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 onClick = {
@@ -193,23 +188,14 @@ private fun CategoryItem(
                 },
                 onLongClick = onLongClick
             )
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                else MaterialTheme.colorScheme.surface
-            )
-            .border(
-                width = animatedBorderWidth,
-                color = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .padding(8.dp),
+            .background(Color.Transparent)  // 去掉外部方框背景
+            .padding(4.dp),  // 减少padding，给图标和文字更多空间
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(40.dp)  // 稍微减小图标尺寸
                 .clip(CircleShape)
                 .background(
                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -222,17 +208,20 @@ private fun CategoryItem(
                 contentDescription = null,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)  // 稍微减小图标大小
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))  // 减少间距
         Text(
             text = category.name,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp  // 稍微增大字体
+            ),
             textAlign = TextAlign.Center,
             color = if (isSelected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
+            maxLines = 1,
+            minLines = 1  // 确保至少显示一行
         )
     }
 }

@@ -32,6 +32,7 @@ import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 fun CategoryManageScreen(
     transactionType: TransactionType = TransactionType.EXPENSE,
     onNavigateBack: () -> Unit = {},
+    onNavigateToAddCategory: (TransactionType) -> Unit = {},
     viewModel: AddTransactionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -82,7 +83,7 @@ fun CategoryManageScreen(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.onSurface)
-                        .clickable { showAddDialog = true },
+                        .clickable { onNavigateToAddCategory(currentType) },  // 跳转到新建分类页面
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

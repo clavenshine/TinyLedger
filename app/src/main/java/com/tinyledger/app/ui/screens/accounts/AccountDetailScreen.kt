@@ -20,13 +20,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.AccountAttribute
@@ -430,7 +437,8 @@ fun AccountDetailScreen(
                 showDeleteConfirm = false
                 onNavigateBack()
             },
-            confirmColor = MaterialTheme.colorScheme.error
+            confirmColor = MaterialTheme.colorScheme.error,
+            countdownSeconds = 5  // 5秒倒计时
         )
     }
     
@@ -936,7 +944,7 @@ private fun ActionMenuItemModern(
 }
 
 /**
- * 美化的确认对话框 - 适配深色/浅色模式，带透明度背景和精致按钮
+ * 美化的确认对话框 - 适配深色/浅色模式，带弹性动画
  */
 @Composable
 private fun StyledConfirmDialog(
@@ -946,112 +954,159 @@ private fun StyledConfirmDialog(
     confirmText: String,
     dismissText: String,
     onConfirm: () -> Unit,
-    confirmColor: Color
+    confirmColor: Color,
+    countdownSeconds: Int = 0  // 倒计时秒数，0表示不启用
 ) {
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismissRequest
-    ) {
-        // 对话框容器 - 带描边和圆角
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 12.dp
+    // 弹性抖动动画
+    val scale = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        scale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
             )
+        )
+    }
+    
+    // 倒计时逻辑
+    var remainingSeconds by remember { mutableStateOf(countdownSeconds) }
+    val isCountdownActive = countdownSeconds > 0
+    
+    LaunchedEffect(isCountdownActive) {
+        if (isCountdownActive && remainingSeconds > 0) {
+            while (remainingSeconds > 0) {
+                kotlinx.coroutines.delay(1000)
+                remainingSeconds--
+            }
+        }
+    }
+    
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            // 对话框容器 - 带描边和圆角
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .scale(scale.value)
+                    .graphicsLayer {
+                        shadowElevation = 16f
+                    },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 16.dp
+                )
             ) {
-                // 标题
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                
-                // 消息
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-                
-                // 按钮行 - 居中排列
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    // 取消按钮 - 精致立体感
+                    // 图标
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clickable(onClick = onDismissRequest)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(20.dp))
                             .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                Brush.radialGradient(
                                     colors = listOf(
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                        confirmColor.copy(alpha = 0.2f),
+                                        confirmColor.copy(alpha = 0.05f)
                                     )
                                 )
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = dismissText,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Icon(
+                            imageVector = if (title.contains("删除")) Icons.Default.DeleteForever
+                            else if (title.contains("停用")) Icons.Default.Block
+                            else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = confirmColor,
+                            modifier = Modifier.size(44.dp)
                         )
                     }
                     
-                    // 确认按钮 - 精致立体感
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clickable(onClick = onConfirm)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    colors = listOf(
-                                        confirmColor.copy(alpha = 0.9f),
-                                        confirmColor
-                                    )
-                                )
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(14.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+                    // 标题
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    // 消息
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                    
+                    // 按钮行 - 居中排列
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = confirmText,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.Bold
+                        // 取消按钮 - 精致立体感
+                        OutlinedButton(
+                            onClick = onDismissRequest,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
                             ),
-                            color = androidx.compose.ui.graphics.Color.White
-                        )
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Text(
+                                text = dismissText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        
+                        // 确认按钮 - 精致立体感
+                        Button(
+                            onClick = onConfirm,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isCountdownActive && remainingSeconds > 0) 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                else confirmColor
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 8.dp,
+                                pressedElevation = 4.dp
+                            ),
+                            enabled = !isCountdownActive || remainingSeconds <= 0
+                        ) {
+                            Text(
+                                text = if (isCountdownActive && remainingSeconds > 0) 
+                                    "$confirmText ($remainingSeconds)"
+                                else confirmText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }

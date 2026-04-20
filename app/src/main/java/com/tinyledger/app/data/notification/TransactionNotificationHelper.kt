@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.media.ToneGenerator
 import android.os.Build
 import android.os.VibrationEffect
@@ -33,6 +35,48 @@ class TransactionNotificationHelper @Inject constructor(
         private const val TAG = "TxNotifHelper"
         private const val CHANNEL_ID = "transaction_confirmation"
         private const val NOTIFICATION_ID_BASE = 10000
+
+        /**
+         * 播放"咻"的滑降提示音
+         * 使用AudioTrack生成从高频滑降到低频的频率扫描音效
+         */
+        fun playWhooshSound() {
+            Thread {
+                try {
+                    val sampleRate = 44100
+                    val durationSec = 0.18
+                    val numSamples = (sampleRate * durationSec).toInt()
+                    val startFreq = 1400.0  // 起始高频
+                    val endFreq = 350.0      // 结束低频
+
+                    val samples = ShortArray(numSamples)
+                    var phase = 0.0
+                    for (i in 0 until numSamples) {
+                        val progress = i.toDouble() / numSamples
+                        val freq = startFreq + (endFreq - startFreq) * progress
+                        phase += 2.0 * Math.PI * freq / sampleRate
+                        // 包络线：渐弱效果，让声音更自然
+                        val envelope = (1.0 - progress * progress) * 0.5
+                        samples[i] = (envelope * Short.MAX_VALUE * Math.sin(phase)).toInt().toShort()
+                    }
+
+                    val audioTrack = AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        numSamples * 2,
+                        AudioTrack.MODE_STATIC
+                    )
+                    audioTrack.write(samples, 0, numSamples)
+                    audioTrack.play()
+                    Thread.sleep(500)
+                    try { audioTrack.release() } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.e(TAG, "播放咻声失败", e)
+                }
+            }.start()
+        }
     }
 
     /**

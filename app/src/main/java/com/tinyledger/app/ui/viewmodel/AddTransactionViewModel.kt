@@ -66,6 +66,14 @@ class AddTransactionViewModel @Inject constructor(
 
     private var editingTransactionId: Long? = null
 
+    fun deleteCurrentTransaction() {
+        val id = editingTransactionId ?: return
+        viewModelScope.launch {
+            transactionRepository.deleteTransaction(id)
+            _uiState.update { it.copy(saveSuccess = true) }
+        }
+    }
+
     init {
         loadSettings()
         loadAccounts()
@@ -141,6 +149,13 @@ class AddTransactionViewModel @Inject constructor(
                             ?: accountRepository.getAccountById(accountId)
                     }
                     
+                    // 加载图片路径（支持多图，以||分隔）
+                    val imagePaths = if (!tx.imagePath.isNullOrEmpty()) {
+                        tx.imagePath.split("||").filter { it.isNotBlank() }
+                    } else {
+                        emptyList()
+                    }
+                    
                     _uiState.update { state ->
                         state.copy(
                             transactionType = tx.type,
@@ -151,7 +166,8 @@ class AddTransactionViewModel @Inject constructor(
                             date = tx.date,
                             isEditing = true,
                             selectedFromAccount = fromAccount,
-                            selectedToAccount = toAccount
+                            selectedToAccount = toAccount,
+                            imagePaths = imagePaths
                         )
                     }
                 } else {
@@ -160,6 +176,14 @@ class AddTransactionViewModel @Inject constructor(
                         _uiState.value.accounts.find { it.id == accountId }
                             ?: accountRepository.getAccountById(accountId)
                     }
+                    
+                    // 加载图片路径（支持多图，以||分隔）
+                    val imagePaths = if (!tx.imagePath.isNullOrEmpty()) {
+                        tx.imagePath.split("||").filter { it.isNotBlank() }
+                    } else {
+                        emptyList()
+                    }
+                    
                     _uiState.update { state ->
                         state.copy(
                             transactionType = tx.type,
@@ -169,7 +193,8 @@ class AddTransactionViewModel @Inject constructor(
                             note = tx.note ?: "",
                             date = tx.date,
                             isEditing = true,
-                            selectedAccount = selectedAccount
+                            selectedAccount = selectedAccount,
+                            imagePaths = imagePaths
                         )
                     }
                 }
@@ -326,6 +351,14 @@ class AddTransactionViewModel @Inject constructor(
     fun addImage(imagePath: String, maxImages: Int = 3) {
         val currentPaths = _uiState.value.imagePaths
         if (currentPaths.size >= maxImages) return // 最多maxImages张
+        
+        // 生成唯一文件名：transaction_timestamp_index.jpg
+        val timestamp = System.currentTimeMillis()
+        val index = currentPaths.size + 1
+        val uniqueFileName = "transaction_${timestamp}_${index}.jpg"
+        
+        // TODO: 这里需要将图片复制到应用私有目录
+        // 目前先保存原始路径，后续在saveTransaction时处理
         _uiState.update { it.copy(imagePaths = currentPaths + imagePath) }
     }
 
@@ -539,7 +572,7 @@ class AddTransactionViewModel @Inject constructor(
                                 note = state.note.ifBlank { null },
                                 date = state.date,
                                 accountId = accountId,
-                                imagePath = state.imagePath
+                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
                             )
                             val insertResult = transactionRepository.insertTransaction(transaction)
                             if (insertResult == -1L) {
@@ -556,7 +589,7 @@ class AddTransactionViewModel @Inject constructor(
                                 note = state.note.ifBlank { null },
                                 date = state.date,
                                 accountId = accountId,
-                                imagePath = state.imagePath
+                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
                             )
                             transactionRepository.updateTransaction(transaction)
                         }
@@ -569,7 +602,7 @@ class AddTransactionViewModel @Inject constructor(
                             note = state.note.ifBlank { null },
                             date = state.date,
                             accountId = accountId,
-                            imagePath = state.imagePath
+                            imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
                         )
                         val insertResult = transactionRepository.insertTransaction(transaction)
                         if (insertResult == -1L) {

@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -63,7 +64,7 @@ fun AccountsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToAccountDetail: (Long) -> Unit = {},
     onNavigateToRepay: (Account) -> Unit = {},
-    onNavigateToAddAccount: () -> Unit = {},
+    onNavigateToAddAccount: (Int) -> Unit = {},
     viewModel: AccountViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -124,7 +125,7 @@ fun AccountsScreen(
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onNavigateToAddAccount() },
+                        .clickable { onNavigateToAddAccount(selectedTab) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -537,7 +538,7 @@ private fun AddAccountDialog(
     // Credit account fields
     var creditLimit by remember { mutableStateOf("") }
     var billDay by remember { mutableStateOf("1") }
-    var repaymentDay by remember { mutableStateOf("10") }
+    var repaymentDay by remember { mutableStateOf("8") }
     
     // 期初余额日期
     var initialBalanceDate by remember { mutableStateOf("") }
@@ -736,51 +737,29 @@ private fun AddAccountDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 
-                // 账单日和还款日 - 同一行显示
+                // 账单日和还款日 - 同一行显示，使用数字滚动选择器
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 账单日 - 缩小宽度
-                    Column(
-                        modifier = Modifier.weight(0.45f),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "账单日",
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        NumberPickerWithLabel(
-                            label = "",
-                            value = billDay.toIntOrNull() ?: 1,
-                            range = 1..31,
-                            onValueChange = { billDay = it.toString() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                    // 账单日
+                    NumberPickerField(
+                        label = "账单日",
+                        value = billDay.toIntOrNull() ?: 1,
+                        onValueChange = { billDay = it.toString() },
+                        modifier = Modifier.weight(1f),
+                        range = 1..31
+                    )
                     
-                    // 还款日 - 缩小宽度
-                    Column(
-                        modifier = Modifier.weight(0.45f),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "还款日",
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        NumberPickerWithLabel(
-                            label = "",
-                            value = repaymentDay.toIntOrNull() ?: 10,
-                            range = 1..31,
-                            onValueChange = { repaymentDay = it.toString() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                    // 还款日
+                    NumberPickerField(
+                        label = "还款日",
+                        value = repaymentDay.toIntOrNull() ?: 8,
+                        onValueChange = { repaymentDay = it.toString() },
+                        modifier = Modifier.weight(1f),
+                        range = 1..31
+                    )
                 }
             } else {
                 // 现金账户：卡号后4位
@@ -942,8 +921,10 @@ fun EditAccountDialog(
     hasUnsettledDebt: Boolean = false
 ) {
     var name by remember { mutableStateOf(account.name) }
+    var selectedType by remember { mutableStateOf(account.type) }
     var selectedColor by remember { mutableStateOf(account.color) }
     var cardNumber by remember { mutableStateOf(account.cardNumber ?: "") }
+    var expanded by remember { mutableStateOf(false) }
     
     // 期初余额和日期
     var initialBalance by remember { mutableStateOf(account.initialBalance.toString()) }
@@ -953,7 +934,7 @@ fun EditAccountDialog(
     // Credit account fields
     var creditLimit by remember { mutableStateOf(account.creditLimit.toString().takeIf { account.creditLimit > 0 } ?: "") }
     var billDay by remember { mutableStateOf(account.billDay.toString().takeIf { account.billDay > 0 } ?: "1") }
-    var repaymentDay by remember { mutableStateOf(account.repaymentDay.toString().takeIf { account.repaymentDay > 0 } ?: "10") }
+    var repaymentDay by remember { mutableStateOf(account.repaymentDay.toString().takeIf { account.repaymentDay > 0 } ?: "8") }
     
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showDebtWarning by remember { mutableStateOf(false) }
@@ -1049,17 +1030,39 @@ fun EditAccountDialog(
                 singleLine = true
             )
             
-            // 显示账户类型（不可编辑）
-            OutlinedTextField(
-                value = account.type.displayName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("账户类型") },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    Icon(getAccountIcon(account.type.icon), contentDescription = null)
+            // 账户类型选择（可编辑）
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            ) {
+                OutlinedTextField(
+                    value = selectedType.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("账户类型") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    getAccountTypesByAttribute(account.attribute).forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.displayName) },
+                            onClick = {
+                                selectedType = type
+                                expanded = false
+                            },
+                            leadingIcon = {
+                                Icon(getAccountIcon(type.icon), contentDescription = null)
+                            }
+                        )
+                    }
                 }
-            )
+            }
             
             // 期初余额 + 期初余额日期（同一行）
             Row(
@@ -1108,8 +1111,8 @@ fun EditAccountDialog(
                 )
             }
             
-            // 信用账户字段
-            if (account.attribute == AccountAttribute.CREDIT) {
+            // 信用账户字段（CREDIT_ACCOUNT类型显示）
+            if (account.attribute == AccountAttribute.CREDIT_ACCOUNT) {
                 OutlinedTextField(
                     value = creditLimit,
                     onValueChange = { creditLimit = it.filter { c -> c.isDigit() || c == '.' } },
@@ -1119,55 +1122,29 @@ fun EditAccountDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 
-                // 账单日和还款日 - 同一行显示
+                // 账单日和还款日 - 同一行显示，使用数字滚动选择器
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 账单日 - 缩小宽度
-                    Column(
-                        modifier = Modifier.weight(0.45f),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "账单日",
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        OutlinedTextField(
-                            value = billDay,
-                            onValueChange = { 
-                                if (it.isEmpty() || it.toIntOrNull() in 1..31) billDay = it 
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    }
+                    // 账单日
+                    NumberPickerField(
+                        label = "账单日",
+                        value = billDay.toIntOrNull() ?: 1,
+                        onValueChange = { billDay = it.toString() },
+                        modifier = Modifier.weight(1f),
+                        range = 1..31
+                    )
                     
-                    // 还款日 - 缩小宽度
-                    Column(
-                        modifier = Modifier.weight(0.45f),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "还款日",
-                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 16.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        OutlinedTextField(
-                            value = repaymentDay,
-                            onValueChange = { 
-                                if (it.isEmpty() || it.toIntOrNull() in 1..31) repaymentDay = it 
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    }
+                    // 还款日
+                    NumberPickerField(
+                        label = "还款日",
+                        value = repaymentDay.toIntOrNull() ?: 8,
+                        onValueChange = { repaymentDay = it.toString() },
+                        modifier = Modifier.weight(1f),
+                        range = 1..31
+                    )
                 }
             } else {
                 OutlinedTextField(
@@ -1253,8 +1230,8 @@ fun EditAccountDialog(
                             if (name.isNotBlank()) Modifier.clickable {
                                 onConfirm(
                                     name,
-                                    account.type,
-                                    account.type.icon,
+                                    selectedType,
+                                    selectedType.icon,
                                     selectedColor,
                                     cardNumber.takeIf { it.isNotBlank() },
                                     creditLimit.toDoubleOrNull() ?: 0.0,
@@ -1380,6 +1357,96 @@ private fun getCategoryIcon(iconName: String): ImageVector {
         "income_transfer" -> Icons.Default.SwapHoriz
         "reimbursement" -> Icons.Default.RequestPage
         else -> Icons.Default.Receipt
+    }
+}
+
+/**
+ * 数字滚动选择器字段 - 与OutlinedTextField高度一致
+ */
+@Composable
+private fun NumberPickerField(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    range: IntRange
+) {
+    Column(modifier = modifier) {
+        // 标签
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        
+        // 选择器容器 - 与OutlinedTextField高度一致
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp), // 与OutlinedTextField默认高度一致
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 减少按钮
+                IconButton(
+                    onClick = {
+                        if (value > range.first) {
+                            onValueChange(value - 1)
+                        }
+                    },
+                    enabled = value > range.first,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "减少",
+                        tint = if (value > range.first) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                }
+                
+                // 显示当前值
+                Text(
+                    text = value.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+                
+                // 增加按钮
+                IconButton(
+                    onClick = {
+                        if (value < range.last) {
+                            onValueChange(value + 1)
+                        }
+                    },
+                    enabled = value < range.last,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "增加",
+                        tint = if (value < range.last) 
+                            MaterialTheme.colorScheme.primary 
+                        else 
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        }
     }
 }
 

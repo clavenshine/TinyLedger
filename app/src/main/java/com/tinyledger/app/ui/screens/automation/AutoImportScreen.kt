@@ -224,6 +224,8 @@ fun AutoImportScreen(
                         }
 
                         // 通知使用权引导（用于捕获 1069xxxx 通知短信）
+                        // 已注释：与上方权限提醒重复
+                        /*
                         val hasNotifPermission = remember {
                             TransactionNotificationService.hasPermission(context)
                         }
@@ -236,6 +238,7 @@ fun AutoImportScreen(
                                 }
                             )
                         }
+                        */
 
                         // 诊断统计信息（帮助排查短信读取问题）
                         uiState.smsReadStats?.let { stats ->
@@ -1102,7 +1105,7 @@ private fun SmsReadStatsCard(stats: SmsReadStats) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 短信导入权限检查卡片
+// 短信导入权限检查卡片 - 可折叠
 // ══════════════════════════════════════════════════════════════════════════════
 
 @Composable
@@ -1125,17 +1128,23 @@ private fun SmsPermissionCheckCard(context: android.content.Context) {
     if (hasReadSms && hasReceiveSms && hasNotificationAccess && hasOverlayPermission) {
         return
     }
+    
+    // 折叠状态
+    var isExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable { isExpanded = !isExpanded },
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = IOSColors.SystemRed.copy(alpha = 0.08f)
-        )
+            containerColor = IOSColors.SystemOrange.copy(alpha = 0.08f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 标题行
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -1144,67 +1153,124 @@ private fun SmsPermissionCheckCard(context: android.content.Context) {
                     Icons.Default.Warning,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = IOSColors.SystemRed
+                    tint = IOSColors.SystemOrange
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "部分权限未授权，短信导入可能不全或异常",
-                    style = MaterialTheme.typography.bodySmall.copy(
+                    style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = IOSColors.SystemRed
+                    color = IOSColors.SystemOrange,
+                    modifier = Modifier.weight(1f)
+                )
+                // 展开/折叠图标
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = IOSColors.SystemOrange,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 权限列表
-            val permissionItems = buildList {
-                if (!hasReadSms) add("读取短信与彩信" to {
-                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                    })
-                })
-                if (!hasReceiveSms) add("接收短信与彩信" to {
-                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                    })
-                })
-                if (!hasNotificationAccess) add("通知类短信" to {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                })
-                if (!hasOverlayPermission) add("后台弹出界面" to {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                    })
-                })
-            }
-
-            permissionItems.forEach { (label, action) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // 折叠内容
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                ) + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = IOSColors.SystemRed.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(
-                        onClick = action,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text("去设置", style = MaterialTheme.typography.labelSmall)
+                    HorizontalDivider(color = IOSColors.SystemOrange.copy(alpha = 0.2f))
+                    
+                    // 权限列表
+                    val permissionItems = buildList {
+                        if (!hasReadSms) add("读取短信与彩信" to {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            })
+                        })
+                        if (!hasReceiveSms) add("接收短信与彩信" to {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            })
+                        })
+                        if (!hasNotificationAccess) add("通知类短信（1069前缀）" to {
+                            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        })
+                        if (!hasOverlayPermission) add("后台弹出界面" to {
+                            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            })
+                        })
                     }
+
+                    permissionItems.forEach { (label, action) ->
+                        // 直角卡片，无背景色
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.Transparent,
+                            shape = RoundedCornerShape(0.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = IOSColors.SystemRed.copy(alpha = 0.7f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                FilledTonalButton(
+                                    onClick = action,
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                    )
+                                ) {
+                                    Text(
+                                        "去设置",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 提示文字
+                    Text(
+                        text = "💡 提示：点击卡片可折叠/展开此提示",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
         }

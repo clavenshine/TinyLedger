@@ -1,50 +1,62 @@
 # TinyLedger v2.5.6 Release Notes
 
-## 📅 Release Date
-April 20, 2026
+## 🆕 新增功能
 
-## ✨ New Features
+### 📸 图片附件功能
+- 记账页面支持添加图片附件（普通交易最多3张，借贷交易最多9张）
+- 支持拍照或从相册选择图片
+- 从相册选择支持多选模式，可一次性选择多张图片
+- 图片缩略图显示，可删除已添加的图片
+- 编辑记账页面可查看、删除或继续添加图片
+- 图片唯一命名并与交易记录永久绑定
 
-### 1. Add Account Page Enhancement
-- **Card Number Field**: Added "Last 4 digits of card number (optional)" input field for Cash Accounts and Credit Accounts
-  - Only accepts numeric input
-  - Limited to maximum 4 digits
-  - Hidden for External Accounts
-  
-- **Credit Account Fields**: Added bill date and repayment date controls for Credit Accounts
-  - Bill day input (default: 1, range: 1-31)
-  - Repayment day input (default: 10, range: 1-31)
-  - Both fields displayed in the same row
-  - Only visible when Credit Account type is selected
-  
-- **Notes Field**: Added notes/purpose input field for all account types
-  - Multi-line input support (up to 3 lines)
-  - Available for Cash Accounts, Credit Accounts, and External Accounts
-  - Mapped to Account's purpose field
+### 🔊 声音反馈优化
+- 保存记账成功时播放"咻"的提示音（需在设置中开启声音）
+- 新建账户成功时播放"咻"的提示音（需在设置中开启声音）
+- 使用AudioTrack生成频率滑降音效（1400Hz→350Hz），更自然流畅
+- 声音设置开启后，所有手动保存操作都有声音反馈
 
-### 2. UI/UX Improvements
-- Dynamic field visibility based on account attribute selection
-- Smooth transitions when switching between account types
-- Proper input validation for all new fields
+### 🎯 智能导航优化
+- "全部账户"页面新建账户时，自动选中当前选中的账户类别
+- 从"现金账户"标签点击新建，默认选中现金账户
+- 从"信用账户"标签点击新建，默认选中信用账户
+- 从"外部往来"标签点击新建，默认选中外部往来账户
 
-## 🔧 Technical Details
-- Version: 2.5.6
-- Version Code: 20506
-- Min SDK: 26 (Android 8.0)
-- Target SDK: 34 (Android 14)
-- Compile SDK: 35 (Android 15)
+## 🎨 界面优化
 
-## 📦 Installation
-1. Download `TinyLedger-v2.5.6-release.apk`
-2. Enable "Install from unknown sources" in your device settings
-3. Install the APK
-4. Open TinyLedger and enjoy!
+### 编辑记账页面
+- 增加"删除"按钮（仅编辑模式显示），风格与页面一致
+- 删除按钮使用主题色适配浅色/深色模式
+- 缩略图删除按钮恢复为红色加粗"×"符号
 
-## 🔄 Upgrade Notes
-- This version is fully backward compatible
-- No data migration required
-- All existing accounts and transactions will be preserved
+### 添加图片弹窗
+- 美化图片选择器弹窗，适配深色/浅色模式
+- 弹出/关闭添加弹性抖动动画效果
+- 图标使用渐变背景，按钮样式优化
+
+### 信用账户日期选择
+- 账单日、还款日改为数字上下滚动式控件
+- 控件高度与"信用额度"、"备注"一致
+- 账单日默认1，还款日默认8，范围1-31
+- 新建账户和编辑账户页面样式统一
+
+## 🐛 Bug修复
+
+- 修复编辑记账页面无法显示已保存图片的问题
+- 修复图片路径序列化/反序列化问题（使用"||"分隔符）
+- 修复相机拍照文件名不一致问题
+- 修复相册URI不持久化问题（复制到应用私有目录）
+- 修复ToneGenerator播放声音被中断问题
+
+## 📱 技术改进
+
+- 图片存储：统一复制到应用私有目录，避免URI失效
+- 图片命名：transaction_timestamp_index.jpg唯一命名
+- 声音播放：从ToneGenerator改为AudioTrack，音质更好
+- 依赖添加：Coil图片加载库（io.coil-kt:coil-compose:2.5.0）
+- 多选支持：GetMultipleContents替代GetContent
 
 ---
 
-**Full Changelog**: https://github.com/clavedev/TinyLedger/compare/v2.5.5...v2.5.6
+**发布日期**: 2026-04-15  
+**APK文件**: TinyLedger-v2.5.6-release.apk

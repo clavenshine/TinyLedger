@@ -91,10 +91,12 @@ class AccountRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteAccount(accountId: Long) {
+        // 先获取账户信息
+        val account = accountDao.getAccountById(accountId) ?: return
         // 先删除该账户的所有交易记录
         transactionDao.deleteTransactionsByAccountId(accountId)
-        // 然后禁用账户
-        accountDao.disableAccount(accountId)
+        // 然后真正删除账户（不是打停用标记）
+        accountDao.deleteAccount(account)
     }
 
     override suspend fun hasUnsettledDebt(accountId: Long): Boolean {

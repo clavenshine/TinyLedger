@@ -175,15 +175,15 @@ data class Category(
             }
         }
 
-        fun addCustomCategory(name: String, type: TransactionType): Category {
+        fun addCustomCategory(name: String, type: TransactionType, icon: String? = null): Category {
             val id = "custom_${System.currentTimeMillis()}"
-            val icon = when (type) {
+            val defaultIcon = when (type) {
                 TransactionType.EXPENSE -> "other"
                 TransactionType.INCOME -> "redpacket"
                 TransactionType.TRANSFER -> "account_transfer"
                 TransactionType.LENDING -> "lend"
             }
-            val category = Category(id, name, icon, type, isDefault = false)
+            val category = Category(id, name, icon ?: defaultIcon, type, isDefault = false)
             
             when (type) {
                 TransactionType.EXPENSE -> customExpenseCategories.add(category)

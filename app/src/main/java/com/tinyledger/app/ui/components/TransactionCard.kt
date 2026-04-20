@@ -119,6 +119,7 @@ fun TransactionCard(
 @Composable
 fun getCategoryIcon(iconName: String): ImageVector {
     return when (iconName) {
+        // 旧版ic_前缀图标
         "ic_food" -> Icons.Default.Restaurant
         "ic_transport" -> Icons.Default.DirectionsCar
         "ic_shopping" -> Icons.Default.ShoppingBag
@@ -134,7 +135,7 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "ic_parttime" -> Icons.Default.Work
         "ic_redpacket" -> Icons.Default.Redeem
         "ic_other_income" -> Icons.Default.AttachMoney
-        // 新增分类图标（使用原始icon名作为key，兼容Transaction.kt中的定义）
+        // 兼容Transaction.kt中的图标名
         "restaurant" -> Icons.Default.Restaurant
         "directions_bus" -> Icons.Default.DirectionsBus
         "shopping_bag" -> Icons.Default.ShoppingBag
@@ -164,6 +165,145 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "children" -> Icons.Default.ChildCare
         "elderly_care" -> Icons.Default.Elderly
         "reimbursement" -> Icons.Default.RequestPage
+        // 吃喝分类
+        "ramen_dining" -> Icons.Default.RamenDining
+        "local_cafe" -> Icons.Default.LocalCafe
+        "local_bar" -> Icons.Default.LocalBar
+        "lunch_dining" -> Icons.Default.LunchDining
+        "dinner_dining" -> Icons.Default.DinnerDining
+        "kebab_dining" -> Icons.Default.KebabDining
+        "bakery_dining" -> Icons.Default.BakeryDining
+        "local_pizza" -> Icons.Default.LocalPizza
+        "icecream" -> Icons.Default.Icecream
+        "cake" -> Icons.Default.Cake
+        "hamburger" -> Icons.Default.Fastfood
+        "flatware" -> Icons.Default.Flatware
+        "local_drink" -> Icons.Default.LocalDrink
+        "tapas" -> Icons.Default.Tapas
+        "wine_bar" -> Icons.Default.WineBar
+        // 购物分类
+        "shopping_cart" -> Icons.Default.ShoppingCart
+        "local_mall" -> Icons.Default.LocalMall
+        "checkroom" -> Icons.Default.Checkroom
+        "store" -> Icons.Default.Store
+        "diamond" -> Icons.Default.Diamond
+        "camera_alt" -> Icons.Default.CameraAlt
+        "smartphone" -> Icons.Default.Smartphone
+        "content_cut" -> Icons.Default.ContentCut
+        "local_offer" -> Icons.Default.LocalOffer
+        // 交通分类
+        "directions_car" -> Icons.Default.DirectionsCar
+        "directions_bike" -> Icons.Default.DirectionsBike
+        "flight" -> Icons.Default.Flight
+        "train" -> Icons.Default.Train
+        "ev_station" -> Icons.Default.EvStation
+        "local_parking" -> Icons.Default.LocalParking
+        "local_gas_station" -> Icons.Default.LocalGasStation
+        "directions_boat" -> Icons.Default.DirectionsBoat
+        "two_wheeler" -> Icons.Default.TwoWheeler
+        "directions_railway" -> Icons.Default.DirectionsRailway
+        "pedal_bike" -> Icons.Default.PedalBike
+        // 住房分类
+        "home_work" -> Icons.Default.HomeWork
+        "bolt" -> Icons.Default.Bolt
+        "local_fire_department" -> Icons.Default.LocalFireDepartment
+        "water_drop" -> Icons.Default.WaterDrop
+        "wifi" -> Icons.Default.Wifi
+        "bed" -> Icons.Default.Bed
+        "hotel" -> Icons.Default.Hotel
+        "ac_unit" -> Icons.Default.AcUnit
+        "phone_android" -> Icons.Default.PhoneAndroid
+        "kitchen" -> Icons.Default.Kitchen
+        "tv" -> Icons.Default.Tv
+        // 娱乐分类
+        "sports_esports" -> Icons.Default.SportsEsports
+        "videogame_asset" -> Icons.Default.VideogameAsset
+        "theaters" -> Icons.Default.Theaters
+        "movie" -> Icons.Default.Movie
+        "music_note" -> Icons.Default.MusicNote
+        "sports_soccer" -> Icons.Default.SportsSoccer
+        "sports_basketball" -> Icons.Default.SportsBasketball
+        "beach_access" -> Icons.Default.BeachAccess
+        "pool" -> Icons.Default.Pool
+        "celebration" -> Icons.Default.Celebration
+        "festival" -> Icons.Default.Festival
+        "casino" -> Icons.Default.Casino
+        // 运动分类
+        "fitness_center" -> Icons.Default.FitnessCenter
+        "sports_tennis" -> Icons.Default.SportsTennis
+        "sports_badminton" -> Icons.Default.SportsTennis
+        "golf_course" -> Icons.Default.GolfCourse
+        "directions_run" -> Icons.Default.DirectionsRun
+        "directions_walk" -> Icons.Default.DirectionsWalk
+        "sports_volleyball" -> Icons.Default.SportsVolleyball
+        "sports_cricket" -> Icons.Default.SportsCricket
+        "skateboarding" -> Icons.Default.Skateboarding
+        "skiing" -> Icons.Default.AcUnit
+        "surfing" -> Icons.Default.Surfing
+        // 人情分类
+        "redeem" -> Icons.Default.Redeem
+        "card_giftcard" -> Icons.Default.CardGiftcard
+        "gift" -> Icons.Default.CardGiftcard
+        "favorite" -> Icons.Default.Favorite
+        "emoji_people" -> Icons.Default.EmojiPeople
+        "savings" -> Icons.Default.Savings
+        "volunteer_activism" -> Icons.Default.VolunteerActivism
+        "handshake" -> Icons.Default.Handshake
+        // 家庭分类
+        "family_restroom" -> Icons.Default.FamilyRestroom
+        "child_care" -> Icons.Default.ChildCare
+        "elderly" -> Icons.Default.Elderly
+        "shower" -> Icons.Default.Shower
+        "local_laundry_service" -> Icons.Default.LocalLaundryService
+        "cleaning_services" -> Icons.Default.CleaningServices
+        // 学习分类
+        "menu_book" -> Icons.Default.MenuBook
+        "class" -> Icons.Default.Class
+        "auto_stories" -> Icons.Default.AutoStories
+        "palette" -> Icons.Default.Palette
+        "brush" -> Icons.Default.Brush
+        "architecture" -> Icons.Default.Architecture
+        "newspaper" -> Icons.Default.Newspaper
+        "science" -> Icons.Default.Science
+        // 医疗分类
+        "local_hospital" -> Icons.Default.LocalHospital
+        "medication" -> Icons.Default.Medication
+        "vaccines" -> Icons.Default.Vaccines
+        "healing" -> Icons.Default.Healing
+        "health_and_safety" -> Icons.Default.HealthAndSafety
+        "bloodtype" -> Icons.Default.Bloodtype
+        "monitor_heart" -> Icons.Default.MonitorHeart
+        "biotech" -> Icons.Default.Biotech
+        "spa" -> Icons.Default.Spa
+        "dentistry" -> Icons.Default.MedicalServices
+        // 理财分类
+        "credit_card" -> Icons.Default.CreditCard
+        "paid" -> Icons.Default.Paid
+        "currency_exchange" -> Icons.Default.CurrencyExchange
+        "attach_money" -> Icons.Default.AttachMoney
+        "assessment" -> Icons.Default.Assessment
+        "query_stats" -> Icons.Default.QueryStats
+        "timeline" -> Icons.Default.Timeline
+        "data_usage" -> Icons.Default.DataUsage
+        // 宠物分类
+        "pets" -> Icons.Default.Pets
+        "eco" -> Icons.Default.Eco
+        "forest" -> Icons.Default.Forest
+        "yard" -> Icons.Default.Yard
+        "park" -> Icons.Default.Park
+        "grass" -> Icons.Default.Grass
+        // 生意分类
+        "business" -> Icons.Default.Business
+        "work" -> Icons.Default.Work
+        "equalizer" -> Icons.Default.Equalizer
+        "price_change" -> Icons.Default.PriceChange
+        // 其他
+        "more_horiz" -> Icons.Default.MoreHoriz
+        "category" -> Icons.Default.Category
+        "help" -> Icons.Default.Help
+        "info" -> Icons.Default.Info
+        "settings" -> Icons.Default.Settings
+        "build" -> Icons.Default.Build
         else -> Icons.Default.Category
     }
 }

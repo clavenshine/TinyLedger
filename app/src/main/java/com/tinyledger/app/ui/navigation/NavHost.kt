@@ -30,6 +30,8 @@ import com.tinyledger.app.ui.screens.profile.ProfileScreen
 import com.tinyledger.app.ui.screens.settings.ImportType
 import com.tinyledger.app.ui.screens.settings.SettingsScreen
 import com.tinyledger.app.ui.screens.statistics.StatisticsScreen
+import com.tinyledger.app.ui.screens.category.CategoryManageScreen
+import com.tinyledger.app.ui.screens.category.AddCategoryScreen
 
 @Composable
 fun AppNavHost(
@@ -162,8 +164,8 @@ fun AppNavHost(
                 onNavigateToRepay = { creditAccount ->
                     navController.navigate(Screen.CreditRepay.createRoute(creditAccount.id))
                 },
-                onNavigateToAddAccount = {
-                    navController.navigate(Screen.AddAccount.route)
+                onNavigateToAddAccount = { tabIndex ->
+                    navController.navigate(Screen.AddAccount.createRoute(tabIndex))
                 }
             )
         }
@@ -305,8 +307,13 @@ fun AppNavHost(
             )
         }
 
-        composable(Screen.AddAccount.route) {
+        composable(
+            route = Screen.AddAccount.route,
+            arguments = listOf(navArgument("accountType") { type = NavType.IntType; defaultValue = 0 })
+        ) { backStackEntry ->
+            val accountType = backStackEntry.arguments?.getInt("accountType") ?: 0
             AddAccountScreen(
+                initialAccountType = accountType,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -403,6 +410,27 @@ fun AppNavHost(
                 com.tinyledger.app.domain.model.TransactionType.EXPENSE
             }
             com.tinyledger.app.ui.screens.category.CategoryManageScreen(
+                transactionType = transactionType,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAddCategory = { type ->
+                    navController.navigate(Screen.AddCategory.createRoute(type.name))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.AddCategory.route,
+            arguments = listOf(
+                navArgument("transactionType") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
+            val transactionType = try {
+                com.tinyledger.app.domain.model.TransactionType.valueOf(transactionTypeStr)
+            } catch (e: Exception) {
+                com.tinyledger.app.domain.model.TransactionType.EXPENSE
+            }
+            AddCategoryScreen(
                 transactionType = transactionType,
                 onNavigateBack = { navController.popBackStack() }
             )
