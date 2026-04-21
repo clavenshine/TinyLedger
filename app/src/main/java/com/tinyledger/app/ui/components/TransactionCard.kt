@@ -168,10 +168,10 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "investment_expense" -> Icons.Default.TrendingDown
         "other" -> Icons.Default.MoreHoriz
         "salary" -> Icons.Default.Work
-        "bonus" -> Icons.Default.CardGiftcard
+        "bonus" -> Icons.Default.Star
         "investment" -> Icons.Default.TrendingUp
         "financial" -> Icons.Default.AccountBalance
-        "redpacket" -> Icons.Default.CardGiftcard
+        "redpacket" -> Icons.Default.Redeem
         "utilities" -> Icons.Default.ElectricalServices
         "dividend" -> Icons.Default.Paid
         "refund" -> Icons.Default.AssignmentReturn

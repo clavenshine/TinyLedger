@@ -287,15 +287,24 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
+    fun saveSubCategory(subCategory: Category) {
+        viewModelScope.launch {
+            preferencesRepository.saveCustomCategory(subCategory)
+        }
+    }
+
     fun deleteCategory(category: Category) {
         // Cannot delete default categories
         if (category.isDefault) return
         
         val removed = Category.removeCustomCategory(category)
-        if (!removed) return
+        if (removed.isEmpty()) return
         
         viewModelScope.launch {
-            preferencesRepository.deleteCustomCategory(category.id)
+            // 删除主分类及其级联的子分类
+            for (cat in removed) {
+                preferencesRepository.deleteCustomCategory(cat.id)
+            }
         }
         
         // Refresh category list
@@ -306,6 +315,31 @@ class AddTransactionViewModel @Inject constructor(
             it.copy(
                 categories = categories,
                 selectedCategory = if (currentSelected?.id == category.id) null else currentSelected
+            )
+        }
+    }
+
+    /**
+     * 删除任意分类（包括内置分类），用于分类管理页面
+     */
+    fun deleteCategoryAny(category: Category) {
+        val removed = Category.removeCategory(category)
+        if (removed.isEmpty()) return
+        
+        viewModelScope.launch {
+            for (cat in removed) {
+                preferencesRepository.deleteCustomCategory(cat.id)
+            }
+        }
+        
+        // Refresh category list
+        val type = _uiState.value.transactionType
+        val categories = Category.getCategoriesByType(type)
+        val currentSelected = _uiState.value.selectedCategory
+        _uiState.update {
+            it.copy(
+                categories = categories,
+                selectedCategory = if (currentSelected?.id == category.id || currentSelected?.parentId == category.id) null else currentSelected
             )
         }
     }

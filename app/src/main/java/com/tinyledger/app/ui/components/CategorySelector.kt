@@ -2,6 +2,10 @@ package com.tinyledger.app.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,8 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -34,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.IOSColors
@@ -45,18 +52,26 @@ fun CategorySelector(
     selectedCategory: Category?,
     onCategorySelected: (Category) -> Unit,
     onAddCategory: ((String) -> Unit)? = null,
-    onDeleteCategory: ((Category) -> Unit)? = null,
-    onRenameCategory: ((Category, String) -> Unit)? = null,
     showAddButton: Boolean = true,
     transactionType: TransactionType = TransactionType.EXPENSE,
     vibrationEnabled: Boolean = false,
-    onNavigateToCategoryManage: (() -> Unit)? = null,
+    onNavigateToCategoryManage: ((TransactionType) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf<Category?>(null) }
-    var showEditDialog by remember { mutableStateOf<Category?>(null) }
-    var showActionMenu by remember { mutableStateOf<Category?>(null) }
+    var expandedParentId by remember { mutableStateOf<String?>(null) }
+
+    // 分离一级分类和二级分类
+    val topLevelCategories = categories.filter { it.parentId == null }
+    val subCategoryMap = topLevelCategories.associateWith { parent ->
+        categories.filter { it.parentId == parent.id }
+    }
+
+    // 二级分类删除回调
+    var subCategoryToDelete by remember { mutableStateOf<Category?>(null) }
+    // 二级分类编辑回调 - 需要父分类名称
+    var subCategoryToEdit by remember { mutableStateOf<Category?>(null) }
+    var parentCategoryForEdit by remember { mutableStateOf<Category?>(null) }
 
     Column(modifier = modifier) {
         // Non-lazy grid: display all items without scrolling
@@ -64,9 +79,9 @@ fun CategorySelector(
         val itemsPerRow = 5  // 每行5个图标
         // 将"分类管理"按钮作为最后一个元素加入列表
         val allItems = if (showAddButton && onAddCategory != null) {
-            categories + listOf(Category("category_manage", "分类管理", "settings", TransactionType.EXPENSE))
+            topLevelCategories + listOf(Category("category_manage", "分类管理", "settings", TransactionType.EXPENSE))
         } else {
-            categories
+            topLevelCategories
         }
         allItems.chunked(itemsPerRow).forEach { rowItems ->
             Row(
@@ -76,11 +91,10 @@ fun CategorySelector(
                 rowItems.forEach { category ->
                     Box(modifier = Modifier.weight(1f)) {
                         if (category.id == "category_manage") {
-                            // 分类管理按钮 - 点击导航到分类管理页面
                             CategoryManageButton(
                                 onClick = {
                                     if (onNavigateToCategoryManage != null) {
-                                        onNavigateToCategoryManage()
+                                        onNavigateToCategoryManage(transactionType)
                                     } else {
                                         showAddDialog = true
                                     }
@@ -89,53 +103,92 @@ fun CategorySelector(
                         } else {
                             CategoryItem(
                                 category = category,
-                                isSelected = category == selectedCategory,
-                                onClick = { onCategorySelected(category) },
-                                onLongClick = {
-                                    if (onDeleteCategory != null || onRenameCategory != null) {
-                                        showActionMenu = category
+                                isSelected = category == selectedCategory || (selectedCategory?.parentId == category.id),
+                                onClick = {
+                                    val subs = subCategoryMap[category] ?: emptyList()
+                                    if (subs.isNotEmpty()) {
+                                        // 有子分类：切换展开/折叠；如果已展开且再次点击，选中一级分类
+                                        if (expandedParentId == category.id) {
+                                            expandedParentId = null
+                                            onCategorySelected(category)
+                                        } else {
+                                            expandedParentId = category.id
+                                        }
+                                    } else {
+                                        // 无子分类：直接选中
+                                        onCategorySelected(category)
                                     }
                                 },
-                                vibrationEnabled = vibrationEnabled
+                                vibrationEnabled = vibrationEnabled,
+                                hasSubCategories = (subCategoryMap[category]?.isNotEmpty() == true)
                             )
                         }
                     }
                 }
-                // Fill empty slots in the last row
                 repeat(itemsPerRow - rowItems.size) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+
+            // 展开的二级分类列表（纵向排列）
+            val expandedCategory = rowItems.find { it.id != "category_manage" && it.id == expandedParentId }
+            if (expandedCategory != null) {
+                val subs = subCategoryMap[expandedCategory] ?: emptyList()
+                if (subs.isNotEmpty()) {
+                    SubCategoryList(
+                        parentCategory = expandedCategory,
+                        subCategories = subs,
+                        selectedCategory = selectedCategory,
+                        onSubCategorySelected = { sub ->
+                            onCategorySelected(sub)
+                        },
+                        onSubCategoryEdit = { sub ->
+                            subCategoryToEdit = sub
+                            parentCategoryForEdit = expandedCategory
+                        },
+                        onSubCategoryDelete = { sub ->
+                            subCategoryToDelete = sub
+                        }
+                    )
+                }
+            }
         }
     }
 
-    // Animated action menu (Edit / Delete)
-    showActionMenu?.let { category ->
-        CategoryActionMenu(
-            category = category,
-            onEdit = {
-                showActionMenu = null
-                showEditDialog = category
+    // 二级分类删除确认对话框
+    subCategoryToDelete?.let { sub ->
+        DeleteSubCategoryDialog(
+            categoryName = sub.name,
+            onConfirm = {
+                onAddCategory?.let { addCb ->
+                    // 通过 ViewModel 删除二级分类
+                    Category.removeCustomCategory(sub)
+                }
+                subCategoryToDelete = null
             },
-            onDelete = {
-                showActionMenu = null
-                showDeleteDialog = category
-            },
-            onDismiss = { showActionMenu = null }
+            onDismiss = { subCategoryToDelete = null }
         )
     }
 
-    // Delete confirmation dialog with 10-second countdown
-    showDeleteDialog?.let { categoryToDelete ->
-        DeleteCategoryDialog(
-            categoryName = categoryToDelete.name,
-            onConfirm = {
-                onDeleteCategory?.invoke(categoryToDelete)
-                showDeleteDialog = null
-            },
-            onDismiss = { showDeleteDialog = null }
-        )
+    // 二级分类编辑对话框
+    subCategoryToEdit?.let { sub ->
+        parentCategoryForEdit?.let { parent ->
+            EditSubCategoryDialog(
+                subCategory = sub,
+                parentCategoryName = parent.name,
+                onConfirm = { newName ->
+                    // 重命名二级分类
+                    Category.renameCustomCategory(sub, newName)
+                    subCategoryToEdit = null
+                    parentCategoryForEdit = null
+                },
+                onDismiss = {
+                    subCategoryToEdit = null
+                    parentCategoryForEdit = null
+                }
+            )
+        }
     }
 
     if (showAddDialog && onAddCategory != null) {
@@ -149,53 +202,36 @@ fun CategorySelector(
             }
         )
     }
-
-    // Edit category dialog
-    showEditDialog?.let { category ->
-        EditCategoryDialog(
-            category = category,
-            existingCategories = categories,
-            onDismiss = { showEditDialog = null },
-            onConfirm = { newName ->
-                onRenameCategory?.invoke(category, newName)
-                showEditDialog = null
-            }
-        )
-    }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryItem(
     category: Category,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {},
-    vibrationEnabled: Boolean = false
+    vibrationEnabled: Boolean = false,
+    hasSubCategories: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
     
     Column(
         modifier = Modifier
-            .aspectRatio(0.85f)  // 调整高宽比，给文字更多空间
+            .aspectRatio(0.85f)
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(
-                onClick = {
-                    if (vibrationEnabled) {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    }
-                    onClick()
-                },
-                onLongClick = onLongClick
-            )
-            .background(Color.Transparent)  // 去掉外部方框背景
-            .padding(4.dp),  // 减少padding，给图标和文字更多空间
+            .clickable {
+                if (vibrationEnabled) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+                onClick()
+            }
+            .background(Color.Transparent)
+            .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)  // 稍微减小图标尺寸
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(
                     if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -208,21 +244,32 @@ private fun CategoryItem(
                 contentDescription = null,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)  // 稍微减小图标大小
+                modifier = Modifier.size(24.dp)
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))  // 减少间距
-        Text(
-            text = category.name,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 11.sp  // 稍微增大字体
-            ),
-            textAlign = TextAlign.Center,
-            color = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            minLines = 1  // 确保至少显示一行
-        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = category.name,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp
+                ),
+                textAlign = TextAlign.Center,
+                color = if (isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                minLines = 1
+            )
+            if (hasSubCategories) {
+                Spacer(modifier = Modifier.width(1.dp))
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(10.dp)
+                )
+            }
+        }
     }
 }
 
@@ -657,6 +704,286 @@ private fun IconOption(
     }
 }
 
+/**
+ * 二级分类纵向列表
+ * 每行：二级分类图标 + 一级分类名称-二级分类名称 + 编辑图标/删除图标
+ */
+@Composable
+private fun SubCategoryList(
+    parentCategory: Category,
+    subCategories: List<Category>,
+    selectedCategory: Category?,
+    onSubCategorySelected: (Category) -> Unit,
+    onSubCategoryEdit: (Category) -> Unit,
+    onSubCategoryDelete: (Category) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp)
+        ) {
+            subCategories.forEach { subCategory ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (subCategory == selectedCategory)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            else Color.Transparent
+                        )
+                        .clickable { onSubCategorySelected(subCategory) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 二级分类图标
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (subCategory == selectedCategory)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = getIconFromName(subCategory.icon),
+                            contentDescription = null,
+                            tint = if (subCategory == selectedCategory)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // 一级分类名称-二级分类名称
+                    Text(
+                        text = "${parentCategory.name}-${subCategory.name}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (subCategory == selectedCategory)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // 编辑图标
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "编辑",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onSubCategoryEdit(subCategory) }
+                            .padding(2.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // 删除图标
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "删除",
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onSubCategoryDelete(subCategory) }
+                            .padding(2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 二级分类删除确认对话框（使用美化版 DeleteConfirmationDialog 样式）
+ */
+@Composable
+private fun DeleteSubCategoryDialog(
+    categoryName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val scale = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        scale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        )
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .scale(scale.value)
+                    .graphicsLayer { shadowElevation = 16f },
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.05f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+                    Text(
+                        text = "删除「$categoryName」？",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "删除后将无法恢复，请谨慎操作",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 24.sp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ),
+                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        ) {
+                            Text("取消", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        Button(
+                            onClick = onConfirm,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("确认删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 二级分类编辑对话框
+ */
+@Composable
+private fun EditSubCategoryDialog(
+    subCategory: Category,
+    parentCategoryName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newName by remember { mutableStateOf(subCategory.name) }
+    var duplicateError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        title = { Text("编辑二级分类", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column {
+                Text(
+                    text = "父分类：$parentCategoryName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = {
+                        newName = it
+                        duplicateError = false
+                    },
+                    label = { Text("分类名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = duplicateError,
+                    supportingText = if (duplicateError) {
+                        { Text("该分类名称已存在", color = MaterialTheme.colorScheme.error) }
+                    } else null
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (newName.isNotBlank() && newName != subCategory.name) {
+                        onConfirm(newName.trim())
+                    }
+                },
+                enabled = newName.isNotBlank() && newName != subCategory.name
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+}
+
 // 常用图标列表
 private val categoryIcons = listOf(
     Icons.Default.Restaurant,       // 餐饮
@@ -681,44 +1008,58 @@ private val categoryIcons = listOf(
 
 private fun getIconFromName(iconName: String): ImageVector {
     return when (iconName) {
+        // 支出分类
         "restaurant" -> Icons.Default.Restaurant
         "directions_bus" -> Icons.Default.DirectionsBus
         "shopping_bag" -> Icons.Default.ShoppingBag
         "local_movies" -> Icons.Default.LocalMovies
         "home" -> Icons.Default.Home
-        "medical" -> Icons.Default.LocalHospital
+        "medical" -> Icons.Default.MedicalServices
         "education" -> Icons.Default.School
         "communication" -> Icons.Default.Phone
         "insurance" -> Icons.Default.Security
         "travel" -> Icons.Default.Flight
-        "lend" -> Icons.Default.Send
         "investment_expense" -> Icons.Default.TrendingDown
-        "other" -> Icons.Default.MoreHoriz
-        "salary" -> Icons.Default.Payments
-        "bonus" -> Icons.Default.CardGiftcard
-        "investment" -> Icons.Default.TrendingUp
-        "financial" -> Icons.Default.AccountBalance
-        "redpacket" -> Icons.Default.Mail
+        "utilities" -> Icons.Default.ElectricalServices
+        "accommodation" -> Icons.Default.Hotel
+        "charity" -> Icons.Default.VolunteerActivism
+        "send_redpacket" -> Icons.Default.CardGiftcard
         "family_living" -> Icons.Default.FamilyRestroom
         "children" -> Icons.Default.ChildCare
         "elderly_care" -> Icons.Default.Elderly
+        "other" -> Icons.Default.MoreHoriz
+        // 收入分类
+        "salary" -> Icons.Default.Work
+        "bonus" -> Icons.Default.Star
+        "investment" -> Icons.Default.TrendingUp
+        "financial" -> Icons.Default.AccountBalance
+        "dividend" -> Icons.Default.Paid
+        "refund" -> Icons.Default.AssignmentReturn
+        "deposit_back" -> Icons.Default.AccountBalanceWallet
+        "redpacket" -> Icons.Default.Redeem
+        "reimbursement" -> Icons.Default.RequestPage
+        // 借贷分类
+        "lend" -> Icons.Default.Money
+        "account_transfer" -> Icons.Default.SwapHoriz
+        "credit_card_repay" -> Icons.Default.CreditCard
+        // 旧版ic_前缀兼容
         "ic_other" -> Icons.Default.MoreHoriz
         "ic_restaurant" -> Icons.Default.Restaurant
         "ic_directions_bus" -> Icons.Default.DirectionsBus
         "ic_shopping_bag" -> Icons.Default.ShoppingBag
         "ic_local_movies" -> Icons.Default.LocalMovies
         "ic_home" -> Icons.Default.Home
-        "ic_medical" -> Icons.Default.LocalHospital
+        "ic_medical" -> Icons.Default.MedicalServices
         "ic_education" -> Icons.Default.School
         "ic_communication" -> Icons.Default.Phone
         "ic_insurance" -> Icons.Default.Security
         "ic_travel" -> Icons.Default.Flight
-        "ic_lend" -> Icons.Default.Send
+        "ic_lend" -> Icons.Default.Money
         "ic_investment_expense" -> Icons.Default.TrendingDown
-        "ic_salary" -> Icons.Default.Payments
-        "ic_bonus" -> Icons.Default.CardGiftcard
+        "ic_salary" -> Icons.Default.Work
+        "ic_bonus" -> Icons.Default.Star
         "ic_financial" -> Icons.Default.AccountBalance
-        "ic_redpacket" -> Icons.Default.Mail
+        "ic_redpacket" -> Icons.Default.Redeem
         "ic_family_living" -> Icons.Default.FamilyRestroom
         "ic_children" -> Icons.Default.ChildCare
         "ic_elderly_care" -> Icons.Default.Elderly

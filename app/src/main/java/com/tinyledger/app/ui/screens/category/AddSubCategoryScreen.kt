@@ -12,34 +12,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.components.getCategoryIcon
 
-// 图标分组数据
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddCategoryScreen(
+fun AddSubCategoryScreen(
+    parentCategory: Category,
     transactionType: TransactionType,
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onSubCategoryCreated: (Category) -> Unit = {},
+    onSaveSubCategory: ((Category) -> Unit)? = null
 ) {
-    var categoryName by remember { mutableStateOf("") }
+    var subCategoryName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     var selectedGroupIndex by remember { mutableStateOf(0) }
-    val maxNameLength = 4  // 最多4个汉字
+    val maxNameLength = 4
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "新建一级分类",
+                        "新建二级分类",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.SemiBold
                         )
@@ -64,28 +64,26 @@ fun AddCategoryScreen(
             ) {
                 Button(
                     onClick = {
-                        if (categoryName.trim().isBlank()) return@Button
+                        if (subCategoryName.trim().isBlank()) return@Button
                         if (selectedIcon == null) return@Button
 
-                        // 检查分类名称是否已存在
-                        val existingCategories = Category.getCategoriesByType(transactionType)
-                        val isDuplicate = existingCategories.any {
-                            it.name.equals(categoryName.trim(), ignoreCase = true)
-                        }
-                        if (isDuplicate) return@Button
-
-                        Category.addCustomCategory(
-                            name = categoryName.trim(),
+                        val newSubCategory = Category.addSubCategory(
+                            name = subCategoryName.trim(),
                             type = transactionType,
+                            parentId = parentCategory.id,
                             icon = selectedIcon!!
                         )
+                        if (onSaveSubCategory != null) {
+                            onSaveSubCategory(newSubCategory)
+                        }
+                        onSubCategoryCreated(newSubCategory)
                         onNavigateBack()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp)),
-                    enabled = categoryName.trim().isNotBlank() && selectedIcon != null,
+                    enabled = subCategoryName.trim().isNotBlank() && selectedIcon != null,
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Text("保存", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -100,20 +98,46 @@ fun AddCategoryScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 分类名称输入
+            // 父分类提示
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "上级分类：",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    imageVector = getCategoryIcon(parentCategory.icon),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    parentCategory.name,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
             Text(
                 "分类名称",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.SemiBold
                 ),
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
             )
 
             OutlinedTextField(
-                value = categoryName,
+                value = subCategoryName,
                 onValueChange = {
                     if (it.length <= maxNameLength) {
-                        categoryName = it
+                        subCategoryName = it
                     }
                 },
                 modifier = Modifier
@@ -124,9 +148,9 @@ fun AddCategoryScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 trailingIcon = {
                     Text(
-                        text = "${categoryName.length}/$maxNameLength",
+                        text = "${subCategoryName.length}/$maxNameLength",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (categoryName.length > maxNameLength)
+                        color = if (subCategoryName.length > maxNameLength)
                             MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -135,7 +159,6 @@ fun AddCategoryScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 分类图标标题
             Text(
                 "分类图标",
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -144,7 +167,6 @@ fun AddCategoryScreen(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             )
 
-            // 左右布局：左侧分类导航 + 右侧图标网格
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,7 +181,6 @@ fun AddCategoryScreen(
                         .fillMaxWidth()
                         .heightIn(min = 300.dp, max = 450.dp)
                 ) {
-                    // 左侧分类导航
                     Column(
                         modifier = Modifier
                             .width(72.dp)
@@ -202,7 +223,6 @@ fun AddCategoryScreen(
                         }
                     }
 
-                    // 右侧图标网格
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -211,7 +231,6 @@ fun AddCategoryScreen(
                             .verticalScroll(rememberScrollState())
                     ) {
                         val currentGroup = iconGroups[selectedGroupIndex]
-                        // 当前分类标题
                         Text(
                             text = currentGroup.name,
                             style = MaterialTheme.typography.titleSmall.copy(
@@ -221,7 +240,6 @@ fun AddCategoryScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        // 图标网格（每行5个）
                         currentGroup.icons.chunked(5).forEach { rowIcons ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -256,7 +274,6 @@ fun AddCategoryScreen(
                                         }
                                     }
                                 }
-                                // 填充空位
                                 repeat(5 - rowIcons.size) {
                                     Spacer(modifier = Modifier.weight(1f))
                                 }

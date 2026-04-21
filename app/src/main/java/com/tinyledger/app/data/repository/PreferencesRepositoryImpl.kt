@@ -81,10 +81,14 @@ class PreferencesRepositoryImpl @Inject constructor(
     }
 
     /**
-     * 简单的自定义分类序列化格式: id|name|icon|typeValue;id|name|icon|typeValue;...
+     * 自定义分类序列化格式: id|name|icon|typeValue[|parentId];...
+     * parentId 是可选的第5个字段，只有二级分类才有
      */
     private fun serializeCustomCategories(categories: List<Category>): String {
-        return categories.joinToString(";") { "${it.id}|${it.name}|${it.icon}|${it.type.value}" }
+        return categories.joinToString(";") { entry ->
+            val parentId = entry.parentId ?: ""
+            "${entry.id}|${entry.name}|${entry.icon}|${entry.type.value}|$parentId"
+        }
     }
 
     private fun parseCustomCategories(data: String): List<Category> {
@@ -97,7 +101,8 @@ class PreferencesRepositoryImpl @Inject constructor(
                     name = parts[1],
                     icon = parts[2],
                     type = TransactionType.fromInt(parts[3].toIntOrNull() ?: 0),
-                    isDefault = false
+                    isDefault = false,
+                    parentId = parts.getOrNull(4)?.ifBlank { null }
                 )
             } else null
         }

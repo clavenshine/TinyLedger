@@ -36,7 +36,8 @@ data class Category(
     val name: String,
     val icon: String,
     val type: TransactionType,
-    val isDefault: Boolean = true
+    val isDefault: Boolean = true,
+    val parentId: String? = null  // 二级分类的父分类ID，null表示一级分类
 ) {
     companion object {
         // 可添加到分类的图标映射
@@ -57,7 +58,7 @@ data class Category(
             "salary" to "ic_salary",
         )
 
-        val defaultExpenseCategories = listOf(
+        val defaultExpenseCategories = mutableListOf(
             Category("food", "餐饮", "restaurant", TransactionType.EXPENSE),
             Category("transport", "交通", "directions_bus", TransactionType.EXPENSE),
             Category("shopping", "购物", "shopping_bag", TransactionType.EXPENSE),
@@ -79,7 +80,7 @@ data class Category(
             Category("other", "其他", "other", TransactionType.EXPENSE)
         )
 
-        val defaultIncomeCategories = listOf(
+        val defaultIncomeCategories = mutableListOf(
             Category("salary", "工资", "salary", TransactionType.INCOME),
             Category("bonus", "奖金", "bonus", TransactionType.INCOME),
             Category("investment", "投资", "investment", TransactionType.INCOME),
@@ -91,11 +92,11 @@ data class Category(
             Category("reimbursement", "报销款", "reimbursement", TransactionType.INCOME)
         )
 
-        val defaultTransferCategories = listOf(
+        val defaultTransferCategories = mutableListOf(
             Category("transfer", "转账", "account_transfer", TransactionType.TRANSFER)
         )
 
-        val defaultLendingCategories = listOf(
+        val defaultLendingCategories = mutableListOf(
             Category("borrow_in", "借入", "lend", TransactionType.LENDING),
             Category("borrow_out", "借出", "lend", TransactionType.LENDING),
             Category("repay", "还款", "credit_card_repay", TransactionType.LENDING),
@@ -121,6 +122,43 @@ data class Category(
                     TransactionType.LENDING -> customLendingCategories.add(cat)
                 }
             }
+        }
+
+        /**
+         * 获取一级分类列表（默认分类 + 无parentId的自定义分类）
+         */
+        fun getTopLevelCategoriesByType(type: TransactionType): List<Category> {
+            return getCategoriesByType(type).filter { it.parentId == null }
+        }
+
+        /**
+         * 获取指定父分类下的二级分类列表
+         */
+        fun getSubCategories(parentId: String, type: TransactionType): List<Category> {
+            return getCategoriesByType(type).filter { it.parentId == parentId }
+        }
+
+        /**
+         * 添加二级分类
+         */
+        fun addSubCategory(name: String, type: TransactionType, parentId: String, icon: String? = null): Category {
+            val id = "sub_${System.currentTimeMillis()}"
+            val defaultIcon = when (type) {
+                TransactionType.EXPENSE -> "other"
+                TransactionType.INCOME -> "redpacket"
+                TransactionType.TRANSFER -> "account_transfer"
+                TransactionType.LENDING -> "lend"
+            }
+            val category = Category(id, name, icon ?: defaultIcon, type, isDefault = false, parentId = parentId)
+
+            when (type) {
+                TransactionType.EXPENSE -> customExpenseCategories.add(category)
+                TransactionType.INCOME -> customIncomeCategories.add(category)
+                TransactionType.TRANSFER -> customTransferCategories.add(category)
+                TransactionType.LENDING -> customLendingCategories.add(category)
+            }
+
+            return category
         }
 
         /**
@@ -195,15 +233,78 @@ data class Category(
             return category
         }
 
-        fun removeCustomCategory(category: Category): Boolean {
+        fun removeCustomCategory(category: Category): List<Category> {
             // Cannot delete default categories
-            if (category.isDefault) return false
-            val removed = when (category.type) {
-                TransactionType.EXPENSE -> customExpenseCategories.remove(category)
-                TransactionType.INCOME -> customIncomeCategories.remove(category)
-                TransactionType.TRANSFER -> customTransferCategories.remove(category)
-                TransactionType.LENDING -> customLendingCategories.remove(category)
+            if (category.isDefault) return emptyList()
+            val removed = mutableListOf<Category>()
+
+            fun removeAndCollect(list: MutableList<Category>): List<Category> {
+                val toRemove = list.filter { it.id == category.id }
+                list.removeAll(toRemove)
+                return toRemove
             }
+
+            removed.addAll(removeAndCollect(customExpenseCategories))
+            removed.addAll(removeAndCollect(customIncomeCategories))
+            removed.addAll(removeAndCollect(customTransferCategories))
+            removed.addAll(removeAndCollect(customLendingCategories))
+
+            // 如果删除的是一级分类，同时级联删除其所有二级分类
+            if (category.parentId == null) {
+                val subRemoved = mutableListOf<Category>()
+                fun removeSubAndCollect(list: MutableList<Category>): List<Category> {
+                    val toRemove = list.filter { it.parentId == category.id }
+                    list.removeAll(toRemove)
+                    return toRemove
+                }
+                subRemoved.addAll(removeSubAndCollect(customExpenseCategories))
+                subRemoved.addAll(removeSubAndCollect(customIncomeCategories))
+                subRemoved.addAll(removeSubAndCollect(customTransferCategories))
+                subRemoved.addAll(removeSubAndCollect(customLendingCategories))
+                removed.addAll(subRemoved)
+            }
+
+            return removed
+        }
+
+        /**
+         * 删除任意分类（包括内置分类），同时级联删除子分类
+         */
+        fun removeCategory(category: Category): List<Category> {
+            val removed = mutableListOf<Category>()
+
+            fun removeAndCollect(list: MutableList<Category>): List<Category> {
+                val toRemove = list.filter { it.id == category.id }
+                list.removeAll(toRemove)
+                return toRemove
+            }
+
+            removed.addAll(removeAndCollect(defaultExpenseCategories))
+            removed.addAll(removeAndCollect(defaultIncomeCategories))
+            removed.addAll(removeAndCollect(defaultTransferCategories))
+            removed.addAll(removeAndCollect(defaultLendingCategories))
+            removed.addAll(removeAndCollect(customExpenseCategories))
+            removed.addAll(removeAndCollect(customIncomeCategories))
+            removed.addAll(removeAndCollect(customTransferCategories))
+            removed.addAll(removeAndCollect(customLendingCategories))
+
+            // 如果删除的是一级分类，同时级联删除其所有二级分类
+            if (category.parentId == null) {
+                fun removeSubAndCollect(list: MutableList<Category>): List<Category> {
+                    val toRemove = list.filter { it.parentId == category.id }
+                    list.removeAll(toRemove)
+                    return toRemove
+                }
+                removed.addAll(removeSubAndCollect(defaultExpenseCategories))
+                removed.addAll(removeSubAndCollect(defaultIncomeCategories))
+                removed.addAll(removeSubAndCollect(defaultTransferCategories))
+                removed.addAll(removeSubAndCollect(defaultLendingCategories))
+                removed.addAll(removeSubAndCollect(customExpenseCategories))
+                removed.addAll(removeSubAndCollect(customIncomeCategories))
+                removed.addAll(removeSubAndCollect(customTransferCategories))
+                removed.addAll(removeSubAndCollect(customLendingCategories))
+            }
+
             return removed
         }
 

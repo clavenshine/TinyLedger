@@ -35,7 +35,11 @@ import com.tinyledger.app.ui.screens.settings.SettingsScreen
 import com.tinyledger.app.ui.screens.statistics.StatisticsScreen
 import com.tinyledger.app.ui.screens.category.CategoryManageScreen
 import com.tinyledger.app.ui.screens.category.AddCategoryScreen
+import com.tinyledger.app.ui.screens.category.EditCategoryScreen
+import com.tinyledger.app.ui.screens.category.AddSubCategoryScreen
+import com.tinyledger.app.domain.model.Category
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
 import com.tinyledger.app.ui.viewmodel.BillsViewModel
 import com.tinyledger.app.ui.screens.detail.TransactionDetailScreen
@@ -216,8 +220,8 @@ fun AppNavHost(
                     navController.popBackStack()
                 },
                 initialCreditAccountId = if (accountId > 0) accountId else null,
-                onNavigateToCategoryManage = {
-                    navController.navigate(Screen.CategoryManage.createRoute("EXPENSE"))
+                onNavigateToCategoryManage = { type ->
+                    navController.navigate(Screen.CategoryManage.createRoute(type.name))
                 }
             )
         }
@@ -365,8 +369,8 @@ fun AppNavHost(
                 initialSelectedAccountId = selectedAccountId,
                 initialTransactionType = transactionType,
                 initialFromAccountId = fromAccountId,
-                onNavigateToCategoryManage = {
-                    navController.navigate(Screen.CategoryManage.createRoute(transactionType?.name ?: "EXPENSE"))
+                onNavigateToCategoryManage = { type ->
+                    navController.navigate(Screen.CategoryManage.createRoute(type.name))
                 }
             )
         }
@@ -386,8 +390,8 @@ fun AppNavHost(
                 onNavigateToAccounts = {
                     navController.navigate(Screen.Accounts.createRoute(0))
                 },
-                onNavigateToCategoryManage = {
-                    navController.navigate(Screen.CategoryManage.createRoute("EXPENSE"))
+                onNavigateToCategoryManage = { type ->
+                    navController.navigate(Screen.CategoryManage.createRoute(type.name))
                 }
             )
         }
@@ -427,6 +431,12 @@ fun AppNavHost(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToAddCategory = { type ->
                     navController.navigate(Screen.AddCategory.createRoute(type.name))
+                },
+                onNavigateToEditCategory = { categoryId, type ->
+                    navController.navigate(Screen.EditCategory.createRoute(categoryId, type.name))
+                },
+                onNavigateToAddSubCategory = { parentId, type ->
+                    navController.navigate(Screen.AddSubCategory.createRoute(parentId, type.name))
                 }
             )
         }
@@ -447,6 +457,60 @@ fun AppNavHost(
                 transactionType = transactionType,
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            route = Screen.EditCategory.route,
+            arguments = listOf(
+                navArgument("categoryId") { type = NavType.StringType },
+                navArgument("transactionType") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val categoryId = backStackEntry.arguments?.getString("categoryId") ?: ""
+            val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
+            val transactionType = try {
+                com.tinyledger.app.domain.model.TransactionType.valueOf(transactionTypeStr)
+            } catch (e: Exception) {
+                com.tinyledger.app.domain.model.TransactionType.EXPENSE
+            }
+            val categories = Category.getCategoriesByType(transactionType)
+            val category = categories.find { it.id == categoryId }
+            if (category != null) {
+                EditCategoryScreen(
+                    category = category,
+                    transactionType = transactionType,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+        }
+
+        composable(
+            route = Screen.AddSubCategory.route,
+            arguments = listOf(
+                navArgument("parentId") { type = NavType.StringType },
+                navArgument("transactionType") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val addTxnViewModel: AddTransactionViewModel = hiltViewModel()
+            val parentId = backStackEntry.arguments?.getString("parentId") ?: ""
+            val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
+            val transactionType = try {
+                com.tinyledger.app.domain.model.TransactionType.valueOf(transactionTypeStr)
+            } catch (e: Exception) {
+                com.tinyledger.app.domain.model.TransactionType.EXPENSE
+            }
+            val categories = Category.getCategoriesByType(transactionType)
+            val parentCategory = categories.find { it.id == parentId }
+            if (parentCategory != null) {
+                AddSubCategoryScreen(
+                    parentCategory = parentCategory,
+                    transactionType = transactionType,
+                    onNavigateBack = { navController.popBackStack() },
+                    onSaveSubCategory = { subCategory ->
+                        addTxnViewModel.saveSubCategory(subCategory)
+                    }
+                )
+            }
         }
 
         composable(

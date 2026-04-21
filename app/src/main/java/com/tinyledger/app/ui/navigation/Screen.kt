@@ -56,6 +56,12 @@ sealed class Screen(val route: String) {
     data object AddCategory : Screen("add_category/{transactionType}") {
         fun createRoute(transactionType: String = "EXPENSE") = "add_category/$transactionType"
     }
+    data object EditCategory : Screen("edit_category/{categoryId}/{transactionType}") {
+        fun createRoute(categoryId: String, transactionType: String = "EXPENSE") = "edit_category/$categoryId/$transactionType"
+    }
+    data object AddSubCategory : Screen("add_sub_category/{parentId}/{transactionType}") {
+        fun createRoute(parentId: String, transactionType: String = "EXPENSE") = "add_sub_category/$parentId/$transactionType"
+    }
     data object AddAccount : Screen("add_account/{accountType}") {
         fun createRoute(accountType: Int = 0) = "add_account/$accountType"
     }

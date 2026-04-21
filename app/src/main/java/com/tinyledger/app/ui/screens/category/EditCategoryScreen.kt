@@ -12,34 +12,37 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.components.getCategoryIcon
 
-// 图标分组数据
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddCategoryScreen(
+fun EditCategoryScreen(
+    category: Category,
     transactionType: TransactionType,
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onCategoryUpdated: (Category) -> Unit = {}
 ) {
-    var categoryName by remember { mutableStateOf("") }
-    var selectedIcon by remember { mutableStateOf<String?>(null) }
-    var selectedGroupIndex by remember { mutableStateOf(0) }
-    val maxNameLength = 4  // 最多4个汉字
+    var categoryName by remember { mutableStateOf(category.name) }
+    var selectedIcon by remember { mutableStateOf(category.icon) }
+    var selectedGroupIndex by remember {
+        mutableStateOf(
+            iconGroups.indexOfFirst { group -> group.icons.contains(category.icon) }.coerceAtLeast(0)
+        )
+    }
+    val maxNameLength = 4
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "新建一级分类",
+                        "修改分类",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.SemiBold
                         )
@@ -65,27 +68,21 @@ fun AddCategoryScreen(
                 Button(
                     onClick = {
                         if (categoryName.trim().isBlank()) return@Button
-                        if (selectedIcon == null) return@Button
+                        if (selectedIcon.isEmpty()) return@Button
 
-                        // 检查分类名称是否已存在
-                        val existingCategories = Category.getCategoriesByType(transactionType)
-                        val isDuplicate = existingCategories.any {
-                            it.name.equals(categoryName.trim(), ignoreCase = true)
-                        }
-                        if (isDuplicate) return@Button
-
-                        Category.addCustomCategory(
+                        val updatedCategory = category.copy(
                             name = categoryName.trim(),
-                            type = transactionType,
-                            icon = selectedIcon!!
+                            icon = selectedIcon
                         )
+                        onCategoryUpdated(updatedCategory)
                         onNavigateBack()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
                         .clip(RoundedCornerShape(24.dp)),
-                    enabled = categoryName.trim().isNotBlank() && selectedIcon != null,
+                    enabled = categoryName.trim().isNotBlank() && selectedIcon.isNotEmpty() &&
+                            (categoryName.trim() != category.name || selectedIcon != category.icon),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Text("保存", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -100,7 +97,6 @@ fun AddCategoryScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 分类名称输入
             Text(
                 "分类名称",
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -135,7 +131,6 @@ fun AddCategoryScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 分类图标标题
             Text(
                 "分类图标",
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -144,7 +139,6 @@ fun AddCategoryScreen(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             )
 
-            // 左右布局：左侧分类导航 + 右侧图标网格
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,7 +153,6 @@ fun AddCategoryScreen(
                         .fillMaxWidth()
                         .heightIn(min = 300.dp, max = 450.dp)
                 ) {
-                    // 左侧分类导航
                     Column(
                         modifier = Modifier
                             .width(72.dp)
@@ -202,7 +195,6 @@ fun AddCategoryScreen(
                         }
                     }
 
-                    // 右侧图标网格
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -211,7 +203,6 @@ fun AddCategoryScreen(
                             .verticalScroll(rememberScrollState())
                     ) {
                         val currentGroup = iconGroups[selectedGroupIndex]
-                        // 当前分类标题
                         Text(
                             text = currentGroup.name,
                             style = MaterialTheme.typography.titleSmall.copy(
@@ -221,7 +212,6 @@ fun AddCategoryScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        // 图标网格（每行5个）
                         currentGroup.icons.chunked(5).forEach { rowIcons ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -256,7 +246,6 @@ fun AddCategoryScreen(
                                         }
                                     }
                                 }
-                                // 填充空位
                                 repeat(5 - rowIcons.size) {
                                     Spacer(modifier = Modifier.weight(1f))
                                 }

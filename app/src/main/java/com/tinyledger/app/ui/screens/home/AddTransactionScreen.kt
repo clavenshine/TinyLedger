@@ -75,7 +75,7 @@ import java.util.*
 fun AddTransactionScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAccounts: () -> Unit = {},
-    onNavigateToCategoryManage: () -> Unit = {},
+    onNavigateToCategoryManage: (TransactionType) -> Unit = {},
     transactionId: Long? = null,
     initialCreditAccountId: Long? = null,
     initialSelectedAccountId: Long? = null,
@@ -538,12 +538,12 @@ fun AddTransactionScreen(
                             selectedCategory = uiState.selectedCategory,
                             onCategorySelected = { viewModel.selectCategory(it) },
                             onAddCategory = { name -> viewModel.addCategory(name) },
-                            onDeleteCategory = { category -> viewModel.deleteCategory(category) },
-                            onRenameCategory = { category, newName -> viewModel.renameCategory(category, newName) },
                             showAddButton = true,
                             transactionType = uiState.transactionType,
                             vibrationEnabled = vibrationEnabled,
-                            onNavigateToCategoryManage = onNavigateToCategoryManage
+                            onNavigateToCategoryManage = { type ->
+                                onNavigateToCategoryManage(type)
+                            }
                         )
                     }
                 }

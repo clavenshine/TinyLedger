@@ -782,17 +782,18 @@ private fun InteractiveTrendChart(
 
             // 仅绘制到选中索引的填充区域和折线
             if (points.size >= 2 && selectedIndex >= 1) {
+                val safeSelectedIndex = selectedIndex.coerceAtMost(points.lastIndex)
                 val fillPath = Path().apply {
                     moveTo(points[0].x, chartH)
-                    for (j in 0..selectedIndex) lineTo(points[j].x, points[j].y)
-                    lineTo(points[selectedIndex].x, chartH)
+                    for (j in 0..safeSelectedIndex) lineTo(points[j].x, points[j].y)
+                    lineTo(points[safeSelectedIndex].x, chartH)
                     close()
                 }
                 drawPath(fillPath, brush = Brush.verticalGradient(
                     colors = listOf(lineColor.copy(alpha = 0.25f), lineColor.copy(alpha = 0.04f)),
-                    startY = points[selectedIndex].y, endY = chartH
+                    startY = points[safeSelectedIndex].y, endY = chartH
                 ))
-                for (j in 0 until min(selectedIndex, points.lastIndex)) {
+                for (j in 0 until min(safeSelectedIndex, points.lastIndex)) {
                     drawLine(lineColor, points[j], points[j + 1], strokeWidth = 1.8.dp.toPx(), cap = StrokeCap.Round)
                 }
             } else if (points.isNotEmpty()) {
