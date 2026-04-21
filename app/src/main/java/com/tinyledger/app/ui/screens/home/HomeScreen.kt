@@ -69,49 +69,29 @@ fun HomeScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var transactionToDelete by remember { mutableStateOf<Long?>(null) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 16.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // ── 顶部标题栏 ──
-        item {
-            CenterAlignedTopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "我的账本",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Icon(
-                            Icons.Default.SwapVert,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp).padding(start = 4.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
+        // 固定区域：本月概览卡片
+        MonthSummaryCard(
+            year = year,
+            month = month,
+            monthlyExpense = uiState.monthlyExpense,
+            monthlyIncome = uiState.monthlyIncome,
+            dailyAvgExpense = uiState.dailyAvgExpense,
+            currencySymbol = uiState.currencySymbol,
+            modifier = Modifier.padding(top = 16.dp)
+        )
 
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-
-        // ── 本月支出卡片 ──
-        item {
-            MonthSummaryCard(
-                year = year,
-                month = month,
-                monthlyExpense = uiState.monthlyExpense,
-                monthlyIncome = uiState.monthlyIncome,
-                dailyAvgExpense = uiState.dailyAvgExpense,
-                currencySymbol = uiState.currencySymbol
-            )
-        }
+        // 可滚动区域
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
 
         // ── 今日账单 ──
         item {
@@ -396,6 +376,7 @@ fun HomeScreen(
             }
         )
     }
+    }
 }
 
 @Composable
@@ -405,10 +386,11 @@ private fun MonthSummaryCard(
     monthlyExpense: Double,
     monthlyIncome: Double,
     dailyAvgExpense: Double,
-    currencySymbol: String
+    currencySymbol: String,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(20.dp),

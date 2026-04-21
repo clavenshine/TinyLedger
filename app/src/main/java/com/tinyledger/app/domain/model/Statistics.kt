@@ -14,3 +14,21 @@ data class CategoryAmount(
     val amount: Double,
     val percentage: Float
 )
+
+data class DailyRecord(
+    val dateStr: String,        // "04.01"
+    val year: Int,
+    val month: Int,
+    val day: Int,
+    val income: Double,
+    val expense: Double,
+    val balance: Double
+)
+
+/** 月度趋势记录（用于年度视图） */
+data class MonthlyRecord(
+    val month: Int,
+    val income: Double,
+    val expense: Double,
+    val balance: Double
+)

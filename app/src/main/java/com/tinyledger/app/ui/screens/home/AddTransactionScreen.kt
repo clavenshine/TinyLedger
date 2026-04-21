@@ -236,46 +236,21 @@ fun AddTransactionScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (uiState.isEditing) "编辑记账" else "添加记账",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.primary)
+    ) {
+        // 固定区域：类型选择Tab（居中，加大顶部间距）
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         ) {
-            // Transaction Type Selector - 4 types
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -357,6 +332,14 @@ fun AddTransactionScreen(
                 }
             }
 
+        // 可滚动区域
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             // Amount Input with dynamic zoom effect (Feature 1: font size auto-enlarges when typing)
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -994,12 +977,12 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Save Button - Feature 3: Color deepens on press with brief loading animation
+            // Save Button - 立体感按钮：白底 + 主色文字 + 阴影 + 高光
             val saveButtonColor by animateColorAsState(
                 targetValue = if (isSaveAnimating || uiState.isSaving)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
                 else
-                    MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.surface,
                 animationSpec = tween(300),
                 label = "save_button_color"
             )
@@ -1011,37 +994,68 @@ fun AddTransactionScreen(
                 ),
                 label = "save_button_scale"
             )
+            val saveButtonShadow by animateDpAsState(
+                targetValue = if (isSaveAnimating || uiState.isSaving) 2.dp else 8.dp,
+                animationSpec = tween(200),
+                label = "save_button_shadow"
+            )
 
-            Button(
-                onClick = {
-                    isSaveAnimating = true
-                    viewModel.saveTransaction()
-                },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .scale(saveButtonScale),
-                enabled = !uiState.isSaving && !isSaveAnimating,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = saveButtonColor
-                )
+                    .padding(horizontal = 16.dp)
             ) {
-                if (uiState.isSaving || isSaveAnimating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.5.dp
+                // 阴影层 — 略偏下方，营造悬浮立体感
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .offset(y = 3.dp)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                )
+
+                // 按钮主体
+                Button(
+                    onClick = {
+                        isSaveAnimating = true
+                        viewModel.saveTransaction()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .scale(saveButtonScale)
+                        .shadow(saveButtonShadow, RoundedCornerShape(16.dp)),
+                    enabled = !uiState.isSaving && !isSaveAnimating,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = saveButtonColor,
+                        disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 0.dp,
+                        pressedElevation = 0.dp
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "保存中...",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                } else {
-                    Text(
-                        text = "保存",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                ) {
+                    if (uiState.isSaving || isSaveAnimating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.5.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "保存中...",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                        )
+                    } else {
+                        Text(
+                            text = "保存",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 

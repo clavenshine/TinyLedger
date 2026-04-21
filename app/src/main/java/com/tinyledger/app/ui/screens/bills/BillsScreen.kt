@@ -53,6 +53,7 @@ import com.tinyledger.app.util.DateUtils
 import com.tinyledger.app.util.SoundFeedbackManager
 import com.tinyledger.app.ui.viewmodel.FilterType
 import com.tinyledger.app.ui.viewmodel.DateFilter
+import com.tinyledger.app.ui.viewmodel.DateFilterMode
 import com.tinyledger.app.ui.viewmodel.PhotoAlbumViewModel
 import coil.compose.AsyncImage
 import java.io.File
@@ -85,55 +86,15 @@ fun BillsScreen(
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // Top bar with title and view mode toggle
-        item {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "账单",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateToSearch) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "搜索"
-                        )
-                    }
-                },
-                actions = {
-                    // Year/Month picker button
-                    TextButton(onClick = { showYearMonthPicker = true }) {
-                        Text(
-                            text = "${uiState.selectedYear}年${uiState.selectedMonth}月",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-
-        // View mode toggle (流水/日历)
+        // View mode toggle (流水/日历/相册) + 日期控件
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // 视图切换
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surface,
@@ -162,6 +123,37 @@ fun BillsScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                // 日期控件（靠右对齐，与左侧切换按钮风格一致的 Surface 容器）
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 3.dp,
+                    modifier = Modifier.clickable { showYearMonthPicker = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "${uiState.selectedYear}年${uiState.selectedMonth}月",
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -327,13 +319,16 @@ fun BillsScreen(
         }
     }
 
-    // Year/month picker dialog
+    // Year/month picker bottom sheet
     if (showYearMonthPicker) {
-        YearMonthPickerDialog(
-            currentYear = uiState.selectedYear,
-            currentMonth = uiState.selectedMonth,
-            onConfirm = { year, month ->
-                viewModel.changeMonth(year, month)
+        AlbumDateFilterBottomSheet(
+            currentDateFilter = DateFilter(
+                mode = DateFilterMode.MONTH,
+                year = uiState.selectedYear,
+                month = uiState.selectedMonth
+            ),
+            onFilterSelected = { filter ->
+                viewModel.changeMonth(filter.year, filter.month)
                 showYearMonthPicker = false
             },
             onDismiss = { showYearMonthPicker = false }
@@ -605,27 +600,12 @@ private fun AlbumView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // TopAppBar
-        CenterAlignedTopAppBar(
-            title = {
-                Text(
-                    text = "账单",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            },
-            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
-            )
-        )
-
-        // View mode toggle (流水/日历/相册)
+        // View mode toggle (流水/日历/相册) + 日期控件
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.Center
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -657,29 +637,45 @@ private fun AlbumView(
                     }
                 }
             }
-        }
 
-        // Album filter chips
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            FilterChip(
-                selected = true,
-                onClick = { showDatePicker = true },
-                label = { Text(albumUiState.dateFilter.displayText()) },
-                leadingIcon = {
+            Spacer(Modifier.weight(1f))
+
+            // 日期控件（靠右对齐，与左侧切换按钮风格一致的 Surface 容器）
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+                modifier = Modifier.clickable { showDatePicker = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Icon(
                         Icons.Default.CalendarToday,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                },
-                modifier = Modifier.height(36.dp)
-            )
+                    Text(
+                        albumUiState.dateFilter.displayText(),
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
 
+        // Album filter chips（全部分类）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
             FilterChip(
                 selected = albumUiState.selectedTypes.isNotEmpty(),
                 onClick = { showTypeFilter = true },

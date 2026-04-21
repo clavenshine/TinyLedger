@@ -80,36 +80,14 @@ fun AddAccountScreen(
         selectedType = types.firstOrNull() ?: AccountType.BANK
     }
     
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "新建账户",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+            .padding(top = 24.dp)
+    ) {
             // 账户属性选择 - 胶囊按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -366,7 +344,6 @@ fun AddAccountScreen(
                 Text("保存", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
-    }
     
     // 日期选择器 - 自定义日历样式
     if (showDatePicker) {
