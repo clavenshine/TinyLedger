@@ -44,6 +44,8 @@ import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.viewmodel.AccountViewModel
 import com.tinyledger.app.util.CurrencyUtils
 import com.tinyledger.app.ui.components.NumericKeyboard
+import com.tinyledger.app.ui.components.BankInfo
+import com.tinyledger.app.ui.components.resolveBankLogo
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -528,24 +530,28 @@ private fun AccountInfoCard(
                     }
                 }
                 
-                // 账户图标
+                // 账户图标 - 银行Logo / 默认图标
+                val bankInfo = resolveBankLogo(account.name)
                 Box(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color(android.graphics.Color.parseColor(account.color))),
+                        .background(
+                            if (bankInfo != null) bankInfo.brandColor
+                            else Color(android.graphics.Color.parseColor(account.color))
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 优先显示银行首字图标
-                    val bankInitial = getBankInitial(account.name)
-                    if (bankInitial != null) {
+                    if (bankInfo != null && bankInfo.shortName.isNotBlank()) {
+                        // 显示银行简称（品牌色背景 + 白色文字）
                         Text(
-                            text = bankInitial,
+                            text = bankInfo.shortName,
                             color = Color.White,
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                     } else {
+                        // 非银行账户，使用默认 Material Icon
                         Icon(
                             imageVector = getAccountIconLocal(account.type.icon),
                             contentDescription = null,

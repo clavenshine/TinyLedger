@@ -37,7 +37,7 @@ class TransactionNotificationHelper @Inject constructor(
         private const val NOTIFICATION_ID_BASE = 10000
 
         /**
-         * 播放"咻"的滑降提示音
+         * 播放“咻”的滑降提示音
          * 使用AudioTrack生成从高频滑降到低频的频率扫描音效
          */
         fun playWhooshSound() {
@@ -48,7 +48,7 @@ class TransactionNotificationHelper @Inject constructor(
                     val numSamples = (sampleRate * durationSec).toInt()
                     val startFreq = 1400.0  // 起始高频
                     val endFreq = 350.0      // 结束低频
-
+        
                     val samples = ShortArray(numSamples)
                     var phase = 0.0
                     for (i in 0 until numSamples) {
@@ -59,7 +59,7 @@ class TransactionNotificationHelper @Inject constructor(
                         val envelope = (1.0 - progress * progress) * 0.5
                         samples[i] = (envelope * Short.MAX_VALUE * Math.sin(phase)).toInt().toShort()
                     }
-
+        
                     val audioTrack = AudioTrack(
                         AudioManager.STREAM_MUSIC,
                         sampleRate,
@@ -74,6 +74,91 @@ class TransactionNotificationHelper @Inject constructor(
                     try { audioTrack.release() } catch (_: Exception) {}
                 } catch (e: Exception) {
                     Log.e(TAG, "播放咻声失败", e)
+                }
+            }.start()
+        }
+        
+        /**
+         * 播放“水滴”声
+         * 使用AudioTrack生成高频短促振荡衰减音效
+         */
+        fun playWaterDropSound() {
+            Thread {
+                try {
+                    val sampleRate = 44100
+                    val durationSec = 0.12
+                    val numSamples = (sampleRate * durationSec).toInt()
+                    val baseFreq = 2400.0  // 高频基调
+        
+                    val samples = ShortArray(numSamples)
+                    var phase = 0.0
+                    for (i in 0 until numSamples) {
+                        val progress = i.toDouble() / numSamples
+                        // 频率轻微下降，模拟水滴
+                        val freq = baseFreq * (1.0 - progress * 0.15)
+                        phase += 2.0 * Math.PI * freq / sampleRate
+                        // 快速衰减包络
+                        val envelope = Math.exp(-progress * 8.0) * 0.6
+                        samples[i] = (envelope * Short.MAX_VALUE * Math.sin(phase)).toInt().toShort()
+                    }
+        
+                    val audioTrack = AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        numSamples * 2,
+                        AudioTrack.MODE_STATIC
+                    )
+                    audioTrack.write(samples, 0, numSamples)
+                    audioTrack.play()
+                    Thread.sleep(300)
+                    try { audioTrack.release() } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.e(TAG, "播放水滴声失败", e)
+                }
+            }.start()
+        }
+        
+        /**
+         * 播放“弹簧”声
+         * 使用AudioTrack生成频率振荡弹跳音效
+         */
+        fun playSpringSound() {
+            Thread {
+                try {
+                    val sampleRate = 44100
+                    val durationSec = 0.25
+                    val numSamples = (sampleRate * durationSec).toInt()
+                    val baseFreq = 600.0
+        
+                    val samples = ShortArray(numSamples)
+                    var phase = 0.0
+                    for (i in 0 until numSamples) {
+                        val progress = i.toDouble() / numSamples
+                        // 频率振荡：模拟弹簧弹跳效果
+                        val bounce = Math.sin(progress * Math.PI * 6.0) * (1.0 - progress)
+                        val freq = baseFreq * (1.0 + bounce * 0.5)
+                        phase += 2.0 * Math.PI * freq / sampleRate
+                        // 衰减包络
+                        val envelope = (1.0 - progress) * (1.0 - progress) * 0.5
+                        samples[i] = (envelope * Short.MAX_VALUE * Math.sin(phase)).toInt().toShort()
+                    }
+        
+                    val audioTrack = AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        numSamples * 2,
+                        AudioTrack.MODE_STATIC
+                    )
+                    audioTrack.write(samples, 0, numSamples)
+                    audioTrack.play()
+                    Thread.sleep(500)
+                    try { audioTrack.release() } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.e(TAG, "播放弹簧声失败", e)
                 }
             }.start()
         }

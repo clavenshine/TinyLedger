@@ -374,7 +374,7 @@ class AddTransactionViewModel @Inject constructor(
         _uiState.update { it.copy(date = date) }
     }
 
-    fun saveTransaction() {
+    fun saveTransaction(onSuccess: () -> Unit = {}) {
         val state = _uiState.value
 
         // Validation
@@ -613,6 +613,7 @@ class AddTransactionViewModel @Inject constructor(
                 }
 
                 _uiState.update { it.copy(isSaving = false, saveSuccess = true) }
+                onSuccess()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

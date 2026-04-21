@@ -353,7 +353,7 @@ fun AddAccountScreen(
                     
                     // 如果声音设置已开启，播放“咻”提示音
                     if (com.tinyledger.app.data.notification.TransactionNotificationService.isSoundEnabled(context)) {
-                        com.tinyledger.app.data.notification.TransactionNotificationHelper.playWhooshSound()
+                        com.tinyledger.app.data.notification.TransactionNotificationHelper.playWaterDropSound()
                     }
                     
                     onNavigateBack()

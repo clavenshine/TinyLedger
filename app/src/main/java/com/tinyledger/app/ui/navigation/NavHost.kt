@@ -3,6 +3,9 @@ package com.tinyledger.app.ui.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -32,6 +35,10 @@ import com.tinyledger.app.ui.screens.settings.SettingsScreen
 import com.tinyledger.app.ui.screens.statistics.StatisticsScreen
 import com.tinyledger.app.ui.screens.category.CategoryManageScreen
 import com.tinyledger.app.ui.screens.category.AddCategoryScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.tinyledger.app.ui.viewmodel.HomeViewModel
+import com.tinyledger.app.ui.viewmodel.BillsViewModel
+import com.tinyledger.app.ui.screens.detail.TransactionDetailScreen
 
 @Composable
 fun AppNavHost(
@@ -75,6 +82,9 @@ fun AppNavHost(
                 onEditTransaction = { id ->
                     navController.navigate(Screen.EditTransaction.createRoute(id))
                 },
+                onViewTransactionDetail = { id ->
+                    navController.navigate(Screen.TransactionDetail.createRoute(id))
+                },
                 onNavigateToAccounts = { tabIndex ->
                     navController.navigate(Screen.Accounts.createRoute(tabIndex))
                 },
@@ -91,6 +101,9 @@ fun AppNavHost(
             BillsScreen(
                 onEditTransaction = { id ->
                     navController.navigate(Screen.EditTransaction.createRoute(id))
+                },
+                onViewTransactionDetail = { id ->
+                    navController.navigate(Screen.TransactionDetail.createRoute(id))
                 },
                 onNavigateToSearch = {
                     navController.navigate(Screen.Search.route)
@@ -433,6 +446,27 @@ fun AppNavHost(
             AddCategoryScreen(
                 transactionType = transactionType,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.TransactionDetail.route,
+            arguments = listOf(
+                navArgument("transactionId") { type = NavType.LongType }
+            )
+        ) {
+            val detailViewModel: com.tinyledger.app.ui.viewmodel.TransactionDetailViewModel = hiltViewModel()
+            TransactionDetailScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onEditTransaction = { id ->
+                    navController.navigate(Screen.EditTransaction.createRoute(id))
+                },
+                onDeleteTransaction = { _ ->
+                    detailViewModel.deleteTransaction()
+                    navController.popBackStack()
+                }
             )
         }
     }

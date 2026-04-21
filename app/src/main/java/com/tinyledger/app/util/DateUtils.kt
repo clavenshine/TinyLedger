@@ -8,6 +8,7 @@ object DateUtils {
     private val monthFormat = SimpleDateFormat("yyyy-MM", Locale.getDefault())
     private val displayFormat = SimpleDateFormat("MM月dd日", Locale.CHINESE)
     private val displayMonthFormat = SimpleDateFormat("yyyy年MM月", Locale.CHINESE)
+    private val detailDateTimeFormat = SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.CHINESE)
 
     fun formatDate(timestamp: Long): String {
         return dateFormat.format(Date(timestamp))
@@ -19,6 +20,10 @@ object DateUtils {
 
     fun formatDisplayDate(timestamp: Long): String {
         return displayFormat.format(Date(timestamp))
+    }
+
+    fun formatDetailDateTime(timestamp: Long): String {
+        return detailDateTimeFormat.format(Date(timestamp))
     }
 
     fun formatDisplayMonth(year: Int, month: Int): String {

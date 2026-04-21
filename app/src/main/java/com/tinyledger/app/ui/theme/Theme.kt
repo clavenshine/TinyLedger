@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
@@ -102,31 +103,43 @@ private fun lightColorScheme(
     )
 }
 
-// Dark Color Scheme — 主色自动提亮，保证在 #121212 深色背景上的可读性
+// Dark Color Scheme — 主色自动提亮，保证在深色背景上的可读性
+// 对于深色专属主题（DARK_MIDNIGHT、DARK_OCEAN），使用其自带的深色背景
+// 对于浅色主题，使用 Material Design 标准深色背景
 private fun darkColorScheme(
     appColorScheme: AppColorScheme = AppColorScheme.fromTheme(ColorTheme.IOS_BLUE)
-) = darkColorScheme(
-    primary = Color(appColorScheme.primaryColor).brightenForDark(0.55f),
-    onPrimary = Color.White,
-    primaryContainer = Color(appColorScheme.primaryLightColor).brightenForDark(0.4f).copy(alpha = 0.18f),
-    onPrimaryContainer = Color(appColorScheme.primaryLightColor).brightenForDark(0.65f),
-    secondary = Color(appColorScheme.secondaryColor).brightenForDark(0.5f),
-    onSecondary = Color.White,
-    secondaryContainer = Color(appColorScheme.secondaryColor).brightenForDark(0.35f).copy(alpha = 0.18f),
-    onSecondaryContainer = Color(appColorScheme.secondaryColor).brightenForDark(0.6f),
-    tertiary = Color(appColorScheme.accentColor).brightenForDark(0.5f),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(appColorScheme.accentColor).brightenForDark(0.35f).copy(alpha = 0.18f),
-    onTertiaryContainer = Color(appColorScheme.accentColor).brightenForDark(0.6f),
-    background = Color(0xFF121212),          // Material Design 深色背景
-    onBackground = Color(0xFFE0E0E0),        // 高对比度浅色文字
-    surface = Color(0xFF1E1E1E),             // 稍亮的表面
-    onSurface = Color(0xFFE0E0E0),
-    surfaceVariant = Color(0xFF2C2C2E),
-    onSurfaceVariant = Color(0xFF9E9E9E),
-    outline = Color(0xFF38383A),
-    outlineVariant = Color(0xFF3A3A3C)
-)
+): ColorScheme {
+    val isDarkTheme = appColorScheme.theme == ColorTheme.DARK_MIDNIGHT || appColorScheme.theme == ColorTheme.DARK_OCEAN
+    val bg = if (isDarkTheme) Color(appColorScheme.backgroundColor) else Color(0xFF121212)
+    val surface = if (isDarkTheme) Color(appColorScheme.surfaceColor) else Color(0xFF1E1E1E)
+    val surfaceVariant = if (isDarkTheme) {
+        // 深色专属主题：surfaceVariant 比背景稍亮
+        Color(appColorScheme.surfaceColor).copy(alpha = 0.85f).compositeOver(Color(0xFF2C2C2E))
+    } else Color(0xFF2C2C2E)
+
+    return darkColorScheme(
+        primary = Color(appColorScheme.primaryColor).brightenForDark(0.55f),
+        onPrimary = Color.White,
+        primaryContainer = Color(appColorScheme.primaryLightColor).brightenForDark(0.4f).copy(alpha = 0.18f),
+        onPrimaryContainer = Color(appColorScheme.primaryLightColor).brightenForDark(0.65f),
+        secondary = Color(appColorScheme.secondaryColor).brightenForDark(0.5f),
+        onSecondary = Color.White,
+        secondaryContainer = Color(appColorScheme.secondaryColor).brightenForDark(0.35f).copy(alpha = 0.18f),
+        onSecondaryContainer = Color(appColorScheme.secondaryColor).brightenForDark(0.6f),
+        tertiary = Color(appColorScheme.accentColor).brightenForDark(0.5f),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(appColorScheme.accentColor).brightenForDark(0.35f).copy(alpha = 0.18f),
+        onTertiaryContainer = Color(appColorScheme.accentColor).brightenForDark(0.6f),
+        background = bg,
+        onBackground = if (isDarkTheme) Color(appColorScheme.textColor) else Color(0xFFE0E0E0),
+        surface = surface,
+        onSurface = if (isDarkTheme) Color(appColorScheme.textColor) else Color(0xFFE0E0E0),
+        surfaceVariant = surfaceVariant,
+        onSurfaceVariant = if (isDarkTheme) Color(appColorScheme.textColor).copy(alpha = 0.7f) else Color(0xFF9E9E9E),
+        outline = if (isDarkTheme) Color(appColorScheme.textColor).copy(alpha = 0.15f) else Color(0xFF38383A),
+        outlineVariant = if (isDarkTheme) Color(appColorScheme.textColor).copy(alpha = 0.1f) else Color(0xFF3A3A3C)
+    )
+}
 
 @Composable
 fun TinyLedgerTheme(
@@ -138,22 +151,25 @@ fun TinyLedgerTheme(
     val configuration = LocalConfiguration.current
     val systemIsDark = (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     
-    // 深色模式自动切换逻辑：
-    // 1. 当系统处于深色模式时，强制使用深色专属主题
-    // 2. 深色模式下锁定主题选择，不可切换
-    // 3. 系统关闭深色模式后，恢复用户选择的主题
-    val effectiveColorScheme = if (systemIsDark) {
-        // 系统深色模式：强制使用深色专属主题（午夜深蓝）
-        AppColorScheme.fromTheme(ColorTheme.DARK_MIDNIGHT)
+    // 主题生效逻辑：
+    // 1. 系统深色模式：强制使用深色模式，只有午夜深蓝/深海墨蓝主题生效，浅色主题回退为午夜深蓝
+    // 2. 系统浅色模式：先判断 app 的"深色模式"设置，再应用用户选择的主题（所有主题均可选）
+    val isDarkTheme = appColorScheme.theme == ColorTheme.DARK_MIDNIGHT || appColorScheme.theme == ColorTheme.DARK_OCEAN
+
+    val (effectiveColorScheme, darkTheme) = if (systemIsDark) {
+        // 系统深色模式：始终深色，只有深色专属主题生效
+        Pair(
+            if (isDarkTheme) appColorScheme else AppColorScheme.fromTheme(ColorTheme.DARK_MIDNIGHT),
+            true
+        )
     } else {
-        // 系统浅色模式：使用用户选择的主题
-        appColorScheme
-    }
-    
-    val darkTheme = when (themeMode) {
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-        ThemeMode.SYSTEM -> systemIsDark
+        // 系统浅色模式：遵循 app 的"深色模式"设置
+        val dark = when (themeMode) {
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+            ThemeMode.SYSTEM -> false // 系统浅色，跟随系统结果为浅色
+        }
+        Pair(appColorScheme, dark)
     }
 
     val colorScheme = if (darkTheme) {

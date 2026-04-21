@@ -5,7 +5,6 @@ import android.provider.Settings
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.*
 import android.content.res.Configuration
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -111,14 +110,13 @@ fun SettingsScreen(
             item {
                 IosSettingsCard {
                     // 主题颜色
-                    val isSystemDark = isSystemInDarkTheme()
                     IosSettingsItem(
                         icon = Icons.Default.Palette,
                         iconTint = Color(uiState.colorScheme.primaryColor),
                         title = "主题颜色",
-                        subtitle = if (isSystemDark) "深色模式已锁定主题" else uiState.settings.colorTheme.displayName,
-                        onClick = { if (!isSystemDark) onNavigateToThemeColor() },
-                        enabled = !isSystemDark
+                        subtitle = uiState.settings.colorTheme.displayName,
+                        onClick = onNavigateToThemeColor,
+                        enabled = true
                     )
                     
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))

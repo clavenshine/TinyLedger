@@ -21,7 +21,7 @@ enum class FilterType {
 }
 
 enum class BillsViewMode {
-    LIST, CALENDAR
+    LIST, CALENDAR, ALBUM
 }
 
 data class BillsUiState(

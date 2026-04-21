@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 工商银行 ICBC - 红色 "工" 字 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path android:fillColor="#C7000B" android:pathData="M50,8 C27.9,8 10,25.9 10,48s17.9,40 40,40s40,-17.9 40,-40S72.1,8 50,8z M50,80c-17.6,0-32,-14.4-32-32s14.4-32,32-32s32,14.4 32,32S67.6,80 50,80z"/>
+    <path android:fillColor="#C7000B" android:pathData="M30,35h15v8h-15z M55,35h20v8h-20z M38,52h24v8h-24z M42,68h16v8h-16z"/>
+</vector>

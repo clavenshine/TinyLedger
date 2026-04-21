@@ -52,6 +52,8 @@ import com.tinyledger.app.ui.viewmodel.AccountUiState
 import com.tinyledger.app.ui.viewmodel.AccountViewModel
 import com.tinyledger.app.ui.viewmodel.MonthlyTransactions
 import com.tinyledger.app.util.CurrencyUtils
+import com.tinyledger.app.ui.components.BankInfo
+import com.tinyledger.app.ui.components.resolveBankLogo
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
@@ -337,20 +339,34 @@ private fun AccountCardSimple(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 账户图标
+                    // 账户图标 - 银行Logo / 默认图标
+                    val bankInfo = resolveBankLogo(account.name)
                     Box(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(android.graphics.Color.parseColor(account.color))),
+                            .background(
+                                if (bankInfo != null) bankInfo.brandColor
+                                else Color(android.graphics.Color.parseColor(account.color))
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = getAccountIcon(account.type.icon),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        if (bankInfo != null && bankInfo.shortName.isNotBlank()) {
+                            // 显示银行简称（品牌色背景 + 白色文字）
+                            Text(
+                                text = bankInfo.shortName,
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Icon(
+                                imageVector = getAccountIcon(account.type.icon),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(16.dp))

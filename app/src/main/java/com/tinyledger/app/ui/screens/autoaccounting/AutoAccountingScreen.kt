@@ -65,9 +65,11 @@ fun AutoAccountingScreen(
     }
     
     // 系统权限状态
+    var hasSystemNotificationPermission by remember { mutableStateOf(checkNotificationPermission(context)) } // 通知权限
     var canDrawOverlays by remember { mutableStateOf(false) } // 悬浮窗权限
     var isIgnoringBatteryOptimizations by remember { mutableStateOf(false) } // 忽略电池优化
     var isAutoStartEnabled by remember { mutableStateOf(false) } // 自启动
+    var isNotPowerSaveMode by remember { mutableStateOf(!isPowerSaveMode(context)) } // 非省电模式
     var isLockedToBackground by remember { mutableStateOf(false) } // 锁定到后台（自动检测）
     var showLockConfirmDialog by remember { mutableStateOf(false) }
     var pendingLockConfirm by remember { mutableStateOf(false) }
@@ -76,6 +78,7 @@ fun AutoAccountingScreen(
     LaunchedEffect(Unit) {
         hasNotificationPermission = TransactionNotificationService.hasPermission(context)
         hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
+        hasSystemNotificationPermission = checkNotificationPermission(context)
         canDrawOverlays = Settings.canDrawOverlays(context)
         isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
         isAutoStartEnabled = checkAutoStartPermission(context)
@@ -92,13 +95,23 @@ fun AutoAccountingScreen(
         isLockedToBackground = checkIfLockedToBackground(context)
     }
     
-    // 检测从系统设置返回时触发锁定确认对话框
+    // 检测从系统设置返回时触发锁定确认对话框并刷新所有权限状态
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                // 刷新通知使用权状态
+                // 刷新所有权限和设置状态
+                hasNotificationPermission = TransactionNotificationService.hasPermission(context)
                 hasNotificationListenerPermission = TransactionNotificationService.hasPermission(context)
+                hasSystemNotificationPermission = checkNotificationPermission(context)
+                notificationEnabled = TransactionNotificationService.isEnabled(context)
+                seamlessEnabled = TransactionNotificationService.isSeamlessEnabled(context)
+                canDrawOverlays = Settings.canDrawOverlays(context)
+                isIgnoringBatteryOptimizations = checkBatteryOptimization(context)
+                isAutoStartEnabled = checkAutoStartPermission(context)
+                isNotPowerSaveMode = !isPowerSaveMode(context)
+                isLockedToBackground = checkIfLockedToBackground(context)
+                
                 // 处理锁定确认
                 if (pendingLockConfirm) {
                     showLockConfirmDialog = true
@@ -288,7 +301,7 @@ fun AutoAccountingScreen(
                         iconTint = IOSColors.SystemIndigo,
                         title = "通知权限",
                         subtitle = "允许应用发送通知提醒",
-                        enabled = checkNotificationPermission(context),
+                        enabled = hasSystemNotificationPermission,
                         onToggle = { openNotificationSettings(context) }
                     )
                     
@@ -336,7 +349,7 @@ fun AutoAccountingScreen(
                         iconTint = IOSColors.SystemRed,
                         title = "关闭省电模式",
                         subtitle = "确保后台服务正常运行",
-                        enabled = !isPowerSaveMode(context),
+                        enabled = isNotPowerSaveMode,
                         onToggle = { openPowerSaveSettings(context) }
                     )
                 }

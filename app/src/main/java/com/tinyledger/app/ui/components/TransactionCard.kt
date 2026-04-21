@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -98,11 +99,28 @@ fun TransactionCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(
-                    text = DateUtils.formatDisplayDate(transaction.date),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = DateUtils.formatDisplayDate(transaction.date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // 如果有图片，显示照片小图标
+                    if (!transaction.imagePath.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val iconSize = with(LocalDensity.current) {
+                            MaterialTheme.typography.bodySmall.fontSize.toDp()
+                        }
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = "有图片",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(iconSize)
+                        )
+                    }
+                }
             }
 
             // Amount

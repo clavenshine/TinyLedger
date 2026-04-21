@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tinyledger.app.util.SoundFeedbackManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.Manifest
@@ -65,7 +66,6 @@ import com.tinyledger.app.ui.components.CategorySelector
 import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.LendingSubType
 import kotlinx.coroutines.flow.drop
-import com.tinyledger.app.util.DateUtils
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
@@ -229,11 +229,9 @@ fun AddTransactionScreen(
 
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
-            // 如果声音设置已开启，播放“咻”提示音
-            if (com.tinyledger.app.data.notification.TransactionNotificationService.isSoundEnabled(context)) {
-                com.tinyledger.app.data.notification.TransactionNotificationHelper.playWhooshSound()
-                kotlinx.coroutines.delay(300)
-            }
+            // 播放保存成功音效和震动
+            SoundFeedbackManager.onSaved(context)
+            kotlinx.coroutines.delay(300)
             onNavigateBack()
         }
     }
@@ -973,6 +971,10 @@ fun AddTransactionScreen(
                                         Button(
                                             onClick = {
                                                 showDeleteConfirm = false
+                                                // 如果声音设置已开启，播放“弹簧”提示音
+                                                if (com.tinyledger.app.data.notification.TransactionNotificationService.isSoundEnabled(context)) {
+                                                    com.tinyledger.app.data.notification.TransactionNotificationHelper.playSpringSound()
+                                                }
                                                 viewModel.deleteCurrentTransaction()
                                             },
                                             modifier = Modifier.weight(1f).height(48.dp),

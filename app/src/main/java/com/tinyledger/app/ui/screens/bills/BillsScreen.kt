@@ -1,6 +1,8 @@
 package com.tinyledger.app.ui.screens.bills
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,9 +10,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,15 +26,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
@@ -37,7 +49,13 @@ import com.tinyledger.app.ui.viewmodel.BillsUiState
 import com.tinyledger.app.ui.viewmodel.BillsViewModel
 import com.tinyledger.app.ui.viewmodel.BillsViewMode
 import com.tinyledger.app.util.CurrencyUtils
+import com.tinyledger.app.util.DateUtils
+import com.tinyledger.app.util.SoundFeedbackManager
 import com.tinyledger.app.ui.viewmodel.FilterType
+import com.tinyledger.app.ui.viewmodel.DateFilter
+import com.tinyledger.app.ui.viewmodel.PhotoAlbumViewModel
+import coil.compose.AsyncImage
+import java.io.File
 import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.math.roundToInt
@@ -46,11 +64,19 @@ import kotlin.math.roundToInt
 @Composable
 fun BillsScreen(
     onEditTransaction: (Long) -> Unit,
+    onViewTransactionDetail: (Long) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     viewModel: BillsViewModel = hiltViewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
+
+    if (uiState.viewMode == BillsViewMode.ALBUM) {
+        AlbumView(
+            onViewTransactionDetail = onViewTransactionDetail
+        )
+    } else {
     var showYearMonthPicker by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -116,7 +142,8 @@ fun BillsScreen(
                     Row(modifier = Modifier.padding(4.dp)) {
                         val modes = listOf(
                             "流水" to BillsViewMode.LIST,
-                            "日历" to BillsViewMode.CALENDAR
+                            "日历" to BillsViewMode.CALENDAR,
+                            "相册" to BillsViewMode.ALBUM
                         )
                         modes.forEach { (label, mode) ->
                             val isSelected = uiState.viewMode == mode
@@ -127,7 +154,7 @@ fun BillsScreen(
                             ) {
                                 Text(
                                     text = label,
-                                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                     ),
@@ -201,6 +228,7 @@ fun BillsScreen(
                             currencySymbol = uiState.currencySymbol,
                             onEdit = { onEditTransaction(transaction.id) },
                             onDelete = { showDeleteDialog = transaction.id },
+                            onViewDetail = { onViewTransactionDetail(transaction.id) },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
@@ -291,6 +319,7 @@ fun BillsScreen(
                         currencySymbol = uiState.currencySymbol,
                         onEdit = { onEditTransaction(transaction.id) },
                         onDelete = { showDeleteDialog = transaction.id },
+                        onViewDetail = { onViewTransactionDetail(transaction.id) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
@@ -310,6 +339,7 @@ fun BillsScreen(
             onDismiss = { showYearMonthPicker = false }
         )
     }
+    }
 
     // Delete confirmation
     showDeleteDialog?.let { transactionId ->
@@ -317,6 +347,8 @@ fun BillsScreen(
             title = "删除账单记录？",
             onDismiss = { showDeleteDialog = null },
             onConfirm = {
+                // 播放删除成功音效和震动
+                SoundFeedbackManager.onDeleted(context)
                 viewModel.deleteTransaction(transactionId)
                 showDeleteDialog = null
             }
@@ -449,6 +481,7 @@ private fun SwipeableTransactionCard(
     currencySymbol: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onViewDetail: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -543,10 +576,583 @@ private fun SwipeableTransactionCard(
                 onClick = {
                     if (offsetX.value != 0f) {
                         coroutineScope.launch { offsetX.animateTo(0f, tween(200)) }
+                    } else {
+                        // 点击跳转到详情页
+                        onViewDetail()
                     }
-                    // 单纯点击不跳转到编辑页面
                 }
             )
+        }
+    }
+}
+
+// ==================== Album View ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlbumView(
+    onViewTransactionDetail: (Long) -> Unit
+) {
+    val billsViewModel: BillsViewModel = hiltViewModel()
+    val albumViewModel: PhotoAlbumViewModel = hiltViewModel()
+    val billsUiState by billsViewModel.uiState.collectAsState()
+    val albumUiState by albumViewModel.uiState.collectAsState()
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTypeFilter by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // TopAppBar
+        CenterAlignedTopAppBar(
+            title = {
+                Text(
+                    text = "账单",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            },
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            )
+        )
+
+        // View mode toggle (流水/日历/相册)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp
+            ) {
+                Row(modifier = Modifier.padding(4.dp)) {
+                    val modes = listOf(
+                        "流水" to BillsViewMode.LIST,
+                        "日历" to BillsViewMode.CALENDAR,
+                        "相册" to BillsViewMode.ALBUM
+                    )
+                    modes.forEach { (label, mode) ->
+                        val isSelected = billsUiState.viewMode == mode
+                        Surface(
+                            modifier = Modifier.clickable { billsViewModel.setViewMode(mode) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Album filter chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            FilterChip(
+                selected = true,
+                onClick = { showDatePicker = true },
+                label = { Text(albumUiState.dateFilter.displayText()) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                modifier = Modifier.height(36.dp)
+            )
+
+            FilterChip(
+                selected = albumUiState.selectedTypes.isNotEmpty(),
+                onClick = { showTypeFilter = true },
+                label = {
+                    Text(
+                        if (albumUiState.selectedTypes.isEmpty()) "全部分类"
+                        else albumUiState.selectedTypes.joinToString(", ") {
+                            when (it) {
+                                TransactionType.EXPENSE -> "支出"
+                                TransactionType.INCOME -> "收入"
+                                TransactionType.TRANSFER -> "转账"
+                                TransactionType.LENDING -> "借贷"
+                            }
+                        }
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                modifier = Modifier.height(36.dp)
+            )
+        }
+
+        // Album content
+        if (albumUiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (albumUiState.groupedByMonth.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "暂无带图片的账单",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                albumUiState.groupedByMonth.forEach { (monthLabel, transactions) ->
+                    item(span = { GridItemSpan(currentLineSpan = 2) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(16.dp)
+                                    .background(IOSColors.SystemIndigo, RoundedCornerShape(2.dp))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = monthLabel,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    items(transactions) { transaction ->
+                        AlbumPhotoCard(
+                            transaction = transaction,
+                            onClick = { onViewTransactionDetail(transaction.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Date picker bottom sheet
+    if (showDatePicker) {
+        AlbumDateFilterBottomSheet(
+            currentDateFilter = albumUiState.dateFilter,
+            onFilterSelected = { filter ->
+                albumViewModel.setDateFilter(filter)
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false }
+        )
+    }
+
+    // Type filter bottom sheet
+    if (showTypeFilter) {
+        AlbumTypeFilterBottomSheet(
+            selectedTypes = albumUiState.selectedTypes,
+            onTypesSelected = { types ->
+                albumViewModel.setTypes(types)
+                showTypeFilter = false
+            },
+            onDismiss = { showTypeFilter = false }
+        )
+    }
+}
+
+@Composable
+private fun AlbumPhotoCard(
+    transaction: Transaction,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        ) {
+            val firstImagePath = if (!transaction.imagePath.isNullOrBlank()) {
+                transaction.imagePath.split("||").firstOrNull { it.isNotBlank() }
+            } else null
+
+            if (firstImagePath != null) {
+                AsyncImage(
+                    model = File(firstImagePath),
+                    contentDescription = "账单图片",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val isExpense = transaction.type == TransactionType.EXPENSE
+        val amountColor = if (isExpense) IOSColors.SystemRed else IOSColors.SystemGreen
+        val prefix = if (isExpense) "- " else "+ "
+
+        Text(
+            text = "$prefix${CurrencyUtils.format(kotlin.math.abs(transaction.amount), "\u00a5")}",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = amountColor
+        )
+
+        Text(
+            text = DateUtils.formatDisplayDate(transaction.date),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlbumDateFilterBottomSheet(
+    currentDateFilter: DateFilter,
+    onFilterSelected: (DateFilter) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val currentCalendar = Calendar.getInstance()
+    val currentYear = currentCalendar.get(Calendar.YEAR)
+    val currentMonth = currentCalendar.get(Calendar.MONTH) + 1
+
+    var pickerYear by remember { mutableIntStateOf(currentDateFilter.year) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            Text(
+                text = "选择时间",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Year navigation row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { pickerYear-- }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "上一年", modifier = Modifier.size(28.dp))
+                }
+
+                Text(
+                    text = "${pickerYear}年",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = if (currentDateFilter.mode == com.tinyledger.app.ui.viewmodel.DateFilterMode.YEAR && currentDateFilter.year == pickerYear)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .clickable {
+                            onFilterSelected(DateFilter(com.tinyledger.app.ui.viewmodel.DateFilterMode.YEAR, pickerYear))
+                        }
+                        .padding(horizontal = 24.dp, vertical = 4.dp)
+                )
+
+                IconButton(onClick = { pickerYear++ }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.KeyboardArrowRight, contentDescription = "下一年", modifier = Modifier.size(28.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Month grid (4x3)
+            val months = (1..12).toList()
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                months.chunked(4).forEach { rowMonths ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowMonths.forEach { month ->
+                            val isCurrentMonth = (pickerYear == currentYear && month == currentMonth)
+                            val isSelectedMonth = (currentDateFilter.mode == com.tinyledger.app.ui.viewmodel.DateFilterMode.MONTH
+                                    && currentDateFilter.year == pickerYear
+                                    && currentDateFilter.month == month)
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        when {
+                                            isSelectedMonth -> MaterialTheme.colorScheme.primary
+                                            isCurrentMonth -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        }
+                                    )
+                                    .clickable {
+                                        onFilterSelected(DateFilter(com.tinyledger.app.ui.viewmodel.DateFilterMode.MONTH, pickerYear, month))
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${month}月",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = if (isSelectedMonth) FontWeight.Bold else FontWeight.Normal
+                                    ),
+                                    color = when {
+                                        isSelectedMonth -> Color.White
+                                        isCurrentMonth -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                        }
+                        repeat(4 - rowMonths.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "点击月份按月筛选，点击年份按年筛选",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlbumTypeFilterBottomSheet(
+    selectedTypes: Set<TransactionType>,
+    onTypesSelected: (Set<TransactionType>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var innerSelectedTypes by remember { mutableStateOf(selectedTypes.toSet()) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        scrimColor = Color(0x99000000),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            // Title
+            Text(
+                text = "选择分类",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Options — compact padding to fit screen
+            val types = listOf(
+                TransactionType.INCOME to "收入",
+                TransactionType.EXPENSE to "支出",
+                TransactionType.TRANSFER to "转账",
+                TransactionType.LENDING to "借贷"
+            )
+
+            types.forEach { (type, label) ->
+                val isChecked = type in innerSelectedTypes
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(
+                            width = 1.dp,
+                            color = if (isChecked) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .then(
+                            if (isChecked) Modifier.background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
+                            ) else Modifier
+                        )
+                        .clickable {
+                            innerSelectedTypes = if (isChecked)
+                                innerSelectedTypes - type
+                            else
+                                innerSelectedTypes + type
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = if (isChecked) FontWeight.SemiBold else FontWeight.Normal
+                        ),
+                        color = if (isChecked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    // Checkbox style
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .border(
+                                width = 2.dp,
+                                color = if (isChecked) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .then(
+                                if (isChecked) Modifier.background(
+                                    MaterialTheme.colorScheme.primary
+                                ) else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isChecked) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Disabled item: 单个分类
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "单个分类",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                            shape = RoundedCornerShape(4.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Confirm button
+            Button(
+                onClick = { onTypesSelected(innerSelectedTypes) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Text(
+                    text = "确定",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
         }
     }
 }

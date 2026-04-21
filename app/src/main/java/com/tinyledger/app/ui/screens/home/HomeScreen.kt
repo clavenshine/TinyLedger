@@ -45,6 +45,7 @@ import java.util.*
 fun HomeScreen(
     onAddTransaction: () -> Unit = {},
     onEditTransaction: (Long) -> Unit = {},
+    onViewTransactionDetail: (Long) -> Unit = {},
     onNavigateToAccounts: (Int) -> Unit = {}, // 0: 现金, 1: 信用, 2: 外部往来
     onNavigateToAutoAccounting: () -> Unit = {},
     onNavigateToCreditAccounts: () -> Unit = {},
@@ -119,6 +120,7 @@ fun HomeScreen(
                 todayExpense = uiState.todayExpense,
                 todayTransactions = uiState.todayTransactions,
                 currencySymbol = uiState.currencySymbol,
+                onViewTransactionDetail = onViewTransactionDetail,
                 onEditTransaction = onEditTransaction
             )
         }
@@ -384,6 +386,10 @@ fun HomeScreen(
             title = "删除账单记录？",
             onDismiss = { showDeleteDialog = false; transactionToDelete = null },
             onConfirm = {
+                // 如果声音设置已开启，播放“弹簧”提示音
+                if (com.tinyledger.app.data.notification.TransactionNotificationService.isSoundEnabled(context)) {
+                    com.tinyledger.app.data.notification.TransactionNotificationHelper.playSpringSound()
+                }
                 transactionToDelete?.let { viewModel.deleteTransaction(it) }
                 showDeleteDialog = false
                 transactionToDelete = null
@@ -525,6 +531,7 @@ private fun TodayBillsCard(
     todayExpense: Double,
     todayTransactions: List<com.tinyledger.app.domain.model.Transaction>,
     currencySymbol: String,
+    onViewTransactionDetail: (Long) -> Unit,
     onEditTransaction: (Long) -> Unit
 ) {
     Card(
@@ -581,7 +588,7 @@ private fun TodayBillsCard(
                     TransactionCard(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
-                        onClick = { onEditTransaction(transaction.id) },
+                        onClick = { onViewTransactionDetail(transaction.id) },
                         flat = true
                     )
                     Spacer(modifier = Modifier.height(4.dp))
