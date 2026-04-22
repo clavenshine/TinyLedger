@@ -923,7 +923,7 @@ private fun CategoryRankingSection(
                 currencySymbol = currencySymbol,
                 selectedIndex = donutSelectedIndex,
                 onSelectedChange = { idx -> donutSelectedIndex = idx },
-                modifier = Modifier.size(220.dp).align(Alignment.CenterHorizontally),
+                modifier = Modifier.size(210.dp).align(Alignment.CenterHorizontally),
                 isDark = isDark
             )
 
@@ -1028,10 +1028,10 @@ private fun DonutChartWithLabels(
                            val endOffDp: Pair<Float, Float>,       // 水平段终点相对中心的dp偏移
                            val isLeft: Boolean)
 
-    val chartBoxSize = 220f  // 与 Modifier.size(220.dp) 一致
-    val strokeWidthDp = 72f
-    val outerEdgeDp = chartBoxSize / 2f  // = 110dp
-    val anchorDp = outerEdgeDp + 2f      // = 112dp（锚点在圆弧外边缘）
+    val chartBoxSize = 210f  // 与 Modifier.size(210.dp) 一致
+    val strokeWidthDp = 64f
+    val outerEdgeDp = chartBoxSize / 2f  // = 105dp
+    val anchorDp = outerEdgeDp + 2f      // = 107dp（锚点在圆弧外边缘）
     val elbowLenDp = 18f                  // 斜线段长度
     val horizLenDp = 35f                  // 水平段长度（加长，延伸到空白区域）
 
@@ -1124,7 +1124,7 @@ private fun DonutChartWithLabels(
                 }
             }
         ) {
-            val strokeWidth = 72.dp.toPx()
+            val strokeWidth = 64.dp.toPx()
             val minDim = size.width.coerceAtMost(size.height)
             val baseRadius = (minDim - strokeWidth) / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
@@ -1132,85 +1132,115 @@ private fun DonutChartWithLabels(
 
             // 底环背景已去除
 
-            // 扇区绘制
+            // 扇区绘制：分两遍，先绘制未选中扇区，再绘制选中扇区（确保浮于上层）
             var runningStart = -90f
+            
+            // 第一遍：绘制所有未选中扇区
             data.forEachIndexed { i, item ->
                 val sweep = (item.percentage * 3.6f) - gap
-                if (sweep > 0.01f) {
-                    val sel = (i == animatedIdx)
-                    // 选中时放大 8%（原5%），加粗幅度加大
-                    val scale = if (sel) effectiveScale else 1.0f
-                    val curR = baseRadius * scale
-                    val curSW = strokeWidth * if (sel) 1.12f else 1.0f
+                if (sweep > 0.01f && i != animatedIdx) {
+                    val curR = baseRadius
+                    val curSW = strokeWidth
                     val arcColor = colors[i % colors.size]
-
-                    // 选中态阴影已去除
-
 
                     // 色块弧
                     drawArc(color = arcColor, startAngle = runningStart + gap / 2, sweepAngle = sweep, useCenter = false,
                         topLeft = Offset(center.x - curR, center.y - curR), size = Size(curR * 2f, curR * 2f),
                         style = Stroke(width = curSW, cap = StrokeCap.Butt))
 
-                    // 立体圆润效果：外弧高光 + 内弧暗影 + 圆角端头
+                    // 立体圆润效果：外弧高光 + 内弧暗影
                     val outerR = curR + curSW / 2f
                     val innerEdgeR = (curR - curSW / 2f).coerceAtLeast(0f)
                     val sAngle = runningStart + gap / 2f
                     val eAngle = sAngle + sweep
-                    // 外弧高光（更宽更亮）
-                    val hlAlpha = if (sel) 0.55f else 0.35f
-                    val hlWidth = if (sel) 4.dp.toPx() else 2.5.dp.toPx()
+                    // 外弧高光
+                    val hlAlpha = 0.35f
+                    val hlWidth = 2.5.dp.toPx()
                     drawArc(color = Color.White.copy(alpha = hlAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
                         topLeft = Offset(center.x - outerR, center.y - outerR), size = Size(outerR * 2f, outerR * 2f),
                         style = Stroke(width = hlWidth, cap = StrokeCap.Butt))
-                    // 内弧暗影（更宽更深）
-                    val shAlpha = if (sel) 0.25f else 0.15f
-                    val shWidth = if (sel) 3.5.dp.toPx() else 2.dp.toPx()
+                    // 内弧暗影
+                    val shAlpha = 0.15f
+                    val shWidth = 2.dp.toPx()
                     drawArc(color = Color.Black.copy(alpha = shAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
                         topLeft = Offset(center.x - innerEdgeR, center.y - innerEdgeR), size = Size(innerEdgeR * 2f, innerEdgeR * 2f),
                         style = Stroke(width = shWidth, cap = StrokeCap.Butt))
-                    // 圆角端头已去除
+                }
+                runningStart += item.percentage * 3.6f
+            }
+            
+            // 第二遍：绘制选中扇区（确保浮于其他色块之上）
+            runningStart = -90f
+            data.forEachIndexed { i, item ->
+                val sweep = (item.percentage * 3.6f) - gap
+                if (sweep > 0.01f && i == animatedIdx) {
+                    val sel = true
+                    val scale = effectiveScale
+                    val curR = baseRadius * scale
+                    val curSW = strokeWidth * 1.12f
+                    val arcColor = colors[i % colors.size]
 
-                    // 需求2：选中态白色描边 — 用Path描绘选中色块完整轮廓（外弧+两条径向边+内弧）
-                    if (sel) {
-                        val outerEdgeR = curR + curSW / 2f
-                        val innerEdgeR = (curR - curSW / 2f).coerceAtLeast(0f)
-                        val sAngle = runningStart + gap / 2f
-                        val eAngle = sAngle + sweep
+                    // 色块弧
+                    drawArc(color = arcColor, startAngle = runningStart + gap / 2, sweepAngle = sweep, useCenter = false,
+                        topLeft = Offset(center.x - curR, center.y - curR), size = Size(curR * 2f, curR * 2f),
+                        style = Stroke(width = curSW, cap = StrokeCap.Butt))
 
-                        val outline = Path().apply {
-                            val sRad = java.lang.Math.toRadians(sAngle.toDouble())
-                            val eRad = java.lang.Math.toRadians(eAngle.toDouble())
-                            // 从外弧起点开始
-                            moveTo(
-                                center.x + outerEdgeR * kotlin.math.cos(sRad).toFloat(),
-                                center.y + outerEdgeR * kotlin.math.sin(sRad).toFloat()
-                            )
-                            // 外弧
-                            arcTo(
-                                rect = androidx.compose.ui.geometry.Rect(
-                                    center.x - outerEdgeR, center.y - outerEdgeR,
-                                    center.x + outerEdgeR, center.y + outerEdgeR
-                                ),
-                                startAngleDegrees = sAngle, sweepAngleDegrees = sweep, forceMoveTo = false
-                            )
-                            // 径向边到内弧终点
-                            lineTo(
-                                center.x + innerEdgeR * kotlin.math.cos(eRad).toFloat(),
-                                center.y + innerEdgeR * kotlin.math.sin(eRad).toFloat()
-                            )
-                            // 内弧（反向）
-                            arcTo(
-                                rect = androidx.compose.ui.geometry.Rect(
-                                    center.x - innerEdgeR, center.y - innerEdgeR,
-                                    center.x + innerEdgeR, center.y + innerEdgeR
-                                ),
-                                startAngleDegrees = eAngle, sweepAngleDegrees = -sweep, forceMoveTo = false
-                            )
-                            close()
-                        }
-                        drawPath(outline, color = Color.White, style = Stroke(width = 3.75.dp.toPx(), join = StrokeJoin.Miter))
+                    // 立体圆润效果：外弧高光 + 内弧暗影
+                    val outerR = curR + curSW / 2f
+                    val innerEdgeR = (curR - curSW / 2f).coerceAtLeast(0f)
+                    val sAngle = runningStart + gap / 2f
+                    val eAngle = sAngle + sweep
+                    // 外弧高光（更亮）
+                    val hlAlpha = 0.55f
+                    val hlWidth = 4.dp.toPx()
+                    drawArc(color = Color.White.copy(alpha = hlAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
+                        topLeft = Offset(center.x - outerR, center.y - outerR), size = Size(outerR * 2f, outerR * 2f),
+                        style = Stroke(width = hlWidth, cap = StrokeCap.Butt))
+                    // 内弧暗影（更深）
+                    val shAlpha = 0.25f
+                    val shWidth = 3.5.dp.toPx()
+                    drawArc(color = Color.Black.copy(alpha = shAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
+                        topLeft = Offset(center.x - innerEdgeR, center.y - innerEdgeR), size = Size(innerEdgeR * 2f, innerEdgeR * 2f),
+                        style = Stroke(width = shWidth, cap = StrokeCap.Butt))
+
+                    // 选中态白色描边 — 用Path描绘选中色块完整轮廓（外弧+两条径向边+内弧）
+                    val outlineOuterR = curR + curSW / 2f
+                    val outlineInnerR = (curR - curSW / 2f).coerceAtLeast(0f)
+                    val outlineSAngle = runningStart + gap / 2f
+                    val outlineEAngle = outlineSAngle + sweep
+
+                    val outline = Path().apply {
+                        val sRad = java.lang.Math.toRadians(outlineSAngle.toDouble())
+                        val eRad = java.lang.Math.toRadians(outlineEAngle.toDouble())
+                        // 从外弧起点开始
+                        moveTo(
+                            center.x + outlineOuterR * kotlin.math.cos(sRad).toFloat(),
+                            center.y + outlineOuterR * kotlin.math.sin(sRad).toFloat()
+                        )
+                        // 外弧
+                        arcTo(
+                            rect = androidx.compose.ui.geometry.Rect(
+                                center.x - outlineOuterR, center.y - outlineOuterR,
+                                center.x + outlineOuterR, center.y + outlineOuterR
+                            ),
+                            startAngleDegrees = outlineSAngle, sweepAngleDegrees = sweep, forceMoveTo = false
+                        )
+                        // 径向边到内弧终点
+                        lineTo(
+                            center.x + outlineInnerR * kotlin.math.cos(eRad).toFloat(),
+                            center.y + outlineInnerR * kotlin.math.sin(eRad).toFloat()
+                        )
+                        // 内弧（反向）
+                        arcTo(
+                            rect = androidx.compose.ui.geometry.Rect(
+                                center.x - outlineInnerR, center.y - outlineInnerR,
+                                center.x + outlineInnerR, center.y + outlineInnerR
+                            ),
+                            startAngleDegrees = outlineEAngle, sweepAngleDegrees = -sweep, forceMoveTo = false
+                        )
+                        close()
                     }
+                    drawPath(outline, color = Color.White, style = Stroke(width = 3.75.dp.toPx(), join = StrokeJoin.Miter))
                 }
                 runningStart += item.percentage * 3.6f
             }
@@ -1279,9 +1309,9 @@ private fun DonutChartWithLabels(
         // ────────────────────────────────────────────────
         // 中心文字 — 字体大小完全自适应内圆直径
         // ────────────────────────────────────────────────
-        // 内圆文字区域（加大到75dp）
-        val innerDiamDp = 75f
-        val safeWidthDp = 67f
+        // 内圆文字区域（加大到80dp）
+        val innerDiamDp = 80f
+        val safeWidthDp = 72f
         val nameFontSize = 13.sp
         val amountFontSize = 14.sp
 
@@ -1298,18 +1328,18 @@ private fun DonutChartWithLabels(
                 if (animatedIdx >= 0 && animatedIdx < data.size) {
                     val s = data[animatedIdx]
                     Text(s.category.name,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Black),
                         color = colors[animatedIdx % colors.size], maxLines = 1, softWrap = false)
                     Text("$currencySymbol${"%.2f".format(s.amount)}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.ExtraBold),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
                 } else {
                     val label = if (data.any { it.category.type.name == "EXPENSE" }) "支出" else "收入"
                     Text(label,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2), maxLines = 1, softWrap = false)
                     Text("$currencySymbol${"%.2f".format(totalAmount)}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.ExtraBold),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
                 }
             }
