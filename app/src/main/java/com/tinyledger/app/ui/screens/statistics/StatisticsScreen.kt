@@ -591,6 +591,8 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
     val barSelected = if (isDark) DarkGrayBarSelected else LightGrayBarSelected
     val dividerColor = if (isDark) DividerColorDark else DividerColorLight
     val isMonthly = uiState.dateMode == DateMode.MONTHLY
+    // 联动选中索引
+    var chartSelectedIndex by remember { mutableIntStateOf(-1) }
 
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(18.dp),
@@ -613,20 +615,45 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
 
             Spacer(Modifier.height(10.dp))
 
-            // 日期行 + 累计金额
+            // 日期行 + 累计金额（联动选中索引）
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 val dateText = if (isMonthly) "${uiState.selectedYear}.${String.format("%02d", uiState.selectedMonth)}"
                                else "${uiState.selectedYear}"
                 Text(dateText, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                     color = if (isDark) Color(0xFFAAAAAE) else TextSecondary)
 
+                // 根据选中索引计算到该位置的累计值
                 val totalLabel = when (uiState.activeTab) { StatsTab.EXPENSE -> "累计支出"; StatsTab.INCOME -> "累计收入"; StatsTab.BALANCE -> "结余" }
-                val totalVal = when (uiState.activeTab) { StatsTab.EXPENSE -> uiState.totalExpense; StatsTab.INCOME -> uiState.totalIncome; StatsTab.BALANCE -> uiState.balance }
-                val amountText = "$totalLabel: ${CurrencyUtils.format(totalVal, uiState.currencySymbol)}"
-                // 紫色加粗金额
+                val displayVal = if (isMonthly && chartSelectedIndex >= 0) {
+                    // 月度模式：累计到选中日期
+                    val dailyRecords = uiState.dailyRecords
+                    if (chartSelectedIndex < dailyRecords.size) {
+                        when (uiState.activeTab) {
+                            StatsTab.EXPENSE -> dailyRecords.subList(0, chartSelectedIndex + 1).sumOf { it.expense }
+                            StatsTab.INCOME -> dailyRecords.subList(0, chartSelectedIndex + 1).sumOf { it.income }
+                            StatsTab.BALANCE -> dailyRecords[chartSelectedIndex].balance
+                        }
+                    } else {
+                        when (uiState.activeTab) { StatsTab.EXPENSE -> uiState.totalExpense; StatsTab.INCOME -> uiState.totalIncome; StatsTab.BALANCE -> uiState.balance }
+                    }
+                } else if (!isMonthly && chartSelectedIndex >= 0) {
+                    // 年度模式：累计到选中月份
+                    val monthlyRecords = uiState.monthlyRecords
+                    if (chartSelectedIndex < monthlyRecords.size) {
+                        when (uiState.activeTab) {
+                            StatsTab.EXPENSE -> monthlyRecords.subList(0, chartSelectedIndex + 1).sumOf { it.expense }
+                            StatsTab.INCOME -> monthlyRecords.subList(0, chartSelectedIndex + 1).sumOf { it.income }
+                            StatsTab.BALANCE -> monthlyRecords[chartSelectedIndex].balance
+                        }
+                    } else {
+                        when (uiState.activeTab) { StatsTab.EXPENSE -> uiState.totalExpense; StatsTab.INCOME -> uiState.totalIncome; StatsTab.BALANCE -> uiState.balance }
+                    }
+                } else {
+                    when (uiState.activeTab) { StatsTab.EXPENSE -> uiState.totalExpense; StatsTab.INCOME -> uiState.totalIncome; StatsTab.BALANCE -> uiState.balance }
+                }
                 Text(buildAnnotatedString {
                     append("$totalLabel: ")
-                    withStyle(style = SpanStyle(color = lineColor, fontWeight = FontWeight.Bold)) { append(CurrencyUtils.format(totalVal, uiState.currencySymbol)) }
+                    withStyle(style = SpanStyle(color = lineColor, fontWeight = FontWeight.Bold)) { append(CurrencyUtils.format(displayVal, uiState.currencySymbol)) }
                 }, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = if (isDark) Color(0xFFAAAAAE) else TextSecondary)
             }
 
@@ -649,7 +676,8 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
                         barDefault = barDefault,
                         barSelected = barSelected,
                         xAxisLabels = listOf("01","05","10","15","20","25","30").takeIf { records.lastOrNull()?.day != 30 } ?: listOf("01","05","10","15","20","25","31"),
-                        chartHeight = 200.dp
+                        chartHeight = 200.dp,
+                        onSelectedIndexChanged = { chartSelectedIndex = it }
                     )
                 }
             } else {
@@ -668,7 +696,8 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
                         barDefault = barDefault,
                         barSelected = barSelected,
                         xAxisLabels = listOf("01","02","03","04","05","06","07","08","09","10","11","12"),
-                        chartHeight = 200.dp
+                        chartHeight = 200.dp,
+                        onSelectedIndexChanged = { chartSelectedIndex = it }
                     )
                 }
             }
@@ -696,9 +725,12 @@ private fun InteractiveTrendChart(
     barDefault: Color,
     barSelected: Color,
     xAxisLabels: List<String>,
-    chartHeight: Dp = 200.dp
+    chartHeight: Dp = 200.dp,
+    onSelectedIndexChanged: ((Int) -> Unit)? = null
 ) {
     var selectedIndex by remember { mutableIntStateOf(records.lastIndex.coerceAtLeast(0)) }
+    // 选中索引变化时通知外部
+    LaunchedEffect(selectedIndex) { onSelectedIndexChanged?.invoke(selectedIndex) }
     val density = LocalDensity.current
     val animatedBarAlpha by animateFloatAsState(
         targetValue = 1f, animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing), label = "barAlpha"
@@ -770,20 +802,19 @@ private fun InteractiveTrendChart(
                 Offset(x, y.coerceIn(paddingTop, chartH))
             }
 
-            // 仅绘制到选中索引的填充区域和折线
-            if (points.size >= 2 && selectedIndex >= 1) {
-                val safeSelectedIndex = selectedIndex.coerceAtMost(points.lastIndex)
+            // 始终绘制完整折线 + 填充区域（不受选中索引限制）
+            if (points.size >= 2) {
                 val fillPath = Path().apply {
                     moveTo(points[0].x, chartH)
-                    for (j in 0..safeSelectedIndex) lineTo(points[j].x, points[j].y)
-                    lineTo(points[safeSelectedIndex].x, chartH)
+                    for (j in points.indices) lineTo(points[j].x, points[j].y)
+                    lineTo(points[points.lastIndex].x, chartH)
                     close()
                 }
                 drawPath(fillPath, brush = Brush.verticalGradient(
                     colors = listOf(lineColor.copy(alpha = 0.25f), lineColor.copy(alpha = 0.04f)),
-                    startY = points[safeSelectedIndex].y, endY = chartH
+                    startY = points.minOf { it.y }, endY = chartH
                 ))
-                for (j in 0 until min(safeSelectedIndex, points.lastIndex)) {
+                for (j in 0 until points.lastIndex) {
                     drawLine(lineColor, points[j], points[j + 1], strokeWidth = 1.8.dp.toPx(), cap = StrokeCap.Round)
                 }
             } else if (points.isNotEmpty()) {
@@ -792,11 +823,11 @@ private fun InteractiveTrendChart(
                 ))
             }
 
-            // 所有已过数据点的小标记（非选中）
+            // 所有小数据点标记（非选中）
             for (j in points.indices) {
                 val v = values.getOrNull(j) ?: 0.0
                 if (v > 0.001 || activeTab == StatsTab.BALANCE) {
-                    if (j <= selectedIndex && j != selectedIndex) {
+                    if (j != selectedIndex) {
                         drawCircle(Color.White, radius = 2.2.dp.toPx(), center = points[j])
                         drawCircle(lineColor, radius = 1.5.dp.toPx(), center = points[j])
                     }
