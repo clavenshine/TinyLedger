@@ -58,6 +58,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.AccountType
@@ -977,83 +978,88 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Save Button - 立体感按钮：白底 + 主色文字 + 阴影 + 高光
-            val saveButtonColor by animateColorAsState(
-                targetValue = if (isSaveAnimating || uiState.isSaving)
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-                else
-                    MaterialTheme.colorScheme.surface,
-                animationSpec = tween(300),
-                label = "save_button_color"
-            )
+            // Save Button - 浅色模式白底品牌色文字 / 深色模式渐变+发光
+            val isDark = isSystemInDarkTheme()
             val saveButtonScale by animateFloatAsState(
-                targetValue = if (isSaveAnimating) 0.96f else 1f,
+                targetValue = if (isSaveAnimating) 0.98f else 1f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium
                 ),
                 label = "save_button_scale"
             )
-            val saveButtonShadow by animateDpAsState(
-                targetValue = if (isSaveAnimating || uiState.isSaving) 2.dp else 8.dp,
-                animationSpec = tween(200),
-                label = "save_button_shadow"
-            )
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = 20.dp)
             ) {
-                // 阴影层 — 略偏下方，营造悬浮立体感
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .offset(y = 3.dp)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                )
+                // 深色模式发光层：多层阴影模拟 glow
+                if (isDark) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .height(54.dp)
+                            .shadow(16.dp, RoundedCornerShape(16.dp), spotColor = Color(0xFF6366F1).copy(alpha = 0.4f), ambientColor = Color(0xFF4F46E5).copy(alpha = 0.2f))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(Color(0xFF2A2A4A), Color(0xFF1F1F3D))
+                                )
+                            )
+                    )
+                }
 
                 // 按钮主体
-                Button(
-                    onClick = {
-                        isSaveAnimating = true
-                        viewModel.saveTransaction()
-                    },
+                val buttonEnabled = !uiState.isSaving && !isSaveAnimating
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .height(54.dp)
                         .scale(saveButtonScale)
-                        .shadow(saveButtonShadow, RoundedCornerShape(16.dp)),
-                    enabled = !uiState.isSaving && !isSaveAnimating,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = saveButtonColor,
-                        disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 0.dp,
-                        pressedElevation = 0.dp
-                    )
+                        .clip(RoundedCornerShape(16.dp))
+                        .then(
+                            if (isDark) Modifier
+                                .shadow(8.dp, RoundedCornerShape(16.dp), spotColor = Color(0xFF6366F1).copy(alpha = 0.35f), ambientColor = Color(0xFF4F46E5).copy(alpha = 0.15f))
+                            else Modifier.shadow(4.dp, RoundedCornerShape(16.dp))
+                        )
+                        .then(
+                            if (isDark)
+                                Modifier.background(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(Color(0xFF2A2A4A), Color(0xFF1F1F3D))
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                            else
+                                Modifier.background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                        )
+                        .clickable(enabled = buttonEnabled) {
+                            isSaveAnimating = true
+                            viewModel.saveTransaction()
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     if (uiState.isSaving || isSaveAnimating) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                            color = if (isDark) Color.White else MaterialTheme.colorScheme.primary,
                             strokeWidth = 2.5.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "保存中...",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            color = if (isDark) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                         )
                     } else {
                         Text(
                             text = "保存",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (isDark) Color.White else MaterialTheme.colorScheme.primary
                         )
                     }
                 }

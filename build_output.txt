@@ -36,20 +36,11 @@
 > Task :app:kspDebugKotlin
 
 > Task :app:compileDebugKotlin
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:625:21 Variable 'amountText' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:702:9 Variable 'density' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:712:9 Variable 'selectedValue' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:713:9 Variable 'selectedLabel' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1323:33 'Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1324:36 'Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1325:47 'TrendingDown: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.TrendingDown
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1326:50 'TrendingDown: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.TrendingDown
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1333:39 'TrendingUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.TrendingUp
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1334:42 'TrendingUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.TrendingUp
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1366:64 Parameter 'currencySymbol' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1416:43 Parameter 'index' is never used, could be renamed to _
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1479:5 Parameter 'currencySymbol' is never used
-w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/statistics/StatisticsScreen.kt:1487:9 Variable 'currentMonth' is never used
+w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/home/AddTransactionScreen.kt:95:9 Variable 'imagePickerOption' is never used
+w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/home/AddTransactionScreen.kt:1126:57 'KeyboardArrowLeft: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowLeft
+w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/home/AddTransactionScreen.kt:1169:57 'KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight
+w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/home/AddTransactionScreen.kt:1834:45 'Chat: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Chat
+w: file:///C:/MyProject/opencode-xiaoxiaojizhangben/TinyLedger_Project_20260406_211505/app/src/main/java/com/tinyledger/app/ui/screens/home/AddTransactionScreen.kt:1837:44 'HelpOutline: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.HelpOutline
 
 > Task :app:compileDebugJavaWithJavac UP-TO-DATE
 > Task :app:hiltAggregateDepsDebug UP-TO-DATE
