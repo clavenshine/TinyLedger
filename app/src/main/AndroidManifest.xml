@@ -30,6 +30,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- 开机自启动权限 - 重启后重绑通知监听服务 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 悬浮窗权限 - 后台弹出界面 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- 相机和相册权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -92,6 +98,20 @@
                 <action android:name="com.tinyledger.app.ACTION_CONFIRM_TRANSACTION" />
                 <action android:name="com.tinyledger.app.ACTION_DELETE_TRANSACTION" />
                 <action android:name="com.tinyledger.app.ACTION_EDIT_TRANSACTION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机自启动接收器 - 重启后重绑通知监听服务 -->
+        <receiver
+            android:name=".data.notification.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.miui.home.action.LAUNCH" />
             </intent-filter>
         </receiver>
 

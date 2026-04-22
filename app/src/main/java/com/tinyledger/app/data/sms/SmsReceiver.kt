@@ -100,15 +100,11 @@ class SmsReceiver : BroadcastReceiver() {
                         continue
                     }
 
-                    // Skip auto-accounting if notification listener is active and will handle it
-                    val notificationListenerActive = TransactionNotificationService.hasPermission(context)
-                        && TransactionNotificationService.isBankSmsCaptureEnabled(context)
-
-                    if (notificationListenerActive) {
-                        Log.d(TAG, "Notification listener active for bank SMS, skipping SmsReceiver auto-accounting to avoid duplicates")
-                        // Still stored in Room above, just skip auto-accounting
-                        continue
-                    }
+                    // 注：不再跳过已开启 notification listener 的情况
+                    // 之前当 notification listener 已激活时会跳过 SMS auto-accounting，
+                    // 但 notification listener 的 smsPackages 列表无法覆盖所有短信应用，
+                    // 导致部分银行短信被两个通道都忽略而丢失。
+                    // 现在两边都处理，靠数据库 uniqueHash 去重。
 
                     try {
                         val normalizedAddress = address

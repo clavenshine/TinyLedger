@@ -3,6 +3,7 @@ package com.tinyledger.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinyledger.app.domain.model.AccountAttribute
+import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.AccountRepository
@@ -121,7 +122,25 @@ class BillsViewModel @Inject constructor(
                         }
                         .filter { transaction ->
                             if (keyword.isBlank()) true
-                            else transaction.note?.contains(keyword, ignoreCase = true) == true
+                            else {
+                                val lowerKeyword = keyword.lowercase()
+                                // 搜索分类名称（一级-二级）
+                                val parentCatName = transaction.category.parentId?.let { pid ->
+                                    Category.getCategoriesByType(transaction.type)
+                                        .find { it.id == pid }?.name ?: ""
+                                } ?: ""
+                                val categoryName = if (parentCatName.isNotEmpty())
+                                    "$parentCatName-${transaction.category.name}" else transaction.category.name
+                                // 搜索账户名称
+                                val accountName = accounts.find { it.id == transaction.accountId }?.name ?: ""
+                                // 搜索金额
+                                val amountStr = kotlin.math.abs(transaction.amount).toString()
+                                // 匹配任意字段
+                                categoryName.lowercase().contains(lowerKeyword) ||
+                                    transaction.note?.lowercase()?.contains(lowerKeyword) == true ||
+                                    accountName.lowercase().contains(lowerKeyword) ||
+                                    amountStr.contains(lowerKeyword)
+                            }
                         }
 
                     // Calculate monthly totals using sign-based amounts (仅现金账户)

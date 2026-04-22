@@ -94,6 +94,15 @@ class SmsTransactionParser @Inject constructor() {
         "邮政储蓄" to listOf(Regex("^95580"), Regex("^1069095580"), Regex("^10690.*95580"))
     )
 
+    // 预编译通用银行号码正则（10658xx/10690xx/10698xx/955xx 类服务号）
+    private val genericBankNumberRegexes = listOf(
+        Regex("^10658\\d+"),
+        Regex("^955\\d{2,}"),
+        Regex("^1069[0-9]\\d+"),
+        Regex("^1069[0-9]{2,}\\d+"),
+        Regex("^10698\\d+")
+    )
+
     // ========== 收入关键词（带权重）==========
     // 权重越高，置信度越高
     // 注意：复合收入词（如「机构提现」「消费退货」）作为整体加入，确保被识别
@@ -148,6 +157,11 @@ class SmsTransactionParser @Inject constructor() {
         "系统通知", "服务提醒",
         "尾号\\d{4}(?:绑定|解绑|注册|认证)"  // 卡号绑定类短信
     )
+
+    // 预编译排除词中的正则表达式（避免每次调用 shouldExclude 时重新编译）
+    private val excludeCompiledPatterns = excludeKeywords.map { pattern ->
+        if (pattern.contains("\\")) Regex(pattern) else null
+    }
 
     // 交易关键词白名单：如果短信包含这些词，即使命中了排除词也不应被排除
     // （交易短信的商户名/附加文案可能碰巧包含排除词）
@@ -234,20 +248,21 @@ class SmsTransactionParser @Inject constructor() {
 
         // 5. 精准提取金额
         val (amount, amountConfidence) = extractAmount(cleanedBody)
-            ?: return ParseResult(null, null, 0f, cardLastFour)
+            ?: return ParseResult(null, null, 0f, cardLastFour, source)
 
         // 6. 判断收支类型
         val (type, typeConfidence) = detectTransactionType(body)
-            ?: return ParseResult(null, null, 0f, cardLastFour)
+            ?: return ParseResult(null, null, 0f, cardLastFour, source)
 
-        // 7. 综合置信度
-        val totalConfidence = (amountConfidence + typeConfidence) / 2f
+        // 7. 综合置信度（来源可靠性因子：精确识别的银行=1.0，1069通用匹配"银行"=0.95）
+        val totalConfidence = (amountConfidence + typeConfidence) / 2f *
+            if (source == "银行") 0.95f else 1.0f
 
         if (totalConfidence < CONFIDENCE_THRESHOLD) {
-            return ParseResult(null, null, totalConfidence, cardLastFour)
+            return ParseResult(null, null, totalConfidence, cardLastFour, source)
         }
 
-        return ParseResult(type, amount, totalConfidence, cardLastFour)
+        return ParseResult(type, amount, totalConfidence, cardLastFour, source)
     }
 
     /**
@@ -256,12 +271,10 @@ class SmsTransactionParser @Inject constructor() {
      * 这防止了交易短信因商户名/附加文案中碰巧包含排除词而被误杀
      */
     private fun shouldExclude(body: String): Boolean {
-        val hitExclude = excludeKeywords.any { pattern ->
-            if (pattern.contains("\\")) {
-                Regex(pattern).containsMatchIn(body)
-            } else {
-                body.contains(pattern)
-            }
+        val hitExclude = excludeKeywords.indices.any { i ->
+            val compiled = excludeCompiledPatterns[i]
+            if (compiled != null) compiled.containsMatchIn(body)
+            else body.contains(excludeKeywords[i])
         }
         if (!hitExclude) return false
 
@@ -295,12 +308,7 @@ class SmsTransactionParser @Inject constructor() {
                 }
             }
             // 通用银行号码特征（10658xx、10690xx、10698xx 类服务号，以及 955xx 类客服号）
-            if (normalizedAddress.matches(Regex("^10658\\d+")) ||
-                normalizedAddress.matches(Regex("^955\\d{2,}")) ||
-                normalizedAddress.matches(Regex("^1069[0-9]\\d+")) ||
-                normalizedAddress.matches(Regex("^1069[0-9]{2,}\\d+")) ||
-                normalizedAddress.matches(Regex("^10698\\d+"))
-            ) {
+            if (genericBankNumberRegexes.any { it.matches(normalizedAddress) }) {
                 // 号码特征符合银行，但无法精确识别具体银行
                 // 检查内容中是否有金融相关特征词
                 if (body.contains("储蓄卡") || body.contains("信用卡") ||
@@ -457,15 +465,16 @@ class SmsTransactionParser @Inject constructor() {
     /**
      * 是否是转账类短信
      */
+    // 预编译转账关键词
+    private val transferKeywords = listOf(
+        "转账", "汇款", "跨行转账", "同行转账",
+        "转出到", "转入到", "账户间转账"
+    )
+    private val transferRegexPattern = Regex("向.*转账")
+
     fun isTransferSms(body: String): Boolean {
-        val transferKeywords = listOf(
-            "转账", "汇款", "跨行转账", "同行转账",
-            "转出到", "转入到", "账户间转账", "向.*转账"
-        )
-        return transferKeywords.any { pattern ->
-            if (pattern.contains(".*")) Regex(pattern).containsMatchIn(body)
-            else body.contains(pattern)
-        }
+        return transferKeywords.any { body.contains(it) } ||
+                transferRegexPattern.containsMatchIn(body)
     }
 }
 
@@ -476,7 +485,8 @@ data class ParseResult(
     val type: TransactionType?,
     val amount: Double?,
     val confidence: Float,
-    val cardLastFour: String?
+    val cardLastFour: String?,
+    val source: String = "未知来源"
 )
 
 /**
@@ -676,12 +686,13 @@ class SmsReader @Inject constructor(
                         .removePrefix("86")
                         .trim()
 
-                    val source = parser.detectBankSource(body, normalizedAddress)
+                    val parseResult = parser.parseSmsContent(body, normalizedAddress)
+
+                    // 用解析结果中的 source 更新统计（避免重复调用 detectBankSource）
+                    val source = parseResult.source
                     if (source != "未知来源") {
                         bankHits[source] = (bankHits[source] ?: 0) + 1
                     }
-
-                    val parseResult = parser.parseSmsContent(body, normalizedAddress)
 
                     if (parseResult.type == null && parseResult.amount == null && parseResult.confidence == 0f) {
                         if (source == "未知来源") unknownSourceCount++ else excludedCount++
@@ -878,12 +889,13 @@ class SmsReader @Inject constructor(
                             .removePrefix("12520")
                             .trim()
 
-                        val source = parser.detectBankSource(body, normalizedAddress)
+                        val parseResult = parser.parseSmsContent(body, normalizedAddress)
+
+                        // 用解析结果中的 source 更新统计（避免重复调用 detectBankSource）
+                        val source = parseResult.source
                         if (source != "未知来源") {
                             bankHits[source] = (bankHits[source] ?: 0) + 1
                         }
-
-                        val parseResult = parser.parseSmsContent(body, normalizedAddress)
 
                         if (parseResult.type == null && parseResult.amount == null && parseResult.confidence == 0f) {
                             if (source == "未知来源") {
@@ -1018,12 +1030,13 @@ class SmsReader @Inject constructor(
                     .removePrefix("12520")
                     .trim()
 
-                val source = parser.detectBankSource(body, normalizedAddress)
+                val parseResult = parser.parseSmsContent(body, normalizedAddress)
+
+                // 用解析结果中的 source 更新统计（避免重复调用 detectBankSource）
+                val source = parseResult.source
                 if (source != "未知来源") {
                     bankHits[source] = (bankHits[source] ?: 0) + 1
                 }
-
-                val parseResult = parser.parseSmsContent(body, normalizedAddress)
 
                 if (parseResult.type == null && parseResult.amount == null && parseResult.confidence == 0f) {
                     if (source == "未知来源") onUnknownSource() else onExcluded()

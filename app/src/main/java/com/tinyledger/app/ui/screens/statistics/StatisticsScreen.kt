@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -133,17 +134,6 @@ fun StatisticsScreen(
                 LazyColumn(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    // 标题（随内容滚动）
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("统计", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-
                     // 概览卡片（随内容滚动）
                     item { OverviewCards(uiState) }
 
@@ -256,7 +246,7 @@ private fun TabWithDateSelector(
             Row(modifier = Modifier.height(48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(text = if (uiState.dateMode == DateMode.MONTHLY) "${uiState.selectedYear}年${String.format("%02d", uiState.selectedMonth)}月"
                        else "${uiState.selectedYear}年",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = MaterialTheme.colorScheme.onSurface)
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurface)
                 Icon(Icons.Default.KeyboardArrowDown, "", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -888,7 +878,7 @@ private fun CategoryRankingSection(
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF6F6F8)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 12.dp)) {
@@ -933,7 +923,7 @@ private fun CategoryRankingSection(
                 currencySymbol = currencySymbol,
                 selectedIndex = donutSelectedIndex,
                 onSelectedChange = { idx -> donutSelectedIndex = idx },
-                modifier = Modifier.size(200.dp).align(Alignment.CenterHorizontally),
+                modifier = Modifier.size(220.dp).align(Alignment.CenterHorizontally),
                 isDark = isDark
             )
 
@@ -978,7 +968,7 @@ private fun TabChip(label: String, selected: Boolean, onClick: () -> Unit, isDar
     )
 }
 
-/** 空心 Donut 环形图 — 带描边、引导线、端点圆点、外侧标注 */
+/** 空心 Donut 环形图 — 带引导虚线、端点圆点、外侧百分比标注、点击放大凸起 */
 @Composable
 private fun DonutChartWithLabels(
     data: List<CategoryAmount>,
@@ -991,13 +981,13 @@ private fun DonutChartWithLabels(
     isDark: Boolean
 ) {
     val animatedIdx by animateIntAsState(targetValue = selectedIndex, animationSpec = tween(durationMillis = 250), label = "donutSel")
-    // 流畅式放大动画：每次选中变化都重新触发（从1.0f弹到1.12f）
+    // 需求3：点击放大5%（1.05）+ 弹性动画凸起效果
     val scaleAnimatable = remember { Animatable(1.0f) }
     LaunchedEffect(selectedIndex) {
         if (selectedIndex >= 0) {
             scaleAnimatable.snapTo(1.0f)
             scaleAnimatable.animateTo(
-                targetValue = 1.12f,
+                targetValue = 1.05f,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
             )
         } else {
@@ -1015,7 +1005,7 @@ private fun DonutChartWithLabels(
     val slicesInfo = remember(data) {
         val result = mutableListOf<SliceInfo>()
         var cumulative = -90f
-        val gapDeg = 1.5f
+        val gapDeg = 0f
         data.forEach { item ->
             val sweep = item.percentage * 3.6f - gapDeg
             if (sweep > 0.01f) {
@@ -1028,20 +1018,97 @@ private fun DonutChartWithLabels(
         result
     }
 
-    // 预提取主题色（Canvas内部不能调用@Composable）
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val surfaceVariantColor = MaterialTheme.colorScheme.surfaceVariant
+    // 需求2背景色：使用与Card一致的浅灰/深色
+    val surfaceColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF6F6F8)
+
+    // 预计算引导线位置（基于已知尺寸，不依赖 DrawScope）
+    data class LabelLayout(val idx: Int, val pct: Double, val color: Color,
+                           val anchorOffDp: Pair<Float, Float>,    // 锚点相对中心的dp偏移
+                           val elbowOffDp: Pair<Float, Float>,     // 肘点相对中心的dp偏移
+                           val endOffDp: Pair<Float, Float>,       // 水平段终点相对中心的dp偏移
+                           val isLeft: Boolean)
+
+    val chartBoxSize = 220f  // 与 Modifier.size(220.dp) 一致
+    val strokeWidthDp = 72f
+    val outerEdgeDp = chartBoxSize / 2f  // = 110dp
+    val anchorDp = outerEdgeDp + 2f      // = 112dp（锚点在圆弧外边缘）
+    val elbowLenDp = 18f                  // 斜线段长度
+    val horizLenDp = 35f                  // 水平段长度（加长，延伸到空白区域）
+
+    val labelLayouts = remember(data, colors) {
+        // 收集需要标注的分类，按占比降序（最大优先）
+        val items = slicesInfo.mapIndexed { idx, info -> Triple(idx, info, data.getOrElse(idx) { null }) }
+            .filter { (_, _, item) -> item != null && item!!.percentage > 3.0 }
+            .sortedByDescending { (_, _, item) -> item!!.percentage }
+
+        // 计算每条引导线的原始位置
+        data class Cand(val idx: Int, val pct: Double, val color: Color,
+                        val anchorOff: Pair<Float, Float>,  // 锚点相对中心
+                        val midAngle: Float,                 // 弧中点角度（弧度）
+                        val isLeft: Boolean,
+                        var elbowOff: Pair<Float, Float>,    // 肘点相对中心
+                        var endOff: Pair<Float, Float>)      // 终点相对中心
+
+        val cands = items.mapNotNull { (i, info, item) ->
+            if (i >= colors.size || item == null) return@mapNotNull null
+            val c = colors[i % colors.size]
+            val left = info.cosMid < 0
+            // 锚点
+            val aOff = Pair(anchorDp * info.cosMid, anchorDp * info.sinMid)
+            // 原始肘点（沿径向外延）
+            val eOff = Pair((anchorDp + elbowLenDp) * info.cosMid, (anchorDp + elbowLenDp) * info.sinMid)
+            // 终点
+            val hOff = Pair(eOff.first + if (left) -horizLenDp else horizLenDp, eOff.second)
+            Cand(i, item.percentage.toDouble(), c, aOff, info.midAngleRad, left, eOff, hOff)
+        }
+
+        // 自动避让算法：左右分组，每组内按原始Y排序后均匀分布
+        val minGap = 18f  // 标签间最小间距dp
+
+        fun redistributeGroup(group: List<Cand>): List<Cand> {
+            if (group.isEmpty()) return group
+            val sorted = group.sortedBy { it.elbowOff.second }.toMutableList()
+            // 先向下推开
+            for (j in 1 until sorted.size) {
+                if (sorted[j].elbowOff.second - sorted[j - 1].elbowOff.second < minGap) {
+                    sorted[j].elbowOff = sorted[j].elbowOff.copy(
+                        second = sorted[j - 1].elbowOff.second + minGap
+                    )
+                }
+            }
+            // 再向上收回（避免超出下边界）
+            for (j in sorted.size - 2 downTo 0) {
+                if (sorted[j + 1].elbowOff.second - sorted[j].elbowOff.second < minGap) {
+                    sorted[j].elbowOff = sorted[j].elbowOff.copy(
+                        second = sorted[j + 1].elbowOff.second - minGap
+                    )
+                }
+            }
+            // 更新endOff（水平段终点Y与肘点一致）
+            sorted.forEach { c ->
+                c.endOff = c.endOff.copy(second = c.elbowOff.second)
+            }
+            return sorted
+        }
+
+        val leftGroup = redistributeGroup(cands.filter { it.isLeft })
+        val rightGroup = redistributeGroup(cands.filter { !it.isLeft })
+
+        (leftGroup + rightGroup).map { c ->
+            LabelLayout(c.idx, c.pct, c.color, c.anchorOff, c.elbowOff, c.endOff, c.isLeft)
+        }
+    }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
 
-        // Canvas 绘制环形图 + 描边 + 引导线
+        // Canvas 绘制环形图 + 引导虚线
         Canvas(modifier = Modifier.matchParentSize()
             .pointerInput(data) {
                 detectTapGestures { offset ->
                     val cx = size.width / 2f; val cy = size.height / 2f
                     val dx = offset.x - cx; val dy = offset.y - cy
                     val dist = sqrt(dx * dx + dy * dy)
-                    val sw = 32.dp.toPx(); val outerR = (size.width.coerceAtMost(size.height) - sw) / 2f
+                    val sw = 52.dp.toPx(); val outerR = (size.width.coerceAtMost(size.height) - sw) / 2f
                     val innerR = outerR - sw
                     if (dist in innerR..outerR + 10.dp.toPx()) {
                         var angle = java.lang.Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat() + 90f
@@ -1057,108 +1124,194 @@ private fun DonutChartWithLabels(
                 }
             }
         ) {
-            val strokeWidth = 32.dp.toPx()
+            val strokeWidth = 72.dp.toPx()
             val minDim = size.width.coerceAtMost(size.height)
             val baseRadius = (minDim - strokeWidth) / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
-            val gap = 1.5f
+            val gap = 0f
 
-            // 底环（背景）
-            drawCircle(color = surfaceVariantColor,
-                radius = baseRadius + strokeWidth / 2f, center = center, style = Stroke(width = strokeWidth, cap = StrokeCap.Butt))
+            // 底环背景已去除
 
-            // 扇区 + 描边
+            // 扇区绘制
             var runningStart = -90f
             data.forEachIndexed { i, item ->
                 val sweep = (item.percentage * 3.6f) - gap
                 if (sweep > 0.01f) {
                     val sel = (i == animatedIdx)
+                    // 选中时放大 8%（原5%），加粗幅度加大
                     val scale = if (sel) effectiveScale else 1.0f
                     val curR = baseRadius * scale
-                    val curSW = strokeWidth * if (sel) 1.1f else 1.0f
+                    val curSW = strokeWidth * if (sel) 1.12f else 1.0f
                     val arcColor = colors[i % colors.size]
 
-                    // 选中态阴影
-                    if (sel) {
-                        drawArc(color = Color.Black.copy(alpha = 0.15f), startAngle = runningStart + gap / 2, sweepAngle = sweep, useCenter = false,
-                            topLeft = Offset(center.x - curR - 2f, center.y - curR - 2f),
-                            size = Size(curR * 2f + 4f, curR * 2f + 4f),
-                            style = Stroke(width = curSW + 6f, cap = StrokeCap.Butt))
-                    }
+                    // 选中态阴影已去除
+
 
                     // 色块弧
                     drawArc(color = arcColor, startAngle = runningStart + gap / 2, sweepAngle = sweep, useCenter = false,
                         topLeft = Offset(center.x - curR, center.y - curR), size = Size(curR * 2f, curR * 2f),
                         style = Stroke(width = curSW, cap = StrokeCap.Butt))
 
-                    // 描边：使用白色（浅色模式）或深色（深色模式）描边，与色块和背景区分
-                    val strokeColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.5f)
-                    drawArc(color = strokeColor, startAngle = runningStart + gap / 2, sweepAngle = sweep, useCenter = false,
-                        topLeft = Offset(center.x - curR, center.y - curR), size = Size(curR * 2f, curR * 2f),
-                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Butt))
+                    // 立体圆润效果：外弧高光 + 内弧暗影 + 圆角端头
+                    val outerR = curR + curSW / 2f
+                    val innerEdgeR = (curR - curSW / 2f).coerceAtLeast(0f)
+                    val sAngle = runningStart + gap / 2f
+                    val eAngle = sAngle + sweep
+                    // 外弧高光（更宽更亮）
+                    val hlAlpha = if (sel) 0.55f else 0.35f
+                    val hlWidth = if (sel) 4.dp.toPx() else 2.5.dp.toPx()
+                    drawArc(color = Color.White.copy(alpha = hlAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
+                        topLeft = Offset(center.x - outerR, center.y - outerR), size = Size(outerR * 2f, outerR * 2f),
+                        style = Stroke(width = hlWidth, cap = StrokeCap.Butt))
+                    // 内弧暗影（更宽更深）
+                    val shAlpha = if (sel) 0.25f else 0.15f
+                    val shWidth = if (sel) 3.5.dp.toPx() else 2.dp.toPx()
+                    drawArc(color = Color.Black.copy(alpha = shAlpha), startAngle = sAngle, sweepAngle = sweep, useCenter = false,
+                        topLeft = Offset(center.x - innerEdgeR, center.y - innerEdgeR), size = Size(innerEdgeR * 2f, innerEdgeR * 2f),
+                        style = Stroke(width = shWidth, cap = StrokeCap.Butt))
+                    // 圆角端头已去除
+
+                    // 需求2：选中态白色描边 — 用Path描绘选中色块完整轮廓（外弧+两条径向边+内弧）
+                    if (sel) {
+                        val outerEdgeR = curR + curSW / 2f
+                        val innerEdgeR = (curR - curSW / 2f).coerceAtLeast(0f)
+                        val sAngle = runningStart + gap / 2f
+                        val eAngle = sAngle + sweep
+
+                        val outline = Path().apply {
+                            val sRad = java.lang.Math.toRadians(sAngle.toDouble())
+                            val eRad = java.lang.Math.toRadians(eAngle.toDouble())
+                            // 从外弧起点开始
+                            moveTo(
+                                center.x + outerEdgeR * kotlin.math.cos(sRad).toFloat(),
+                                center.y + outerEdgeR * kotlin.math.sin(sRad).toFloat()
+                            )
+                            // 外弧
+                            arcTo(
+                                rect = androidx.compose.ui.geometry.Rect(
+                                    center.x - outerEdgeR, center.y - outerEdgeR,
+                                    center.x + outerEdgeR, center.y + outerEdgeR
+                                ),
+                                startAngleDegrees = sAngle, sweepAngleDegrees = sweep, forceMoveTo = false
+                            )
+                            // 径向边到内弧终点
+                            lineTo(
+                                center.x + innerEdgeR * kotlin.math.cos(eRad).toFloat(),
+                                center.y + innerEdgeR * kotlin.math.sin(eRad).toFloat()
+                            )
+                            // 内弧（反向）
+                            arcTo(
+                                rect = androidx.compose.ui.geometry.Rect(
+                                    center.x - innerEdgeR, center.y - innerEdgeR,
+                                    center.x + innerEdgeR, center.y + innerEdgeR
+                                ),
+                                startAngleDegrees = eAngle, sweepAngleDegrees = -sweep, forceMoveTo = false
+                            )
+                            close()
+                        }
+                        drawPath(outline, color = Color.White, style = Stroke(width = 3.75.dp.toPx(), join = StrokeJoin.Miter))
+                    }
                 }
                 runningStart += item.percentage * 3.6f
             }
 
-            // 中心圆盘遮罩（与卡片背景一致）
-            val innerR = baseRadius - strokeWidth
-            drawCircle(color = surfaceColor, radius = innerR, center = center)
+            // 内圆背景：灰白色覆盖圆环镂空区域
+            val ringInnerR = baseRadius - strokeWidth / 2f
+            drawCircle(color = surfaceColor, radius = ringInnerR, center = center)
 
-            // ── 引导线 + 外侧标注 ──
-            val labelRadiusOuter = baseRadius + strokeWidth / 2f + 12.dp.toPx()
-            val labelEndRadius = labelRadiusOuter + 28.dp.toPx()
+            // ────────────────────────────────────────────────
+            // 引导线系统：同色锚点 + 斜线→水平折线
+            // ────────────────────────────────────────────────
+            val lineW = 1.5.dp.toPx()
+            val dotR = 3.5.dp.toPx()
+            val dpToPx = size.width / chartBoxSize  // dp→px转换因子
 
-            val maxLabels = minOf(slicesInfo.size, 6)
-            for (i in 0 until maxLabels) {
-                if (i >= data.size || i >= colors.size) continue
-                val info = slicesInfo[i]
-                val startX = center.x + labelRadiusOuter * info.cosMid
-                val startY = center.y + labelRadiusOuter * info.sinMid
-                val endX = center.x + labelEndRadius * info.cosMid
-                val endY = center.y + labelEndRadius * info.sinMid
+            val validLabels = labelLayouts.filter { it.idx < slicesInfo.size }
+            for (ll in validLabels) {
+                val info = slicesInfo[ll.idx]
+                val c = ll.color
+                // 引导线颜色：浅色模式黑色，深色模式白色
+                val lc = if (isDark) Color.White else Color.Black
 
-                val pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f, 3f), 0f)
-                drawLine(color = colors[i % colors.size].copy(alpha = 0.5f), start = Offset(startX, startY), end = Offset(endX, endY), strokeWidth = 1.dp.toPx(), pathEffect = pathEffect)
-                drawCircle(color = colors[i % colors.size], radius = 3f, center = Offset(endX, endY))
+                // 锚点（圆弧外边缘）
+                val ax = center.x + ll.anchorOffDp.first * dpToPx
+                val ay = center.y + ll.anchorOffDp.second * dpToPx
+                // 肘点
+                val ex = center.x + ll.elbowOffDp.first * dpToPx
+                val ey = center.y + ll.elbowOffDp.second * dpToPx
+                // 水平段终点
+                val hx = center.x + ll.endOffDp.first * dpToPx
+                val hy = center.y + ll.endOffDp.second * dpToPx
+
+                // 锚点实心圆
+                drawCircle(color = c, radius = dotR, center = Offset(ax, ay))
+                // 第一段：斜向实线
+                drawLine(color = lc, start = Offset(ax, ay), end = Offset(ex, ey), strokeWidth = lineW)
+                // 第二段：水平实线
+                drawLine(color = lc, start = Offset(ex, ey), end = Offset(hx, hy), strokeWidth = lineW)
+                // 末端小圆点
+                drawCircle(color = c, radius = dotR * 0.7f, center = Offset(hx, hy))
             }
         }
 
-        // ── 外侧文字标注 ──
-        val chartSize = 200.dp
-
-        val maxLabels = minOf(slicesInfo.size, 6)
-        for (idx in 0 until maxLabels) {
-            if (idx >= data.size || idx >= colors.size) continue
-            val info = slicesInfo[idx]
-            val pctStr = "${"%.1f".format(data[idx].percentage)}%"
-
-            // 标签放在引导线终点外侧，远离色块区域避免重叠
-            val offsetFactor = 1.15f
-            val offsetXVal = (info.cosMid * chartSize.value * offsetFactor / 2f)
-            val offsetYVal = (info.sinMid * chartSize.value * offsetFactor / 2f)
-            Box(modifier = Modifier.offset(x = offsetXVal.dp, y = offsetYVal.dp)) {
-                Text(text = "${data[idx].category.name}  $pctStr",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                    color = if (isDark) Color(0xFFE6EDF3) else Color(0xFF1C1C1E))
+        // ────────────────────────────────────────────────
+        // 外侧标注文字（同色系，固定在水平线末端外侧）
+        // ────────────────────────────────────────────────
+        val labelFontSize = 11.sp
+        // 标签文字颜色：浅色模式黑色，深色模式白色
+        val labelTextColor = if (isDark) Color.White else Color.Black
+        for (ll in labelLayouts) {
+            if (ll.idx >= data.size) continue
+            val item = data[ll.idx]
+            val pctStr = "${item.category.name} ${"%.1f".format(item.percentage)}%"
+            // 文字在水平段终点外侧
+            val tx = ll.endOffDp.first.dp + if (ll.isLeft) (-4).dp else 4.dp
+            val ty = ll.endOffDp.second.dp - 8.dp
+            Box(modifier = Modifier.offset(x = tx, y = ty)) {
+                Text(
+                    text = pctStr,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = labelFontSize, fontWeight = FontWeight.Bold),
+                    color = labelTextColor
+                )
             }
         }
 
-        // ── 中心文字 ──
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (animatedIdx >= 0 && animatedIdx < data.size) {
-                val s = data[animatedIdx]
-                Text(s.category.name, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
-                    color = colors[animatedIdx % colors.size])
-                Text(CurrencyUtils.format(s.amount, currencySymbol),
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold),
-                    color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E))
-            } else {
-                val label = if (data.any { it.category.type.name == "EXPENSE" }) "支出" else "收入"
-                Text(label, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2))
-                Text(CurrencyUtils.format(totalAmount, currencySymbol),
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold),
-                    color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E))
+        // ────────────────────────────────────────────────
+        // 中心文字 — 字体大小完全自适应内圆直径
+        // ────────────────────────────────────────────────
+        // 内圆文字区域（加大到75dp）
+        val innerDiamDp = 75f
+        val safeWidthDp = 67f
+        val nameFontSize = 13.sp
+        val amountFontSize = 14.sp
+
+        Box(
+            modifier = Modifier
+                .size(innerDiamDp.dp)
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = ((innerDiamDp - safeWidthDp) / 2f).dp)
+            ) {
+                if (animatedIdx >= 0 && animatedIdx < data.size) {
+                    val s = data[animatedIdx]
+                    Text(s.category.name,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Bold),
+                        color = colors[animatedIdx % colors.size], maxLines = 1, softWrap = false)
+                    Text("$currencySymbol${"%.2f".format(s.amount)}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.ExtraBold),
+                        color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
+                } else {
+                    val label = if (data.any { it.category.type.name == "EXPENSE" }) "支出" else "收入"
+                    Text(label,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Bold),
+                        color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2), maxLines = 1, softWrap = false)
+                    Text("$currencySymbol${"%.2f".format(totalAmount)}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.ExtraBold),
+                        color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
+                }
             }
         }
     }

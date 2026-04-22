@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -203,6 +204,7 @@ fun CategoryManageScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
         ) {
             Row(
                 modifier = Modifier
@@ -280,24 +282,34 @@ fun CategoryManageScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(5),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(items = categories, key = { it.id }) { category ->
-                    val subCategories = Category.getSubCategories(category.id, currentType)
-                    val hasSubCategories = subCategories.isNotEmpty()
-                    val isSelected = selectedCategory?.id == category.id
+            // 一级分类网格（非懒加载，适配 verticalScroll）
+            val itemsPerRow = 5
+            categories.chunked(itemsPerRow).forEach { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { category ->
+                        val subCategories = Category.getSubCategories(category.id, currentType)
+                        val hasSubCategories = subCategories.isNotEmpty()
+                        val isSelected = selectedCategory?.id == category.id
 
-                    CategoryManageItem(
-                        category = category,
-                        hasSubCategories = hasSubCategories,
-                        isSelected = isSelected,
-                        onClick = { selectedCategory = category }
-                    )
+                        Box(modifier = Modifier.weight(1f)) {
+                            CategoryManageItem(
+                                category = category,
+                                hasSubCategories = hasSubCategories,
+                                isSelected = isSelected,
+                                onClick = { selectedCategory = category }
+                            )
+                        }
+                    }
+                    repeat(itemsPerRow - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // 二级分类展开区域

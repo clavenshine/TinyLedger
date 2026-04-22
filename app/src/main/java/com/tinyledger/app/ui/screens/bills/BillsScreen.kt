@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -61,7 +63,7 @@ import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BillsScreen(
     onEditTransaction: (Long) -> Unit,
@@ -73,30 +75,31 @@ fun BillsScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
 
+    var showYearMonthPicker by remember { mutableStateOf(false) }
+
     if (uiState.viewMode == BillsViewMode.ALBUM) {
         AlbumView(
             onViewTransactionDetail = onViewTransactionDetail
         )
     } else {
-    var showYearMonthPicker by remember { mutableStateOf(false) }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // View mode toggle (流水/日历/相册) + 日期控件
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 视图切换
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
+        // 固定顶栏：View mode toggle (流水/日历/相册) + 日期控件
+        stickyHeader(key = "tab_bar") {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 视图切换
+            Surface(
+                shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 3.dp
                 ) {
@@ -157,7 +160,7 @@ fun BillsScreen(
                     }
                 }
             }
-        }
+        } // end stickyHeader
 
         // Monthly summary card
         item {
@@ -258,6 +261,70 @@ fun BillsScreen(
                             selectedLabelColor = MaterialTheme.colorScheme.primary
                         )
                     )
+
+                    Spacer(Modifier.weight(1f))
+
+                    // 搜索输入框
+                    var searchExpanded by remember { mutableStateOf(false) }
+                    if (searchExpanded) {
+                        BasicTextField(
+                            value = uiState.searchKeyword,
+                            onValueChange = {
+                                viewModel.setSearchKeyword(it)
+                            },
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(32.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 0.dp),
+                            textStyle = MaterialTheme.typography.labelMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxHeight()
+                                ) {
+                                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                        if (uiState.searchKeyword.isEmpty()) {
+                                            Text(
+                                                "搜索",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "关闭搜索",
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .clickable {
+                                                viewModel.setSearchKeyword("")
+                                                searchExpanded = false
+                                            },
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "搜索",
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .clickable { searchExpanded = true },
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -317,7 +384,8 @@ fun BillsScreen(
                 }
             }
         }
-    }
+    } // end LazyColumn
+    } // end else
 
     // Year/month picker bottom sheet
     if (showYearMonthPicker) {
@@ -333,7 +401,6 @@ fun BillsScreen(
             },
             onDismiss = { showYearMonthPicker = false }
         )
-    }
     }
 
     // Delete confirmation

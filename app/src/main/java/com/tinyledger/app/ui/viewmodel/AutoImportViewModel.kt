@@ -74,7 +74,8 @@ class AutoImportViewModel @Inject constructor(
                 val transactions = withContext(Dispatchers.IO) {
                     smsReader.readTransactions(contentResolver, startTime ?: 0L)
                 }.filter { sms ->
-                    if (startTime != null && sms.date < startTime) false
+                    if (sms.confidence < 0.8f) false
+                    else if (startTime != null && sms.date < startTime) false
                     else if (endTime != null && sms.date > endTime) false
                     else true
                 }

@@ -189,11 +189,12 @@ class TransactionNotificationService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
         val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: ""
+        val summaryText = extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString() ?: ""
 
-        // 用最长的内容来解析
-        val fullContent = listOf(bigText, text).maxByOrNull { it.length } ?: ""
+        // 用最长的内容来解析（包含 summaryText）
+        val fullContent = listOf(bigText, text, summaryText).maxByOrNull { it.length } ?: ""
 
-        Log.d(TAG, "[通知捕获] pkg=$packageName title='$title' text='${text.take(80)}' bigText='${bigText.take(80)}'")
+        Log.d(TAG, "[通知捕获] pkg=$packageName title='$title' text='${text.take(80)}' bigText='${bigText.take(80)}' summaryText='${summaryText.take(80)}'")
 
         // ── 路径1：支付类应用 → 自动记账 ──────────────────────────────
         val appLabel = paymentPackages[packageName]
@@ -331,17 +332,27 @@ class TransactionNotificationService : NotificationListenerService() {
     ): ParsedNotification? {
         val combined = "$title $fullContent".trim()
 
-        // 微信支付通知：title 必须是 "微信支付" 或 "微信红包" 等服务号名称
-        // 普通聊天消息的 title 是发送者昵称，不应被捕获
+        // 微信支付通知：title 可能是 "微信支付"、"微信红包"、"微信收款助手"、"转账" 等
+        // 某些手机上标题可能只是 "微信" 或包含 "付款" 等关键词
+        // 因此放宽匹配：标题包含支付关键词 OR 内容中包含明确的微信支付特征
         val isPaymentTitle = title.contains("微信支付") ||
                 title.contains("微信红包") ||
                 title.contains("微信收款") ||
+                title.contains("微信收款助手") ||
                 title.contains("零钱") ||
                 title.contains("转账") ||
-                title.contains("WeChat Pay")
+                title.contains("WeChat Pay") ||
+                title.contains("微信转账") ||
+                title.contains("付款到账")
 
-        // 必须是支付服务号发出的通知，拒绝普通聊天消息
-        if (!isPaymentTitle) {
+        // 内容中也检查是否包含微信支付特征（用于标题不匹配但内容明确是微信支付的情况）
+        val isPaymentContent = combined.contains("微信支付凭证") ||
+                combined.contains("微信转账凭证") ||
+                combined.contains("你已成功付款") ||
+                combined.contains("收款到账") ||
+                (combined.contains("元") && (combined.contains("收款方") || combined.contains("付款方")))
+
+        if (!isPaymentTitle && !isPaymentContent) {
             Log.d(TAG, "微信非支付通知，跳过: title=$title")
             return null
         }
@@ -380,17 +391,25 @@ class TransactionNotificationService : NotificationListenerService() {
         val combined = "$title $fullContent".trim()
 
         // 支付宝通知的 title 通常包含 "支付宝"、"花呗"、"余额宝" 等
+        // 某些手机上可能简化为 "支付成功" 等
         val isPaymentTitle = title.contains("支付宝") ||
                 title.contains("花呗") ||
                 title.contains("余额宝") ||
                 title.contains("借呗") ||
                 title.contains("网商银行") ||
-                title.contains("Alipay")
+                title.contains("Alipay") ||
+                title.contains("支付成功") ||
+                title.contains("付款成功") ||
+                title.contains("收款到账")
 
-        // 如果 title 不含支付室关键词，则检查内容是否包含明确的支付宝交易信息
+        // 如果 title 不含支付关键词，则检查内容是否包含明确的支付宝交易信息
         if (!isPaymentTitle) {
             val hasAlipayContent = combined.contains("支付宝") && hasPaymentKeywords(combined)
-            if (!hasAlipayContent) {
+            // 也检查是否包含支付宝特有的内容特征
+            val hasAlipayPattern = combined.contains("付款方式") ||
+                    combined.contains("交易订单") ||
+                    combined.contains("商家订单")
+            if (!hasAlipayContent && !hasAlipayPattern) {
                 Log.d(TAG, "支付宝非支付通知，跳过: title=$title")
                 return null
             }
@@ -516,6 +535,29 @@ class TransactionNotificationService : NotificationListenerService() {
                             Log.d(TAG, "银行短信待确认记账已保存: pendingId=$pendingId")
                             notificationHelper.showTransactionConfirmationNotification(pendingId = pendingId, transaction = transaction, sourceLabel = address)
                         }
+                    } else {
+                        // 即使无法解析金额，如果内容包含明确银行特征，也存入待确认供用户手动处理
+                        val strongBankIndicators = listOf("支出", "消费", "扣款", "收入", "到账", "入账", "收款")
+                        if (strongBankIndicators.any { body.contains(it) }) {
+                            Log.d(TAG, "银行短信解析金额失败，但包含交易关键词，存入待确认: ${body.take(40)}")
+                            val guessedType = if (listOf("收入", "到账", "入账", "收款").any { body.contains(it) }) {
+                                TransactionType.INCOME
+                            } else {
+                                TransactionType.EXPENSE
+                            }
+                            val transaction = Transaction(
+                                type = guessedType,
+                                category = Category.fromId("other", guessedType),
+                                amount = 0.0,
+                                note = "银行短信(需确认): ${body.take(60)}",
+                                date = System.currentTimeMillis(),
+                                accountId = null
+                            )
+                            if (!isSeamlessEnabled(applicationContext)) {
+                                val pendingId = pendingTransactionRepository.insertPendingTransaction(transaction)
+                                notificationHelper.showTransactionConfirmationNotification(pendingId = pendingId, transaction = transaction, sourceLabel = address)
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -598,6 +640,17 @@ class TransactionNotificationService : NotificationListenerService() {
             }
         }
 
+        // 优先级2.5：RMB/CNY 格式（部分银行短信使用）
+        val rmbRegex = Regex("[RC]MB\\s*(\\d+(?:\\.\\d{1,2})?)", RegexOption.IGNORE_CASE)
+        val rmbMatch = rmbRegex.find(text)
+        if (rmbMatch != null) {
+            val amount = rmbMatch.groupValues[1].toDoubleOrNull()
+            if (amount != null && amount > 0 && amount < 10_000_000) {
+                Log.d(TAG, "匹配到'RMB/CNY+数字'模式: $amount")
+                return amount
+            }
+        }
+
         // 优先级3：交易关键词后跟数字（兜底模式，需更严格匹配）
         // 如 "支付123.45" "消费100" "付款50.00" "到账200"
         val anchoredRegex = Regex(
@@ -610,6 +663,17 @@ class TransactionNotificationService : NotificationListenerService() {
             val amount = anchoredMatch.groupValues[1].toDoubleOrNull()
             if (amount != null && amount > 0 && amount < 10_000_000) {
                 Log.d(TAG, "匹配到'关键词+数字'模式: $amount")
+                return amount
+            }
+        }
+
+        // 优先级4：尝试匹配金额文本前后有"金额"关键词的模式
+        val amountKeywordRegex = Regex("金额[：:]?\\s*(\\d+(?:\\.\\d{1,2})?)")
+        val amountKwMatch = amountKeywordRegex.find(text)
+        if (amountKwMatch != null) {
+            val amount = amountKwMatch.groupValues[1].toDoubleOrNull()
+            if (amount != null && amount > 0 && amount < 10_000_000) {
+                Log.d(TAG, "匹配到'金额+数字'模式: $amount")
                 return amount
             }
         }

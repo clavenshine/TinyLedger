@@ -37,6 +37,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -246,30 +247,36 @@ private fun CategoryItem(
                 else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
-        }
-        Spacer(modifier = Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = category.name,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp
-                ),
-                textAlign = TextAlign.Center,
-                color = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                minLines = 1
-            )
+            // 有子分类时在图标右下角显示三点小图标
             if (hasSubCategories) {
-                Spacer(modifier = Modifier.width(1.dp))
                 Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(10.dp)
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "有二级分类",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = (-2).dp, y = (-2).dp)
+                        .size(14.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        )
+                        .padding(1.dp)
                 )
             }
         }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp
+            ),
+            textAlign = TextAlign.Center,
+            color = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            minLines = 1
+        )
     }
 }
 
@@ -705,8 +712,9 @@ private fun IconOption(
 }
 
 /**
- * 二级分类纵向列表
- * 每行：二级分类图标 + 一级分类名称-二级分类名称 + 编辑图标/删除图标
+ * 二级分类纵向列表（添加记账页面专用）
+ * 每行：二级分类图标 + 一级分类名称-二级分类名称 + 单选框
+ * 浅色虚线分隔，无编辑/删除图标
  */
 @Composable
 private fun SubCategoryList(
@@ -723,88 +731,85 @@ private fun SubCategoryList(
             .padding(vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier.padding(vertical = 4.dp)
         ) {
-            subCategories.forEach { subCategory ->
+            subCategories.forEachIndexed { index, subCategory ->
+                if (index > 0) {
+                    // 浅色虚线分隔
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        thickness = 0.5.dp
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(
                             if (subCategory == selectedCategory)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                             else Color.Transparent
                         )
                         .clickable { onSubCategorySelected(subCategory) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 二级分类图标
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (subCategory == selectedCategory)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                        contentAlignment = Alignment.Center
+                    // 左侧：二级分类图标 + 名称
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            imageVector = getIconFromName(subCategory.icon),
-                            contentDescription = null,
-                            tint = if (subCategory == selectedCategory)
+                        // 二级分类图标
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (subCategory == selectedCategory)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = getIconFromName(subCategory.icon),
+                                contentDescription = null,
+                                tint = if (subCategory == selectedCategory)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        // 一级分类名称-二级分类名称
+                        Text(
+                            text = "${parentCategory.name}-${subCategory.name}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (subCategory == selectedCategory)
                                 MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            else
+                                MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    // 一级分类名称-二级分类名称
-                    Text(
-                        text = "${parentCategory.name}-${subCategory.name}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (subCategory == selectedCategory)
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // 编辑图标
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "编辑",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable { onSubCategoryEdit(subCategory) }
-                            .padding(2.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // 删除图标
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable { onSubCategoryDelete(subCategory) }
-                            .padding(2.dp)
+                    // 右侧：单选框
+                    RadioButton(
+                        selected = subCategory == selectedCategory,
+                        onClick = { onSubCategorySelected(subCategory) },
+                        modifier = Modifier.size(24.dp),
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
                     )
                 }
             }
