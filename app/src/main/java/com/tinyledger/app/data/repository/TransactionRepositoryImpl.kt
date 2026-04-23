@@ -242,6 +242,50 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getTransactionsByTopLevelCategorySync(categoryId: String): List<Transaction> {
+        return transactionDao.getTransactionsByTopLevelCategory(categoryId).map { it.toDomain() }
+    }
+
+    override suspend fun autoMatchTransactionsToSubCategory(
+        parentCategoryId: String,
+        newSubCategoryId: String,
+        subCategoryName: String,
+        firstSubCategoryId: String?
+    ): Int {
+        // 获取该一级分类下的所有交易记录
+        val transactions = transactionDao.getTransactionsByTopLevelCategory(parentCategoryId)
+        if (transactions.isEmpty()) return 0
+
+        val matchedIds = mutableListOf<Long>()
+        val unmatchedIds = mutableListOf<Long>()
+
+        // 遍历交易记录，尝试智能匹配
+        transactions.forEach { tx ->
+            val note = tx.note ?: ""
+            // 如果note中包含新二级分类的名称，则匹配到该二级分类
+            if (note.contains(subCategoryName, ignoreCase = true)) {
+                matchedIds.add(tx.id)
+            } else {
+                unmatchedIds.add(tx.id)
+            }
+        }
+
+        // 批量更新匹配的交易记录到新二级分类
+        var updatedCount = 0
+        if (matchedIds.isNotEmpty()) {
+            transactionDao.batchUpdateCategory(matchedIds, newSubCategoryId)
+            updatedCount += matchedIds.size
+        }
+
+        // 对于未匹配的交易，默认匹配到该一级分类下的第一个二级分类
+        if (unmatchedIds.isNotEmpty() && firstSubCategoryId != null) {
+            transactionDao.batchUpdateCategory(unmatchedIds, firstSubCategoryId)
+            updatedCount += unmatchedIds.size
+        }
+
+        return updatedCount
+    }
+
     private fun TransactionEntity.toDomain(): Transaction {
         return Transaction(
             id = id,

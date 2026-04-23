@@ -66,7 +66,17 @@ class PreferencesRepositoryImpl @Inject constructor(
         dataStore.edit { preferences ->
             val existing = preferences[CUSTOM_CATEGORIES_KEY] ?: ""
             val categories = parseCustomCategories(existing).toMutableList()
-            categories.add(category)
+            
+            // 检查分类是否已存在（根据ID）
+            val existingIndex = categories.indexOfFirst { it.id == category.id }
+            if (existingIndex >= 0) {
+                // 如果存在，则更新
+                categories[existingIndex] = category
+            } else {
+                // 如果不存在，则添加
+                categories.add(category)
+            }
+            
             preferences[CUSTOM_CATEGORIES_KEY] = serializeCustomCategories(categories)
         }
     }

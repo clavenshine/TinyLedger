@@ -86,7 +86,7 @@ fun TransactionCard(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = transaction.category.name,
+                    text = getDisplayCategoryName(transaction.category),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -323,5 +323,34 @@ fun getCategoryIcon(iconName: String): ImageVector {
         "settings" -> Icons.Default.Settings
         "build" -> Icons.Default.Build
         else -> Icons.Default.Category
+    }
+}
+
+/**
+ * 获取显示用的分类名称
+ * 规则：
+ * 1. 如果是二级分类（有parentId），显示“一级分类名称-二级分类名称”
+ * 2. 如果是一级分类（无parentId），直接显示名称
+ * 
+ * 注意：通过 categoryId 实时查找最新的分类名称，确保分类名称修改后能实时显示
+ */
+fun getDisplayCategoryName(category: Category): String {
+    // 通过 categoryId 和 type 实时查找最新的分类信息
+    val latestCategory = Category.getCategoriesByType(category.type)
+        .find { it.id == category.id } ?: category
+    
+    return if (latestCategory.parentId != null) {
+        // 二级分类：查找父分类名称
+        val parentCategory = Category.getCategoriesByType(latestCategory.type)
+            .find { it.id == latestCategory.parentId }
+        if (parentCategory != null) {
+            "${parentCategory.name}-${latestCategory.name}"
+        } else {
+            // 如果找不到父分类，只显示二级分类名称
+            latestCategory.name
+        }
+    } else {
+        // 一级分类：直接显示名称
+        latestCategory.name
     }
 }

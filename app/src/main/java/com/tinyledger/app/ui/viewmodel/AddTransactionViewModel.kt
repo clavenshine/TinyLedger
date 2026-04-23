@@ -293,6 +293,20 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
+    suspend fun autoMatchTransactionsToSubCategory(
+        parentCategoryId: String,
+        newSubCategoryId: String,
+        subCategoryName: String,
+        firstSubCategoryId: String?
+    ): Int {
+        return transactionRepository.autoMatchTransactionsToSubCategory(
+            parentCategoryId = parentCategoryId,
+            newSubCategoryId = newSubCategoryId,
+            subCategoryName = subCategoryName,
+            firstSubCategoryId = firstSubCategoryId
+        )
+    }
+
     fun deleteCategory(category: Category) {
         // Cannot delete default categories
         if (category.isDefault) return
@@ -323,6 +337,25 @@ class AddTransactionViewModel @Inject constructor(
      * 删除任意分类（包括内置分类），用于分类管理页面
      */
     fun deleteCategoryAny(category: Category) {
+        // 如果是二级分类，需要先迁移交易记录
+        if (category.parentId != null) {
+            viewModelScope.launch {
+                // 查找该父级分类下的其他二级分类
+                val siblingSubCategories = Category.getSubCategories(category.parentId, category.type)
+                    .filter { it.id != category.id }
+                
+                // 确定目标分类：如果有其他二级分类，使用第一个；否则使用父级分类
+                val targetCategoryId = if (siblingSubCategories.isNotEmpty()) {
+                    siblingSubCategories.first().id
+                } else {
+                    category.parentId
+                }
+                
+                // 将所有使用该二级分类的交易记录迁移到目标分类
+                transactionRepository.updateCategoryForTransactions(category.id, targetCategoryId)
+            }
+        }
+        
         val removed = Category.removeCategory(category)
         if (removed.isEmpty()) return
         

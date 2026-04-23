@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.BeautifiedAlertDialog
 import com.tinyledger.app.ui.components.getCategoryIcon
 
 // 图标分组数据
@@ -32,6 +33,7 @@ fun AddCategoryScreen(
     var categoryName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     var selectedGroupIndex by remember { mutableStateOf(0) }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
     val maxNameLength = 4  // 最多4个汉字
 
     Scaffold(
@@ -67,12 +69,15 @@ fun AddCategoryScreen(
                         if (categoryName.trim().isBlank()) return@Button
                         if (selectedIcon == null) return@Button
 
-                        // 检查分类名称是否已存在
+                        // 检查分类名称是否已存在（包括一级和二级分类）
                         val existingCategories = Category.getCategoriesByType(transactionType)
                         val isDuplicate = existingCategories.any {
                             it.name.equals(categoryName.trim(), ignoreCase = true)
                         }
-                        if (isDuplicate) return@Button
+                        if (isDuplicate) {
+                            showDuplicateDialog = true
+                            return@Button
+                        }
 
                         Category.addCustomCategory(
                             name = categoryName.trim(),
@@ -268,5 +273,16 @@ fun AddCategoryScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+    
+    // 分类名称重复提示对话框
+    if (showDuplicateDialog) {
+        BeautifiedAlertDialog(
+            title = "分类名称已存在",
+            message = "该分类名称已被使用，请使用其他名称",
+            onDismiss = { showDuplicateDialog = false },
+            icon = "🏷️",
+            iconColor = Color(0xFFFF9800)
+        )
     }
 }

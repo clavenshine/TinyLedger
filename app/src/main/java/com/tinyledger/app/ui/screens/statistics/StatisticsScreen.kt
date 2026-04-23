@@ -46,9 +46,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.CategoryAmount
 import com.tinyledger.app.domain.model.DailyRecord
 import com.tinyledger.app.domain.model.MonthlyRecord
+import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.ChartColors
 import com.tinyledger.app.ui.theme.IOSColors
 import com.tinyledger.app.ui.theme.IOSColorsDark
@@ -146,7 +148,8 @@ fun StatisticsScreen(
                             uiState.totalExpense else uiState.totalIncome
                         if (categories.isNotEmpty()) {
                             item { Spacer(modifier = Modifier.height(8.dp)) }
-                            item { CategoryRankingSection(categories, totalAmount, uiState.currencySymbol) }
+                            val txnType = if (tab == StatsTab.EXPENSE) TransactionType.EXPENSE else TransactionType.INCOME
+                            item { CategoryRankingSection(categories, totalAmount, uiState.currencySymbol, txnType) }
                         }
                     }
 
@@ -896,6 +899,7 @@ private fun CategoryRankingSection(
     categories: List<CategoryAmount>,
     totalAmount: Double,
     currencySymbol: String,
+    transactionType: TransactionType = TransactionType.EXPENSE,
     onCollapse: () -> Unit = {}
 ) {
     val isDark = isInDarkTheme()
@@ -903,13 +907,73 @@ private fun CategoryRankingSection(
     var selectedTab by remember { mutableStateOf(CategoryTab.MAIN) }
     var donutSelectedIndex by remember { mutableIntStateOf(-1) }
 
+    // 根据大类/小类Tab切换数据
+    val displayCategories = remember(categories, selectedTab, transactionType) {
+        if (selectedTab == CategoryTab.MAIN) {
+            // 大类：显示所有一级分类（包括有二级分类和没有二级分类的）
+            // 从Category模型获取完整的一级分类列表，而不仅仅依赖有交易记录的分类
+            val allTopLevelCategories = Category.getTopLevelCategoriesByType(transactionType)
+            
+            // 构建每个一级分类的金额（本身金额 + 所有二级分类金额之和）
+            allTopLevelCategories.map { topLevelCat ->
+                // 该一级分类本身的交易金额（如果有的话）
+                val directAmount = categories
+                    .find { it.category.id == topLevelCat.id }?.amount ?: 0.0
+                // 该一级分类下所有二级分类的交易金额之和
+                val subCategoriesAmount = categories
+                    .filter { it.category.parentId == topLevelCat.id }
+                    .sumOf { it.amount }
+                val totalCatAmount = directAmount + subCategoriesAmount
+                CategoryAmount(topLevelCat, totalCatAmount, 0f)
+            }.filter { it.amount > 0 }.let { mainLevelList ->
+                // 过滤掉金额为0的一级分类，重新计算百分比
+                val totalOfAllMainCategories = mainLevelList.sumOf { it.amount }
+                if (totalOfAllMainCategories > 0) {
+                    mainLevelList.map { it.copy(percentage = (it.amount / totalOfAllMainCategories * 100).toFloat()) }
+                } else {
+                    mainLevelList
+                }
+            }.sortedByDescending { it.amount }
+        } else {
+            // 小类：显示最末级分类
+            // 从Category模型判断哪些一级分类有二级分类
+            val topLevelWithSubs = Category.getTopLevelCategoriesByType(transactionType)
+                .filter { topLevel ->
+                    Category.getSubCategories(topLevel.id, transactionType).isNotEmpty()
+                }
+                .map { it.id }
+                .toSet()
+            
+            // 过滤出最末级分类：
+            //    - 如果一级分类有二级分类：只保留其二级分类（parentId != null 且其父在topLevelWithSubs中）
+            //    - 如果一级分类无二级分类：保留该一级分类本身（parentId == null 且不在topLevelWithSubs中）
+            categories.filter { item ->
+                if (item.category.parentId != null) {
+                    // 二级分类：直接保留
+                    true
+                } else {
+                    // 一级分类：只有当它没有二级分类时才保留
+                    item.category.id !in topLevelWithSubs
+                }
+            }.let { subLevelList ->
+                // 重新计算百分比（基于所有最末级分类的总金额）
+                val totalOfAllSubCategories = subLevelList.sumOf { it.amount }
+                if (totalOfAllSubCategories > 0) {
+                    subLevelList.map { it.copy(percentage = (it.amount / totalOfAllSubCategories * 100).toFloat()) }
+                } else {
+                    subLevelList
+                }
+            }.sortedByDescending { it.amount }
+        }
+    }
+
     // 按金额降序排列（用于列表）
-    val sortedCategories = remember(categories) { categories.sortedByDescending { it.amount } }
+    val sortedCategories = displayCategories
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF6F6F8)),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFEAEAEA)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 12.dp)) {

@@ -12,13 +12,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.BeautifiedAlertDialog
 import com.tinyledger.app.ui.components.getCategoryIcon
+import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,7 +30,8 @@ fun EditCategoryScreen(
     category: Category,
     transactionType: TransactionType,
     onNavigateBack: () -> Unit = {},
-    onCategoryUpdated: (Category) -> Unit = {}
+    onCategoryUpdated: (Category) -> Unit = {},
+    viewModel: AddTransactionViewModel = hiltViewModel()
 ) {
     var categoryName by remember { mutableStateOf(category.name) }
     var selectedIcon by remember { mutableStateOf(category.icon) }
@@ -35,6 +40,7 @@ fun EditCategoryScreen(
             iconGroups.indexOfFirst { group -> group.icons.contains(category.icon) }.coerceAtLeast(0)
         )
     }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
     val maxNameLength = 4
 
     Scaffold(
@@ -70,11 +76,34 @@ fun EditCategoryScreen(
                         if (categoryName.trim().isBlank()) return@Button
                         if (selectedIcon.isEmpty()) return@Button
 
+                        // 检查分类名称是否已存在（排除当前分类本身）
+                        val existingCategories = Category.getCategoriesByType(transactionType)
+                        val isDuplicate = existingCategories.any {
+                            it.id != category.id && it.name.equals(categoryName.trim(), ignoreCase = true)
+                        }
+                        if (isDuplicate) {
+                            showDuplicateDialog = true
+                            return@Button
+                        }
+
                         val updatedCategory = category.copy(
                             name = categoryName.trim(),
                             icon = selectedIcon
                         )
-                        onCategoryUpdated(updatedCategory)
+                        
+                        // 更新分类（名称和图标）
+                        val result = Category.updateCustomCategory(
+                            category = category,
+                            newName = categoryName.trim(),
+                            newIcon = selectedIcon
+                        )
+                        
+                        if (result != null) {
+                            // 持久化保存
+                            viewModel.saveSubCategory(result)
+                            onCategoryUpdated(result)
+                        }
+                        
                         onNavigateBack()
                     },
                     modifier = Modifier
@@ -257,5 +286,16 @@ fun EditCategoryScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+    
+    // 分类名称重复提示对话框
+    if (showDuplicateDialog) {
+        BeautifiedAlertDialog(
+            title = "分类名称已存在",
+            message = "该分类名称已被使用，请使用其他名称",
+            onDismiss = { showDuplicateDialog = false },
+            icon = "🏷️",
+            iconColor = Color(0xFFFF9800)
+        )
     }
 }

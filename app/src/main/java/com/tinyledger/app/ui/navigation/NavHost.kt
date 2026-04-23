@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -466,6 +467,7 @@ fun AppNavHost(
                 navArgument("transactionType") { type = NavType.StringType }
             )
         ) { backStackEntry ->
+            val addTxnViewModel: AddTransactionViewModel = hiltViewModel()
             val categoryId = backStackEntry.arguments?.getString("categoryId") ?: ""
             val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
             val transactionType = try {
@@ -479,7 +481,11 @@ fun AppNavHost(
                 EditCategoryScreen(
                     category = category,
                     transactionType = transactionType,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onCategoryUpdated = { updatedCategory ->
+                        // 分类更新后，ViewModel 会自动刷新，CategoryManageScreen 会重新获取数据
+                    },
+                    viewModel = addTxnViewModel
                 )
             }
         }
@@ -492,6 +498,7 @@ fun AppNavHost(
             )
         ) { backStackEntry ->
             val addTxnViewModel: AddTransactionViewModel = hiltViewModel()
+            val scope = rememberCoroutineScope()
             val parentId = backStackEntry.arguments?.getString("parentId") ?: ""
             val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
             val transactionType = try {
@@ -508,6 +515,20 @@ fun AppNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onSaveSubCategory = { subCategory ->
                         addTxnViewModel.saveSubCategory(subCategory)
+                    },
+                    onAutoMatchTransactions = { newSubCategory ->
+                        var matchedCount = 0
+                        kotlinx.coroutines.runBlocking {
+                            val allSubCategories = Category.getSubCategories(parentCategory.id, transactionType)
+                            val firstSubId = allSubCategories.firstOrNull()?.id
+                            matchedCount = addTxnViewModel.autoMatchTransactionsToSubCategory(
+                                parentCategoryId = parentCategory.id,
+                                newSubCategoryId = newSubCategory.id,
+                                subCategoryName = newSubCategory.name,
+                                firstSubCategoryId = firstSubId
+                            )
+                        }
+                        matchedCount
                     }
                 )
             }

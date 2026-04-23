@@ -79,6 +79,18 @@ interface TransactionDao {
     // 按账户ID列表和日期范围查询支出分类（排除TRANSFER和LENDING类型）
     @Query("SELECT category, SUM(ABS(amount)) as total FROM transactions WHERE (amount < 0 OR (type = 0 AND amount > 0)) AND type != 2 AND type != 3 AND date BETWEEN :startDate AND :endDate AND accountId IN (:accountIds) GROUP BY category")
     fun getExpenseByCategoryForAccounts(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<List<CategoryTotal>>
+
+    // 查询某个一级分类下的所有交易记录（包括其所有二级分类）
+    @Query("SELECT * FROM transactions WHERE category = :categoryId ORDER BY date DESC")
+    suspend fun getTransactionsByTopLevelCategory(categoryId: String): List<TransactionEntity>
+
+    // 通过关键字搜索交易记录的note字段
+    @Query("SELECT * FROM transactions WHERE category = :categoryId AND note LIKE '%' || :keyword || '%' ORDER BY date DESC")
+    suspend fun searchTransactionsByCategoryAndKeyword(categoryId: String, keyword: String): List<TransactionEntity>
+
+    // 批量更新交易记录的分类
+    @Query("UPDATE transactions SET category = :newCategoryId, updatedAt = :timestamp WHERE id IN (:transactionIds)")
+    suspend fun batchUpdateCategory(transactionIds: List<Long>, newCategoryId: String, timestamp: Long = System.currentTimeMillis())
 }
 
 data class CategoryTotal(

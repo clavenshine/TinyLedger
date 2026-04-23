@@ -12,12 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.BeautifiedAlertDialog
 import com.tinyledger.app.ui.components.getCategoryIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,11 +29,15 @@ fun AddSubCategoryScreen(
     transactionType: TransactionType,
     onNavigateBack: () -> Unit = {},
     onSubCategoryCreated: (Category) -> Unit = {},
-    onSaveSubCategory: ((Category) -> Unit)? = null
+    onSaveSubCategory: ((Category) -> Unit)? = null,
+    onAutoMatchTransactions: ((Category) -> Int)? = null // 智能匹配回调，返回匹配数量
 ) {
     var subCategoryName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
     var selectedGroupIndex by remember { mutableStateOf(0) }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
+    var showMatchSuccessDialog by remember { mutableStateOf(false) }
+    var matchedTransactionCount by remember { mutableStateOf(0) }
     val maxNameLength = 4
 
     Scaffold(
@@ -67,15 +73,37 @@ fun AddSubCategoryScreen(
                         if (subCategoryName.trim().isBlank()) return@Button
                         if (selectedIcon == null) return@Button
 
+                        // 检查分类名称是否已存在（包括一级和二级分类）
+                        val existingCategories = Category.getCategoriesByType(transactionType)
+                        val isDuplicate = existingCategories.any {
+                            it.name.equals(subCategoryName.trim(), ignoreCase = true)
+                        }
+                        if (isDuplicate) {
+                            showDuplicateDialog = true
+                            return@Button
+                        }
+
                         val newSubCategory = Category.addSubCategory(
                             name = subCategoryName.trim(),
                             type = transactionType,
                             parentId = parentCategory.id,
                             icon = selectedIcon!!
                         )
+                        
+                        // 调用保存回调
                         if (onSaveSubCategory != null) {
                             onSaveSubCategory(newSubCategory)
                         }
+                        
+                        // 执行智能匹配
+                        if (onAutoMatchTransactions != null) {
+                            val matchedCount = onAutoMatchTransactions(newSubCategory)
+                            if (matchedCount > 0) {
+                                matchedTransactionCount = matchedCount
+                                showMatchSuccessDialog = true
+                            }
+                        }
+                        
                         onSubCategoryCreated(newSubCategory)
                         onNavigateBack()
                     },
@@ -285,5 +313,27 @@ fun AddSubCategoryScreen(
 
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+    
+    // 分类名称重复提示对话框
+    if (showDuplicateDialog) {
+        BeautifiedAlertDialog(
+            title = "分类名称已存在",
+            message = "该分类名称已被使用，请使用其他名称",
+            onDismiss = { showDuplicateDialog = false },
+            icon = "🏷️",
+            iconColor = Color(0xFFFF9800)
+        )
+    }
+    
+    // 智能匹配成功提示对话框
+    if (showMatchSuccessDialog) {
+        BeautifiedAlertDialog(
+            title = "智能匹配成功",
+            message = "已智能匹配 $matchedTransactionCount 笔交易到新分类",
+            onDismiss = { showMatchSuccessDialog = false },
+            icon = "✅",
+            iconColor = Color(0xFF4CAF50)
+        )
     }
 }

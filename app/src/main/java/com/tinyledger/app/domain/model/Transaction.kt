@@ -308,8 +308,11 @@ data class Category(
             return removed
         }
 
-        fun renameCustomCategory(category: Category, newName: String): Category? {
-            // Cannot rename default categories
+        /**
+         * 更新自定义分类（名称和图标）
+         */
+        fun updateCustomCategory(category: Category, newName: String, newIcon: String): Category? {
+            // Cannot update default categories
             if (category.isDefault) return null
             val list = when (category.type) {
                 TransactionType.EXPENSE -> customExpenseCategories
@@ -319,9 +322,16 @@ data class Category(
             }
             val index = list.indexOfFirst { it.id == category.id }
             if (index < 0) return null
-            val renamed = category.copy(name = newName)
-            list[index] = renamed
-            return renamed
+            val updated = category.copy(name = newName, icon = newIcon)
+            list[index] = updated
+            return updated
+        }
+
+        /**
+         * 重命名自定义分类（仅更新名称，保留兼容性）
+         */
+        fun renameCustomCategory(category: Category, newName: String): Category? {
+            return updateCustomCategory(category, newName, category.icon)
         }
 
         fun fromId(id: String, type: TransactionType): Category {

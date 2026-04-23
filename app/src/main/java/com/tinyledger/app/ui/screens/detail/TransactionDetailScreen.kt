@@ -18,12 +18,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import coil.compose.AsyncImage
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
@@ -409,22 +413,45 @@ private fun TransactionDetailContent(
     
     // 图片全屏预览（支持多图滑动浏览）
     if (showImagePreview && imageList.isNotEmpty()) {
+        // 弹性动画
+        val scale = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+        
         Dialog(onDismissRequest = { showImagePreview = false }) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(Color.Transparent), // 去掉黑色背景
+                contentAlignment = Alignment.Center
             ) {
                 if (imageList.size == 1) {
                     // 单图：点击关闭
-                    AsyncImage(
-                        model = File(imageList[0]),
-                        contentDescription = "大图预览",
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showImagePreview = false },
-                        contentScale = ContentScale.Fit
-                    )
+                            .scale(scale.value)
+                            .fillMaxWidth(0.9f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White) // 白色背景
+                            .padding(8.dp) // 白色边框
+                    ) {
+                        AsyncImage(
+                            model = File(imageList[0]),
+                            contentDescription = "大图预览",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showImagePreview = false },
+                            contentScale = ContentScale.Fit
+                        )
+                    }
                 } else {
                     // 多图：HorizontalPager 浏览
                     val pagerState = rememberPagerState(
@@ -435,23 +462,36 @@ private fun TransactionDetailContent(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize()
                     ) { page ->
-                        AsyncImage(
-                            model = File(imageList[page]),
-                            contentDescription = "大图预览${page + 1}",
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showImagePreview = false },
-                            contentScale = ContentScale.Fit
-                        )
+                                .scale(scale.value)
+                                .fillMaxWidth(0.9f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White) // 白色背景
+                                .padding(8.dp) // 白色边框
+                        ) {
+                            AsyncImage(
+                                model = File(imageList[page]),
+                                contentDescription = "大图预览${page + 1}",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { showImagePreview = false },
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
                     // 页码指示器
                     Text(
                         text = "${pagerState.currentPage + 1} / ${imageList.size}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 48.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
                 // 关闭按钮
@@ -460,12 +500,14 @@ private fun TransactionDetailContent(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                 ) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "关闭",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }

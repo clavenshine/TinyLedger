@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.AccountType
 import com.tinyledger.app.domain.model.accountColors
+import com.tinyledger.app.ui.components.BeautifiedAlertDialog
 import com.tinyledger.app.ui.viewmodel.AccountViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -61,6 +62,13 @@ fun AddAccountScreen(
     var selectedColor by remember { mutableStateOf(accountColors[0]) }
     var cardNumber by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    
+    // 重复检测对话框状态
+    var showDuplicateDialog by remember { mutableStateOf(false) }
+    
+    // 账户数据用于重复检测
+    val uiState by viewModel.uiState.collectAsState()
+    val allAccounts = uiState.accountsWithBalance.map { it.first }
     
     // Credit account fields
     var creditLimit by remember { mutableStateOf("") }
@@ -309,6 +317,18 @@ fun AddAccountScreen(
             // 保存按钮
             Button(
                 onClick = {
+                    // 检查账户是否重复（账户类别+账户名称+账号后4位）
+                    val isDuplicate = allAccounts.any { account ->
+                        account.attribute == selectedAttribute &&
+                        account.name.equals(name.trim(), ignoreCase = true) &&
+                        account.cardNumber == cardNumber.ifBlank { null }
+                    }
+                    
+                    if (isDuplicate) {
+                        showDuplicateDialog = true
+                        return@Button
+                    }
+                    
                     val balance = initialBalance.toDoubleOrNull() ?: 0.0
                     val limit = creditLimit.toDoubleOrNull() ?: 0.0
                     val bill = billDay.toIntOrNull() ?: 1
@@ -547,6 +567,17 @@ fun AddAccountScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+    
+    // 账户重复检测对话框
+    if (showDuplicateDialog) {
+        BeautifiedAlertDialog(
+            title = "账户已存在",
+            message = "已存在相同类别、名称和账号的账户，请勿重复添加",
+            onDismiss = { showDuplicateDialog = false },
+            icon = "💳",
+            iconColor = Color(0xFFFF9800)
+        )
     }
 }
 

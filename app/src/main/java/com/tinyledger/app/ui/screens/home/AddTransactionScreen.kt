@@ -63,6 +63,7 @@ import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.AccountType
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.ui.components.BeautifiedAlertDialog
 import com.tinyledger.app.ui.components.CategorySelector
 import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.LendingSubType
@@ -96,6 +97,9 @@ fun AddTransactionScreen(
     var showPermissionDialog by remember { mutableStateOf(false) }
     var permissionType by remember { mutableStateOf("") } // "camera" or "storage"
     var pendingCameraPhotoPath by remember { mutableStateOf<String?>(null) } // 保存相机拍照的临时文件路径
+        
+    // 未来日期校验提示对话框
+    var showFutureDateDialog by remember { mutableStateOf(false) }
 
     // 相机启动器
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -824,16 +828,29 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Error Message
+            // Error Message - 使用美化对话框
             uiState.errorMessage?.let { error ->
                 // 期初余额日期校验错误用美化弹窗
                 if (error == "存在期初余额日期之前的记录，请核实") {
                     // 由下方弹窗处理
                 } else {
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                    // 其他错误也使用美化对话框
+                    val dialogIcon = when {
+                        error.contains("请选择") -> "📋"
+                        error.contains("账户") -> "💳"
+                        else -> "⚠️"
+                    }
+                    val dialogColor = when {
+                        error.contains("请选择") -> Color(0xFFFF9800)
+                        error.contains("账户") -> Color(0xFF2196F3)
+                        else -> Color(0xFFFF9800)
+                    }
+                    BeautifiedAlertDialog(
+                        title = "提示",
+                        message = error,
+                        onDismiss = { viewModel.clearError() },
+                        icon = dialogIcon,
+                        iconColor = dialogColor
                     )
                 }
             }
@@ -1038,8 +1055,14 @@ fun AddTransactionScreen(
                                 )
                         )
                         .clickable(enabled = buttonEnabled) {
-                            isSaveAnimating = true
-                            viewModel.saveTransaction()
+                            // 检查是否选择了未来日期
+                            val currentTime = System.currentTimeMillis()
+                            if (uiState.date > currentTime) {
+                                showFutureDateDialog = true
+                            } else {
+                                isSaveAnimating = true
+                                viewModel.saveTransaction()
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -1820,6 +1843,123 @@ fun AddTransactionScreen(
                             tint = Color.White,
                             modifier = Modifier.size(34.dp)
                         )
+                    }
+                }
+            }
+        }
+    }
+    
+    // 未来日期校验提示对话框
+    if (showFutureDateDialog) {
+        val scale = remember { Animatable(0f) }
+        LaunchedEffect(Unit) {
+            scale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+        
+        Dialog(
+            onDismissRequest = { showFutureDateDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 半透明遮罩
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x80000000))
+                        .clickable { showFutureDateDialog = false }
+                )
+                
+                // 弹窗卡片
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.88f)
+                        .scale(scale.value)
+                        .graphicsLayer { shadowElevation = 20f },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 图标
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(
+                                    color = Color(0xFFFF9800).copy(alpha = 0.1f),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9800),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // 标题
+                        Text(
+                            text = "日期提示",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // 提示内容
+                        Text(
+                            text = "记账所选日期在当前日期之后，请确认！",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        // 按钮区域
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // 返回按钮
+                            OutlinedButton(
+                                onClick = { showFutureDateDialog = false },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("返回")
+                            }
+                            
+                            // 确认按钮
+                            Button(
+                                onClick = {
+                                    showFutureDateDialog = false
+                                    isSaveAnimating = true
+                                    viewModel.saveTransaction()
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("确认")
+                            }
+                        }
                     }
                 }
             }

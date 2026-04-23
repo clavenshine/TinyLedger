@@ -25,4 +25,13 @@ interface TransactionRepository {
     suspend fun updateCategoryForTransactions(oldCategoryId: String, newCategoryId: String)
     fun getTransactionsByAccountIdsAndDateRange(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<List<Transaction>>
     fun getExpenseByCategoryForAccounts(accountIds: List<Long>, startDate: Long, endDate: Long): Flow<Map<String, Double>>
+    
+    // 智能匹配相关方法
+    suspend fun getTransactionsByTopLevelCategorySync(categoryId: String): List<Transaction>
+    suspend fun autoMatchTransactionsToSubCategory(
+        parentCategoryId: String,
+        newSubCategoryId: String,
+        subCategoryName: String,
+        firstSubCategoryId: String?
+    ): Int
 }
