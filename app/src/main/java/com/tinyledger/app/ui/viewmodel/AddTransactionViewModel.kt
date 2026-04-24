@@ -36,7 +36,7 @@ data class AddTransactionUiState(
     val note: String = "",
     val date: Long = System.currentTimeMillis(),
     val imagePath: String? = null,  // 图片附件路径（保留兼容）
-    val imagePaths: List<String> = emptyList(),  // 图片附件路径列表，最多3张
+    val imagePaths: List<String> = emptyList(),  // 图片附件路径列表，最多9张
     val isEditing: Boolean = false,
     val isSaving: Boolean = false,
     val saveSuccess: Boolean = false,
@@ -51,7 +51,9 @@ data class AddTransactionUiState(
     val lendingSubType: LendingSubType = LendingSubType.BORROW_IN,
     // 信用还款相关
     val creditRepaySubType: CreditRepaySubType = CreditRepaySubType.NORMAL,
-    val creditAccountToRepay: Account? = null // 要还款的信用账户
+    val creditAccountToRepay: Account? = null, // 要还款的信用账户
+    // 报销相关
+    val markAsReimbursement: Boolean = false
 )
 
 @HiltViewModel
@@ -411,6 +413,10 @@ class AddTransactionViewModel @Inject constructor(
         _uiState.update { it.copy(note = note) }
     }
 
+    fun setMarkAsReimbursement(mark: Boolean) {
+        _uiState.update { it.copy(markAsReimbursement = mark) }
+    }
+
     fun setImage(imagePath: String?) {
         _uiState.update { it.copy(imagePath = imagePath) }
     }
@@ -632,6 +638,11 @@ class AddTransactionViewModel @Inject constructor(
                         if (wasDualRecord) {
                             // 从双记录切换到单记录：删除旧的关联记录，创建新的单记录
                             transactionRepository.deleteTransaction(editingTransactionId!!)
+                            val reimbursementStatus = if (state.transactionType == TransactionType.EXPENSE && state.markAsReimbursement) {
+                                com.tinyledger.app.domain.model.ReimbursementStatus.PENDING
+                            } else {
+                                com.tinyledger.app.domain.model.ReimbursementStatus.NONE
+                            }
                             val transaction = Transaction(
                                 type = state.transactionType,
                                 category = category,
@@ -639,7 +650,8 @@ class AddTransactionViewModel @Inject constructor(
                                 note = state.note.ifBlank { null },
                                 date = state.date,
                                 accountId = accountId,
-                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
+                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||"),
+                                reimbursementStatus = reimbursementStatus
                             )
                             val insertResult = transactionRepository.insertTransaction(transaction)
                             if (insertResult == -1L) {
@@ -647,7 +659,7 @@ class AddTransactionViewModel @Inject constructor(
                                 return@launch
                             }
                         } else {
-                            // 原来就是单记录，正常更新
+                            // 原来就是单记录，正常更新（保留原有报销状态）
                             val transaction = Transaction(
                                 id = editingTransactionId ?: 0,
                                 type = state.transactionType,
@@ -656,12 +668,18 @@ class AddTransactionViewModel @Inject constructor(
                                 note = state.note.ifBlank { null },
                                 date = state.date,
                                 accountId = accountId,
-                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
+                                imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||"),
+                                reimbursementStatus = existingTx?.reimbursementStatus ?: com.tinyledger.app.domain.model.ReimbursementStatus.NONE
                             )
                             transactionRepository.updateTransaction(transaction)
                         }
                     } else {
                         // 新建模式
+                        val reimbursementStatus = if (state.transactionType == TransactionType.EXPENSE && state.markAsReimbursement) {
+                            com.tinyledger.app.domain.model.ReimbursementStatus.PENDING
+                        } else {
+                            com.tinyledger.app.domain.model.ReimbursementStatus.NONE
+                        }
                         val transaction = Transaction(
                             type = state.transactionType,
                             category = category,
@@ -669,7 +687,8 @@ class AddTransactionViewModel @Inject constructor(
                             note = state.note.ifBlank { null },
                             date = state.date,
                             accountId = accountId,
-                            imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||")
+                            imagePath = if (state.imagePaths.isEmpty()) null else state.imagePaths.joinToString("||"),
+                            reimbursementStatus = reimbursementStatus
                         )
                         val insertResult = transactionRepository.insertTransaction(transaction)
                         if (insertResult == -1L) {

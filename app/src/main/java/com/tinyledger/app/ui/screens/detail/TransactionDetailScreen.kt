@@ -2,6 +2,7 @@ package com.tinyledger.app.ui.screens.detail
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -25,6 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -411,9 +416,8 @@ private fun TransactionDetailContent(
         )
     }
     
-    // 图片全屏预览（支持多图滑动浏览）
+    // 图片全屏预览（支持多图滑动浏览+双指放大）
     if (showImagePreview && imageList.isNotEmpty()) {
-        // 弹性动画
         val scale = remember { Animatable(0f) }
         LaunchedEffect(Unit) {
             scale.animateTo(
@@ -424,89 +428,151 @@ private fun TransactionDetailContent(
                 )
             )
         }
-        
-        Dialog(onDismissRequest = { showImagePreview = false }) {
+
+        Dialog(
+            onDismissRequest = { showImagePreview = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Transparent), // 去掉黑色背景
+                    .background(Color.Black.copy(alpha = 0.9f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (imageList.size == 1) {
-                    // 单图：点击关闭
+                    var imageScale by remember { mutableFloatStateOf(1f) }
+                    var offsetX by remember { mutableFloatStateOf(0f) }
+                    var offsetY by remember { mutableFloatStateOf(0f) }
+
                     Box(
                         modifier = Modifier
-                            .scale(scale.value)
-                            .fillMaxWidth(0.9f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White) // 白色背景
-                            .padding(8.dp) // 白色边框
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    imageScale = (imageScale * zoom).coerceIn(1f, 5f)
+                                    if (imageScale > 1f) {
+                                        offsetX += pan.x
+                                        offsetY += pan.y
+                                    } else {
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                }
+                            }
+                            .clickable { showImagePreview = false },
+                        contentAlignment = Alignment.Center
                     ) {
-                        AsyncImage(
-                            model = File(imageList[0]),
-                            contentDescription = "大图预览",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { showImagePreview = false },
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                } else {
-                    // 多图：HorizontalPager 浏览
-                    val pagerState = rememberPagerState(
-                        initialPage = previewImageIndex,
-                        pageCount = { imageList.size }
-                    )
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
+                        // 柔润白色描边容器
                         Box(
                             modifier = Modifier
-                                .scale(scale.value)
-                                .fillMaxWidth(0.9f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White) // 白色背景
-                                .padding(8.dp) // 白色边框
+                                .fillMaxSize(0.92f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .border(3.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(20.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
-                                model = File(imageList[page]),
-                                contentDescription = "大图预览${page + 1}",
+                                model = File(imageList[0]),
+                                contentDescription = "大图预览",
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { showImagePreview = false },
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(17.dp))
+                                    .scale(scale.value)
+                                    .graphicsLayer {
+                                        scaleX = imageScale
+                                        scaleY = imageScale
+                                        translationX = offsetX
+                                        translationY = offsetY
+                                    },
                                 contentScale = ContentScale.Fit
                             )
                         }
                     }
-                    // 页码指示器
+                } else {
+                    val pagerState = rememberPagerState(
+                        initialPage = previewImageIndex,
+                        pageCount = { imageList.size }
+                    )
+                    // 每个页面的独立缩放状态
+                    val perPageScale = remember { mutableStateMapOf<Int, Float>() }
+                    val perPageOffsetX = remember { mutableStateMapOf<Int, Float>() }
+                    val perPageOffsetY = remember { mutableStateMapOf<Int, Float>() }
+
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val page = pagerState.currentPage
+                                    val currentScale = perPageScale[page] ?: 1f
+                                    val newScale = (currentScale * zoom).coerceIn(1f, 5f)
+                                    perPageScale[page] = newScale
+                                    if (newScale > 1f) {
+                                        perPageOffsetX[page] = (perPageOffsetX[page] ?: 0f) + pan.x
+                                        perPageOffsetY[page] = (perPageOffsetY[page] ?: 0f) + pan.y
+                                    } else {
+                                        perPageOffsetX[page] = 0f
+                                        perPageOffsetY[page] = 0f
+                                    }
+                                }
+                            }
+                    ) { page ->
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // 柔润白色描边容器
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize(0.92f)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .border(3.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(20.dp))
+                                    .graphicsLayer {
+                                        scaleX = perPageScale[page] ?: 1f
+                                        scaleY = perPageScale[page] ?: 1f
+                                        translationX = perPageOffsetX[page] ?: 0f
+                                        translationY = perPageOffsetY[page] ?: 0f
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = File(imageList[page]),
+                                    contentDescription = "大图预览${page + 1}",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(17.dp))
+                                        .scale(scale.value),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
+                    }
+
                     Text(
                         text = "${pagerState.currentPage + 1} / ${imageList.size}",
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = Color.White,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 48.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                            .background(Color.Black.copy(alpha = 0.6f))
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
-                // 关闭按钮
+
                 IconButton(
                     onClick = { showImagePreview = false },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                        .background(Color.Black.copy(alpha = 0.5f))
                 ) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = "关闭",
-                        tint = MaterialTheme.colorScheme.onSurface,
+                        tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )
                 }

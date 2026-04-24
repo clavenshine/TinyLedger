@@ -123,13 +123,43 @@ fun TransactionCard(
                 }
             }
 
-            // Amount
-            Text(
-                text = "$amountPrefix${CurrencyUtils.format(displayAmount, currencySymbol)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = amountColor
-            )
+            // Amount and reimbursement status
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "$amountPrefix${CurrencyUtils.format(displayAmount, currencySymbol)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = amountColor
+                )
+                // 报销状态标签（仅当有报销标记时显示）
+                if (transaction.reimbursementStatus != com.tinyledger.app.domain.model.ReimbursementStatus.NONE) {
+                    val statusColor = when (transaction.reimbursementStatus) {
+                        com.tinyledger.app.domain.model.ReimbursementStatus.PENDING -> MaterialTheme.colorScheme.error
+                        com.tinyledger.app.domain.model.ReimbursementStatus.REIMBURSED -> Color(0xFF2E7D32)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    val statusText = when (transaction.reimbursementStatus) {
+                        com.tinyledger.app.domain.model.ReimbursementStatus.PENDING -> "待报销"
+                        com.tinyledger.app.domain.model.ReimbursementStatus.REIMBURSED -> "已报销"
+                        else -> ""
+                    }
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(statusColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = statusColor
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }

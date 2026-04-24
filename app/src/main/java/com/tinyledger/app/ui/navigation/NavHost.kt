@@ -44,6 +44,11 @@ import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
 import com.tinyledger.app.ui.viewmodel.BillsViewModel
 import com.tinyledger.app.ui.screens.detail.TransactionDetailScreen
+import com.tinyledger.app.ui.screens.backup.BackupScreen
+import com.tinyledger.app.ui.screens.backup.BackupExportScreen
+import com.tinyledger.app.ui.screens.backup.BackupImportScreen
+import com.tinyledger.app.ui.screens.reimbursement.ReimbursementDetailScreen
+import com.tinyledger.app.ui.screens.reimbursement.ReimbursementScreen
 
 @Composable
 fun AppNavHost(
@@ -98,6 +103,9 @@ fun AppNavHost(
                 },
                 onNavigateToCreditAccounts = {
                     navController.navigate(Screen.CreditAccounts.route)
+                },
+                onNavigateToReimbursement = {
+                    navController.navigate(Screen.Reimbursement.route)
                 }
             )
         }
@@ -162,6 +170,12 @@ fun AppNavHost(
                 },
                 onNavigateToThemeColor = {
                     navController.navigate(Screen.ThemeColor.route)
+                },
+                onNavigateToBackup = {
+                    navController.navigate(Screen.Backup.route)
+                },
+                onNavigateToReimbursement = {
+                    navController.navigate(Screen.Reimbursement.route)
                 }
             )
         }
@@ -550,6 +564,68 @@ fun AppNavHost(
                 },
                 onDeleteTransaction = { _ ->
                     detailViewModel.deleteTransaction()
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.Backup.route) {
+            BackupScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToExport = {
+                    navController.navigate(Screen.BackupExport.route)
+                },
+                onNavigateToImport = {
+                    navController.navigate(Screen.BackupImport.route)
+                }
+            )
+        }
+
+        composable(Screen.BackupExport.route) {
+            BackupExportScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onExportComplete = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.BackupImport.route) {
+            BackupImportScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onImportComplete = {
+                    navController.popBackStack(Screen.Profile.route, inclusive = false)
+                }
+            )
+        }
+
+        composable(Screen.Reimbursement.route) {
+            ReimbursementScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToDetail = { transactionId ->
+                    navController.navigate(Screen.ReimbursementDetail.createRoute(transactionId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.ReimbursementDetail.route,
+            arguments = listOf(
+                navArgument("transactionId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val transactionId = backStackEntry.arguments?.getLong("transactionId") ?: 0L
+            ReimbursementDetailScreen(
+                transactionId = transactionId,
+                onNavigateBack = {
                     navController.popBackStack()
                 }
             )

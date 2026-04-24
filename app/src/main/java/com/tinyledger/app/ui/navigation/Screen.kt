@@ -68,4 +68,11 @@ sealed class Screen(val route: String) {
     data object TransactionDetail : Screen("transaction_detail/{transactionId}") {
         fun createRoute(transactionId: Long) = "transaction_detail/$transactionId"
     }
+    data object Backup : Screen("backup")
+    data object BackupExport : Screen("backup_export")
+    data object BackupImport : Screen("backup_import")
+    data object Reimbursement : Screen("reimbursement")
+    data object ReimbursementDetail : Screen("reimbursement_detail/{transactionId}") {
+        fun createRoute(transactionId: Long) = "reimbursement_detail/$transactionId"
+    }
 }

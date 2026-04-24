@@ -6,6 +6,9 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -25,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +53,7 @@ fun HomeScreen(
     onNavigateToAccounts: (Int) -> Unit = {}, // 0: 现金, 1: 信用, 2: 外部往来
     onNavigateToAutoAccounting: () -> Unit = {},
     onNavigateToCreditAccounts: () -> Unit = {},
+    onNavigateToReimbursement: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -116,6 +121,16 @@ fun HomeScreen(
                 onDelete = { transactionId ->
                     viewModel.deletePendingTransaction(transactionId)
                 }
+            )
+        }
+
+        // ── 待报销发票 ──
+        item {
+            ReimbursementQuickCard(
+                pendingCount = uiState.pendingReimbursementCount,
+                pendingTotal = uiState.pendingReimbursementTotal,
+                currencySymbol = uiState.currencySymbol,
+                onClick = onNavigateToReimbursement
             )
         }
 
@@ -218,10 +233,13 @@ fun HomeScreen(
                             val creditAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CREDIT }
                             val totalCreditBalance = creditAccounts.sumOf { it.second }
                             if (totalCreditBalance != 0.0) {
-                                Text(
+                                var creditFontSize by remember { mutableStateOf(18.sp) }
+                                AutoSizeAmountText(
                                     text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(totalCreditBalance)}",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    maxFontSize = 18.sp,
+                                    minFontSize = 12.sp,
                                     color = if (totalCreditBalance < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                    enableMarquee = true,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
                             } else {
@@ -260,9 +278,12 @@ fun HomeScreen(
                             val creditAccountTotal = creditAccountAccounts.sumOf { it.second }
                             val availableBalance = creditAccountAccounts.sumOf { it.first.creditLimit } + creditAccountTotal
                             if (creditAccountAccounts.isNotEmpty()) {
-                                Text(
+                                var creditAvailFontSize by remember { mutableStateOf(18.sp) }
+                                AutoSizeAmountText(
                                     text = "可用 ${uiState.currencySymbol} ${CurrencyUtils.formatAmount(availableBalance)}",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    maxFontSize = 18.sp,
+                                    minFontSize = 12.sp,
+                                    enableMarquee = true,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
                             } else {
@@ -307,9 +328,12 @@ fun HomeScreen(
                             }
                             val cashAccounts = uiState.accountsWithBalance.filter { it.first.attribute == com.tinyledger.app.domain.model.AccountAttribute.CASH }
                             val cashTotal = cashAccounts.sumOf { it.second }
-                            Text(
+                            var cashFontSize by remember { mutableStateOf(18.sp) }
+                            AutoSizeAmountText(
                                 text = "${uiState.currencySymbol} ${CurrencyUtils.formatAmount(cashTotal)}",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                maxFontSize = 18.sp,
+                                minFontSize = 12.sp,
+                                enableMarquee = true,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -436,14 +460,28 @@ private fun MonthSummaryCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // 本月支出金额自适应字体大小
+                var expenseFontSize by remember { mutableStateOf(24.sp) }
                 Text(
                     text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyExpense)}",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 24.sp,
+                        fontSize = expenseFontSize,
                         letterSpacing = (-0.5).sp
                     ),
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.onSizeChanged { size ->
+                        if (size.width > 0) {
+                            val avail = size.width.toFloat()
+                            val est = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyExpense)}".length * expenseFontSize.value * 0.6f
+                            if (est > avail && expenseFontSize > 14.sp) {
+                                val ratio = avail / est
+                                expenseFontSize = (expenseFontSize.value * ratio).coerceAtLeast(14f).sp
+                            }
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -466,16 +504,17 @@ private fun MonthSummaryCard(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "本月收入",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF757575)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
+                            AutoSizeAmountText(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(monthlyIncome)}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                                maxFontSize = 24.sp,
+                                minFontSize = 14.sp,
                                 color = Color(0xFF2E7D32)
                             )
                         }
@@ -487,16 +526,17 @@ private fun MonthSummaryCard(
                                 .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                         )
 
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "日均支出",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color(0xFF757575)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
+                            AutoSizeAmountText(
                                 text = "${currencySymbol} ${CurrencyUtils.formatAmount(dailyAvgExpense)}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp),
+                                maxFontSize = 24.sp,
+                                minFontSize = 14.sp,
                                 color = Color(0xFFC62828)
                             )
                         }
@@ -610,108 +650,115 @@ private fun PendingTransactionsCard(
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            if (pendingTransactions.isEmpty()) {
-                // 无待确认账单
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "暂时无待确认交易账单",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = Color(0xFFBDBDBD)
-                    )
-                }
-            } else {
-                // 待确认账单列表
-                pendingTransactions.forEach { transaction ->
-                    val isIncome = transaction.type == com.tinyledger.app.domain.model.TransactionType.INCOME
-                    val amountColor = if (isIncome) IOSColors.SystemGreen else IOSColors.SystemRed
-                    val amountPrefix = if (isIncome) "+" else "-"
-
-                    Row(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 150.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (pendingTransactions.isEmpty()) {
+                    // 无待确认账单
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // 左侧：交易信息
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = transaction.category.name,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                            )
-                            if (!transaction.note.isNullOrBlank()) {
-                                Text(
-                                    text = transaction.note.take(40),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                            Text(
-                                text = DateUtils.formatDisplayDate(transaction.date),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // 中间：金额
                         Text(
-                            text = "$amountPrefix$currencySymbol ${String.format("%.2f", kotlin.math.abs(transaction.amount))}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = amountColor,
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                            text = "暂时无待确认交易账单",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = Color(0xFFBDBDBD)
                         )
+                    }
+                } else {
+                    // 待确认账单列表
+                    pendingTransactions.forEach { transaction ->
+                        val isIncome = transaction.type == com.tinyledger.app.domain.model.TransactionType.INCOME
+                        val amountColor = if (isIncome) IOSColors.SystemGreen else IOSColors.SystemRed
+                        val amountPrefix = if (isIncome) "+" else "-"
 
-                        // 右侧：操作按钮
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // 待确认按钮
-                            Button(
-                                onClick = { onConfirm(transaction) },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 左侧：交易信息
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "待确认",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 11.sp
+                                    text = transaction.category.name,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
+                                )
+                                if (!transaction.note.isNullOrBlank()) {
+                                    Text(
+                                        text = transaction.note.take(40),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                                Text(
+                                    text = DateUtils.formatDisplayDate(transaction.date),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
-                            // 删除按钮
-                            Button(
-                                onClick = { showDeleteDialog = transaction.id },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text(
-                                    text = "删除",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 11.sp
-                                )
+                            // 中间：金额
+                            Text(
+                                text = "$amountPrefix$currencySymbol ${String.format("%.2f", kotlin.math.abs(transaction.amount))}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = amountColor,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+
+                            // 右侧：操作按钮
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // 待确认按钮
+                                Button(
+                                    onClick = { onConfirm(transaction) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(
+                                        text = "待确认",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 11.sp
+                                    )
+                                }
+
+                                // 删除按钮
+                                Button(
+                                    onClick = { showDeleteDialog = transaction.id },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(
+                                        text = "删除",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // 分隔线（最后一项不显示）
-                    if (transaction != pendingTransactions.last()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                        )
+                        // 分隔线（最后一项不显示）
+                        if (transaction != pendingTransactions.last()) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            )
+                        }
                     }
                 }
             }
@@ -728,5 +775,117 @@ private fun PendingTransactionsCard(
                 showDeleteDialog = null
             }
         )
+    }
+}
+
+/** 自适应金额文本：确保金额符号+数字在一行显示完整，大字体时自动缩小，超大字体时跑马灯滚动 */
+@Composable
+fun AutoSizeAmountText(
+    text: String,
+    maxFontSize: androidx.compose.ui.unit.TextUnit = 18.sp,
+    minFontSize: androidx.compose.ui.unit.TextUnit = 10.sp,
+    color: Color = Color.Unspecified,
+    enableMarquee: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var fontSize by remember { mutableStateOf(maxFontSize) }
+    var needsMarquee by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = fontSize
+        ),
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier.onSizeChanged { size ->
+            if (size.width > 0) {
+                val availableWidthPx = size.width.toFloat()
+                val densityValue = density.density
+                val charCount = text.length
+                val estimatedCharWidth = fontSize.value * densityValue * 0.62f
+                val estimatedWidth = charCount * estimatedCharWidth
+                if (estimatedWidth > availableWidthPx) {
+                    if (fontSize > minFontSize) {
+                        val scale = availableWidthPx / estimatedWidth
+                        val newFontSize = (fontSize.value * scale).coerceAtLeast(minFontSize.value)
+                        fontSize = newFontSize.sp
+                        // 重新估算缩小后的宽度，如果仍然超出则启用跑马灯
+                        val newEstimatedWidth = charCount * newFontSize * densityValue * 0.62f
+                        if (newEstimatedWidth > availableWidthPx && enableMarquee) {
+                            needsMarquee = true
+                        }
+                    } else if (enableMarquee) {
+                        needsMarquee = true
+                    }
+                } else {
+                    needsMarquee = false
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReimbursementQuickCard(
+    pendingCount: Int,
+    pendingTotal: Double,
+    currencySymbol: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ReceiptLong,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "待报销发票",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "待报销${pendingCount}笔，合计金额${currencySymbol}${CurrencyUtils.formatAmount(pendingTotal)}元",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
     }
 }

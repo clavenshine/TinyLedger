@@ -126,7 +126,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tinyledger_database"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8, com.tinyledger.app.data.local.MIGRATION_8_9, com.tinyledger.app.data.local.MIGRATION_9_10, com.tinyledger.app.data.local.MIGRATION_10_11, com.tinyledger.app.data.local.MIGRATION_11_12, com.tinyledger.app.data.local.MIGRATION_12_13, com.tinyledger.app.data.local.MIGRATION_13_14, com.tinyledger.app.data.local.MIGRATION_14_15)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8, com.tinyledger.app.data.local.MIGRATION_8_9, com.tinyledger.app.data.local.MIGRATION_9_10, com.tinyledger.app.data.local.MIGRATION_10_11, com.tinyledger.app.data.local.MIGRATION_11_12, com.tinyledger.app.data.local.MIGRATION_12_13, com.tinyledger.app.data.local.MIGRATION_13_14, com.tinyledger.app.data.local.MIGRATION_14_15, com.tinyledger.app.data.local.MIGRATION_15_16)
         .build()
     }
 

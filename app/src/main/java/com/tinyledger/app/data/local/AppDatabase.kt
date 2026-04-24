@@ -157,9 +157,16 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
     }
 }
 
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 新增 reimbursementStatus 字段到 transactions 表
+        database.execSQL("ALTER TABLE transactions ADD COLUMN reimbursementStatus INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

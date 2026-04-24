@@ -157,40 +157,66 @@ private fun AppBottomNavigation(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.Bottom
             ) {
                 // 首页
-                NavItemView(
-                    item = bottomNavItems[0],
-                    isSelected = currentRoute == bottomNavItems[0].route,
-                    onClick = { onNavigate(bottomNavItems[0].route) }
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NavItemView(
+                        item = bottomNavItems[0],
+                        isSelected = currentRoute == bottomNavItems[0].route,
+                        onClick = { onNavigate(bottomNavItems[0].route) }
+                    )
+                }
 
                 // 账单
-                NavItemView(
-                    item = bottomNavItems[1],
-                    isSelected = currentRoute == bottomNavItems[1].route,
-                    onClick = { onNavigate(bottomNavItems[1].route) }
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NavItemView(
+                        item = bottomNavItems[1],
+                        isSelected = currentRoute == bottomNavItems[1].route,
+                        onClick = { onNavigate(bottomNavItems[1].route) }
+                    )
+                }
 
-                // 中间的记账按钮 (FAB style)
-                CenterAddButton(onClick = onAddClick)
+                // 中间的记账按钮 (FAB style) - weight=1f确保绝对居中
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CenterAddButton(onClick = onAddClick)
+                }
 
                 // 统计
-                NavItemView(
-                    item = bottomNavItems[2],
-                    isSelected = currentRoute == bottomNavItems[2].route,
-                    onClick = { onNavigate(bottomNavItems[2].route) }
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NavItemView(
+                        item = bottomNavItems[2],
+                        isSelected = currentRoute == bottomNavItems[2].route,
+                        onClick = { onNavigate(bottomNavItems[2].route) }
+                    )
+                }
 
                 // 我的
-                NavItemView(
-                    item = bottomNavItems[3],
-                    isSelected = currentRoute == bottomNavItems[3].route,
-                    onClick = { onNavigate(bottomNavItems[3].route) }
-                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NavItemView(
+                        item = bottomNavItems[3],
+                        isSelected = currentRoute == bottomNavItems[3].route,
+                        onClick = { onNavigate(bottomNavItems[3].route) }
+                    )
+                }
             }
         }
     }
@@ -232,7 +258,7 @@ private fun NavItemView(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier.width(72.dp),
+        modifier = Modifier.width(64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Selected indicator dot
@@ -267,13 +293,14 @@ private fun NavItemView(
             text = item.title,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
+                fontSize = 10.sp
             ),
             color = if (isSelected) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            }
+            },
+            maxLines = 1
         )
     }
 }

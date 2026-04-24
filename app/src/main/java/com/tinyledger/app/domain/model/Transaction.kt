@@ -9,7 +9,8 @@ data class Transaction(
     val date: Long,
     val accountId: Long? = null,  // 关联账户ID
     val relatedTransactionId: Long? = null,  // 关联的另一笔交易ID（用于转账/借贷）
-    val imagePath: String? = null  // 图片附件路径
+    val imagePath: String? = null,  // 图片附件路径
+    val reimbursementStatus: ReimbursementStatus = ReimbursementStatus.NONE  // 报销状态
 )
 
 enum class TransactionType(val value: Int) {
@@ -26,6 +27,23 @@ enum class TransactionType(val value: Int) {
                 2 -> TRANSFER
                 3 -> LENDING
                 else -> EXPENSE
+            }
+        }
+    }
+}
+
+enum class ReimbursementStatus(val value: Int) {
+    NONE(0),
+    PENDING(1),
+    REIMBURSED(2);
+
+    companion object {
+        fun fromInt(value: Int): ReimbursementStatus {
+            return when (value) {
+                0 -> NONE
+                1 -> PENDING
+                2 -> REIMBURSED
+                else -> NONE
             }
         }
     }

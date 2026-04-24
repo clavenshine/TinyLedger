@@ -34,4 +34,9 @@ interface TransactionRepository {
         subCategoryName: String,
         firstSubCategoryId: String?
     ): Int
+
+    // 报销相关方法
+    fun getTransactionsByReimbursementStatus(status: Int): Flow<List<Transaction>>
+    suspend fun updateReimbursementStatus(transactionId: Long, status: Int)
+    fun getTotalAmountByReimbursementStatus(status: Int): Flow<Double>
 }

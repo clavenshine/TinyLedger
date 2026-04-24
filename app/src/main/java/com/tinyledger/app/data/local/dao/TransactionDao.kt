@@ -91,6 +91,18 @@ interface TransactionDao {
     // 批量更新交易记录的分类
     @Query("UPDATE transactions SET category = :newCategoryId, updatedAt = :timestamp WHERE id IN (:transactionIds)")
     suspend fun batchUpdateCategory(transactionIds: List<Long>, newCategoryId: String, timestamp: Long = System.currentTimeMillis())
+
+    // 按报销状态查询交易记录
+    @Query("SELECT * FROM transactions WHERE reimbursementStatus = :status ORDER BY date DESC")
+    fun getTransactionsByReimbursementStatus(status: Int): Flow<List<TransactionEntity>>
+
+    // 更新交易记录的报销状态
+    @Query("UPDATE transactions SET reimbursementStatus = :status, updatedAt = :timestamp WHERE id = :transactionId")
+    suspend fun updateReimbursementStatus(transactionId: Long, status: Int, timestamp: Long = System.currentTimeMillis())
+
+    // 按报销状态统计金额总和
+    @Query("SELECT SUM(ABS(amount)) FROM transactions WHERE reimbursementStatus = :status AND (amount < 0 OR (type = 0 AND amount > 0))")
+    fun getTotalAmountByReimbursementStatus(status: Int): Flow<Double?>
 }
 
 data class CategoryTotal(

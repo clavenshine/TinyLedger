@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -94,7 +95,7 @@ private fun isInDarkTheme(): Boolean {
 
 // ──────────────────────────── 主界面 ────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
@@ -193,22 +194,23 @@ fun StatisticsScreen(
 }
 
 // ──────────────────────────── Tab + 日期选择器 ────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun TabWithDateSelector(
     uiState: StatisticsUiState,
     viewModel: StatisticsViewModel,
     onShowPicker: (Boolean) -> Unit
 ) {
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 4.dp,
-            modifier = Modifier.padding(end = 12.dp)
+            modifier = Modifier.align(Alignment.CenterVertically).padding(end = 12.dp)
         ) {
             Row(
                 modifier = Modifier.padding(6.dp),
@@ -243,13 +245,14 @@ private fun TabWithDateSelector(
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
+        // 日期控件（一行放不下时自动换行到第二行靠左对齐）
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp, border = null,
-            modifier = Modifier.clickable { onShowPicker(true) }) {
-            Row(modifier = Modifier.height(48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            modifier = Modifier.align(Alignment.CenterVertically).clickable { onShowPicker(true) }) {
+            Row(modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(text = if (uiState.dateMode == DateMode.MONTHLY) "${uiState.selectedYear}年${String.format("%02d", uiState.selectedMonth)}月"
                        else "${uiState.selectedYear}年",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurface)
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1)
                 Icon(Icons.Default.KeyboardArrowDown, "", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -580,7 +583,32 @@ private fun OverviewMiniCard(label: String, value: String, bg: Color, textColor:
                 }
             }
             Spacer(Modifier.height(4.dp))
-            if (value.isNotEmpty()) Text(value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp), color = textColor)
+            if (value.isNotEmpty()) {
+                // 金额文本自适应字体大小，确保金额符号+数字在一行内完整显示
+                var amountFontSize by remember { mutableStateOf(15.sp) }
+                Text(value,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = amountFontSize),
+                    color = textColor,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.onSizeChanged { size ->
+                        if (size.width > 0) {
+                            val availableWidthPx = size.width.toFloat()
+                            val charCount = value.length
+                            val estimatedCharWidthPx = amountFontSize.value * 0.62f
+                            val estimatedWidth = charCount * estimatedCharWidthPx
+                            if (estimatedWidth > availableWidthPx) {
+                                val ratio = availableWidthPx / estimatedWidth
+                                val newFontSize = (amountFontSize.value * ratio).coerceAtLeast(9f)
+                                amountFontSize = newFontSize.sp
+                            } else if (amountFontSize.value < 15f) {
+                                // 如果空间足够，恢复到最大字体（缓慢恢复避免闪烁）
+                                amountFontSize = (amountFontSize.value * 1.05f).coerceAtMost(15f).sp
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -618,12 +646,23 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
 
             Spacer(Modifier.height(10.dp))
 
-            // 日期行 + 累计金额（联动选中索引）
+            // 日期行 + 累计金额（同一行显示，字体自适应确保不换行）
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 val dateText = if (isMonthly) "${uiState.selectedYear}.${String.format("%02d", uiState.selectedMonth)}"
                                else "${uiState.selectedYear}"
-                Text(dateText, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                    color = if (isDark) Color(0xFFAAAAAE) else TextSecondary)
+                var dateFontSize by remember { mutableStateOf(13.sp) }
+                Text(dateText, style = MaterialTheme.typography.bodySmall.copy(fontSize = dateFontSize),
+                    color = if (isDark) Color(0xFFAAAAAE) else TextSecondary,
+                    maxLines = 1, softWrap = false,
+                    modifier = Modifier.onSizeChanged { size ->
+                        if (size.width > 0) {
+                            val avail = size.width.toFloat()
+                            val est = dateText.length * dateFontSize.value * 0.62f
+                            if (est > avail) {
+                                dateFontSize = (dateFontSize.value * avail / est).coerceAtLeast(9f).sp
+                            }
+                        }
+                    })
 
                 // 根据选中索引计算到该位置的累计值
                 val totalLabel = when (uiState.activeTab) { StatsTab.EXPENSE -> "累计支出"; StatsTab.INCOME -> "累计收入"; StatsTab.BALANCE -> "结余" }
@@ -654,10 +693,23 @@ private fun TrendChartCard(uiState: StatisticsUiState) {
                 } else {
                     when (uiState.activeTab) { StatsTab.EXPENSE -> uiState.totalExpense; StatsTab.INCOME -> uiState.totalIncome; StatsTab.BALANCE -> uiState.balance }
                 }
+                val amountText = CurrencyUtils.format(displayVal, uiState.currencySymbol)
+                var totalFontSize by remember { mutableStateOf(13.sp) }
                 Text(buildAnnotatedString {
                     append("$totalLabel: ")
-                    withStyle(style = SpanStyle(color = lineColor, fontWeight = FontWeight.Bold)) { append(CurrencyUtils.format(displayVal, uiState.currencySymbol)) }
-                }, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = if (isDark) Color(0xFFAAAAAE) else TextSecondary)
+                    withStyle(style = SpanStyle(color = lineColor, fontWeight = FontWeight.Bold)) { append(amountText) }
+                }, style = MaterialTheme.typography.bodySmall.copy(fontSize = totalFontSize),
+                    color = if (isDark) Color(0xFFAAAAAE) else TextSecondary,
+                    maxLines = 1, softWrap = false,
+                    modifier = Modifier.onSizeChanged { size ->
+                        if (size.width > 0) {
+                            val avail = size.width.toFloat()
+                            val est = (totalLabel.length + 2 + amountText.length) * totalFontSize.value * 0.62f
+                            if (est > avail) {
+                                totalFontSize = (totalFontSize.value * avail / est).coerceAtLeast(9f).sp
+                            }
+                        }
+                    })
             }
 
             Spacer(Modifier.height(14.dp))
@@ -1379,24 +1431,32 @@ private fun DonutChartWithLabels(
             }
         }
 
-        // ────────────────────────────────────────────────
-        // 外侧标注文字（同色系，固定在水平线末端外侧）
-        // ────────────────────────────────────────────────
+        // 外侧标注文字（同色系，固定在水平线末端外侧，名称和百分比在同一行）
         val labelFontSize = 11.sp
         // 标签文字颜色：浅色模式黑色，深色模式白色
         val labelTextColor = if (isDark) Color.White else Color.Black
         for (ll in labelLayouts) {
             if (ll.idx >= data.size) continue
             val item = data[ll.idx]
-            val pctStr = "${item.category.name} ${"%.1f".format(item.percentage)}%"
-            // 文字在水平段终点外侧
+            val catName = item.category.name
+            val pctText = "${"%.1f".format(item.percentage)}%"
+            val fullText = "$catName $pctText"
+            
+            // 文字在水平段终点外侧，单行显示，根据左右位置对齐，不能超出画布
             val tx = ll.endOffDp.first.dp + if (ll.isLeft) (-4).dp else 4.dp
             val ty = ll.endOffDp.second.dp - 8.dp
-            Box(modifier = Modifier.offset(x = tx, y = ty)) {
+            Box(
+                modifier = Modifier
+                    .offset(x = tx, y = ty)
+                    .widthIn(max = 100.dp),
+                contentAlignment = if (ll.isLeft) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
                 Text(
-                    text = pctStr,
+                    text = fullText,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = labelFontSize, fontWeight = FontWeight.Bold),
-                    color = labelTextColor
+                    color = labelTextColor,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -1407,13 +1467,31 @@ private fun DonutChartWithLabels(
         // 内圆文字区域（加大到80dp）
         val innerDiamDp = 80f
         val safeWidthDp = 72f
-        val nameFontSize = 13.sp
-        val amountFontSize = 14.sp
+        // 中心文字自适应字体大小
+        var centerNameFontSize by remember { mutableStateOf(13.sp) }
+        var centerAmountFontSize by remember { mutableStateOf(14.sp) }
 
         Box(
             modifier = Modifier
                 .size(innerDiamDp.dp)
-                .clip(CircleShape),
+                .clip(CircleShape)
+                .onSizeChanged { size ->
+                    if (size.width > 0) {
+                        val availableWidthPx = size.width.toFloat()
+                        // 名称字体自适应
+                        val nameEstWidth = 4 * 13 * 0.62f
+                        if (nameEstWidth > availableWidthPx * 0.8f) {
+                            val ratio = (availableWidthPx * 0.8f) / nameEstWidth
+                            centerNameFontSize = (13 * ratio).coerceAtLeast(8f).sp
+                        }
+                        // 金额字体自适应
+                        val amountEstWidth = 12 * 14 * 0.62f
+                        if (amountEstWidth > availableWidthPx * 0.85f) {
+                            val ratio = (availableWidthPx * 0.85f) / amountEstWidth
+                            centerAmountFontSize = (14 * ratio).coerceAtLeast(9f).sp
+                        }
+                    }
+                },
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -1423,18 +1501,18 @@ private fun DonutChartWithLabels(
                 if (animatedIdx >= 0 && animatedIdx < data.size) {
                     val s = data[animatedIdx]
                     Text(s.category.name,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Black),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = centerNameFontSize, fontWeight = FontWeight.Black),
                         color = colors[animatedIdx % colors.size], maxLines = 1, softWrap = false)
                     Text("$currencySymbol${"%.2f".format(s.amount)}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.Black),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = centerAmountFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
                 } else {
                     val label = if (data.any { it.category.type.name == "EXPENSE" }) "支出" else "收入"
                     Text(label,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = nameFontSize, fontWeight = FontWeight.Black),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = centerNameFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2), maxLines = 1, softWrap = false)
                     Text("$currencySymbol${"%.2f".format(totalAmount)}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = amountFontSize, fontWeight = FontWeight.Black),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = centerAmountFontSize, fontWeight = FontWeight.Black),
                         color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1, softWrap = false)
                 }
             }
@@ -1467,15 +1545,12 @@ private fun RankingListItem(item: CategoryAmount, color: Color, currencySymbol: 
 
         Spacer(Modifier.width(12.dp))
 
-        // 中间：名称 + 百分比 + 进度条
+        // 中间：名称 + 百分比 + 进度条（百分比放在名称下方）
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(item.category.name, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1)
-                Spacer(Modifier.width(8.dp))
-                Text(pctText, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2))
-            }
+            Text(item.category.name, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF1C1C1E), maxLines = 1)
+            Text(pctText, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = if (isDark) Color(0xFF8E8E93) else Color(0xFFAEAEB2))
             Spacer(Modifier.height(5.dp))
             // 进度条
             Box(modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(3.5.dp))

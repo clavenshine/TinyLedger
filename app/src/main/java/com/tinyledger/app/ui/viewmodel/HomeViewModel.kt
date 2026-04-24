@@ -3,6 +3,7 @@ package com.tinyledger.app.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinyledger.app.domain.model.AccountAttribute
+import com.tinyledger.app.domain.model.ReimbursementStatus
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.AccountRepository
@@ -28,7 +29,9 @@ data class HomeUiState(
     val isLoading: Boolean = false,
     val hasAccounts: Boolean = true,
     val accounts: List<com.tinyledger.app.domain.model.Account> = emptyList(),
-    val accountsWithBalance: List<Pair<com.tinyledger.app.domain.model.Account, Double>> = emptyList()
+    val accountsWithBalance: List<Pair<com.tinyledger.app.domain.model.Account, Double>> = emptyList(),
+    val pendingReimbursementCount: Int = 0,
+    val pendingReimbursementTotal: Double = 0.0
 )
 
 @HiltViewModel
@@ -54,13 +57,19 @@ class HomeViewModel @Inject constructor(
         val calendar = java.util.Calendar.getInstance()
         val dayOfMonth = calendar.get(java.util.Calendar.DAY_OF_MONTH)
 
+        val reimbursementFlow = combine(
+            transactionRepository.getTransactionsByReimbursementStatus(ReimbursementStatus.PENDING.value),
+            transactionRepository.getTotalAmountByReimbursementStatus(ReimbursementStatus.PENDING.value)
+        ) { list, total -> list to total }
+
         viewModelScope.launch {
             combine(
                 transactionRepository.getTransactionsByDateRange(startDate, endDate),
-                transactionRepository.getAllTransactions(),  // 获取所有交易，然后按日期过滤
+                transactionRepository.getAllTransactions(),
                 preferencesRepository.getSettings(),
-                accountRepository.getAllAccounts()
-            ) { monthTransactions, allTransactions, settings, accounts ->
+                accountRepository.getAllAccounts(),
+                reimbursementFlow
+            ) { monthTransactions, allTransactions, settings, accounts, (pendingReimbursements, pendingTotal) ->
                 // 获取现金账户ID集合
                 val cashAccountIds = accounts
                     .filter { it.attribute == AccountAttribute.CASH }
@@ -98,7 +107,9 @@ class HomeViewModel @Inject constructor(
                     todayExpense = todayExp,
                     dailyAvgExpense = dailyAvg,
                     currencySymbol = settings.currencySymbol,
-                    isLoading = false
+                    isLoading = false,
+                    pendingReimbursementCount = pendingReimbursements.size,
+                    pendingReimbursementTotal = pendingTotal
                 )
             }.combine(pendingTransactionRepository.getAllPendingTransactions()) { state, pendingTx ->
                 state.copy(pendingTransactions = pendingTx)

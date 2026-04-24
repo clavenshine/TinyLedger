@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -63,7 +64,7 @@ import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun BillsScreen(
     onEditTransaction: (Long) -> Unit,
@@ -90,76 +91,79 @@ fun BillsScreen(
     ) {
         // 固定顶栏：View mode toggle (流水/日历/相册) + 日期控件
         stickyHeader(key = "tab_bar") {
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // 视图切换
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 3.dp
-                ) {
-                    Row(modifier = Modifier.padding(4.dp)) {
-                        val modes = listOf(
-                            "流水" to BillsViewMode.LIST,
-                            "日历" to BillsViewMode.CALENDAR,
-                            "相册" to BillsViewMode.ALBUM
-                        )
-                        modes.forEach { (label, mode) ->
-                            val isSelected = uiState.viewMode == mode
-                            Surface(
-                                modifier = Modifier.clickable { viewModel.setViewMode(mode) },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                            ) {
-                                Text(
-                                    text = label,
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    ),
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            ) {
+                Row(modifier = Modifier.padding(4.dp)) {
+                    val modes = listOf(
+                        "流水" to BillsViewMode.LIST,
+                        "日历" to BillsViewMode.CALENDAR,
+                        "相册" to BillsViewMode.ALBUM
+                    )
+                    modes.forEach { (label, mode) ->
+                        val isSelected = uiState.viewMode == mode
+                        Surface(
+                            modifier = Modifier.clickable { viewModel.setViewMode(mode) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
+            }
 
-                Spacer(Modifier.weight(1f))
-
-                // 日期控件（靠右对齐，与左侧切换按钮风格一致的 Surface 容器）
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 3.dp,
-                    modifier = Modifier.clickable { showYearMonthPicker = true }
+            // 日期控件（一行放不下时自动换行到第二行靠左对齐）
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp,
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .clickable { showYearMonthPicker = true }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "${uiState.selectedYear}年${uiState.selectedMonth}月",
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.Medium
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Icon(
+                        Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "${uiState.selectedYear}年${uiState.selectedMonth}月",
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Medium
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
+        }
         } // end stickyHeader
 
         // Monthly summary card
@@ -650,7 +654,7 @@ private fun SwipeableTransactionCard(
 
 // ==================== Album View ====================
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AlbumView(
     onViewTransactionDetail: (Long) -> Unit
@@ -667,17 +671,19 @@ private fun AlbumView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // View mode toggle (流水/日历/相册) + 日期控件
-        Row(
+        // View mode toggle (流水/日历/相册) + 日期控件（使用 FlowRow 实现自动换行）
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 3.dp
+                shadowElevation = 3.dp,
+                modifier = Modifier.align(Alignment.CenterVertically)
             ) {
                 Row(modifier = Modifier.padding(4.dp)) {
                     val modes = listOf(
@@ -705,14 +711,14 @@ private fun AlbumView(
                 }
             }
 
-            Spacer(Modifier.weight(1f))
-
-            // 日期控件（靠右对齐，与左侧切换按钮风格一致的 Surface 容器）
+            // 日期控件（一行放不下时自动换行到第二行靠左对齐）
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 3.dp,
-                modifier = Modifier.clickable { showDatePicker = true }
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .clickable { showDatePicker = true }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -731,7 +737,8 @@ private fun AlbumView(
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.Medium
                         ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
                     )
                 }
             }
@@ -1329,15 +1336,34 @@ private fun CalendarView(
                                         }
                                     )
                                     if (hasTransactions) {
+                                        // 金额文本自适应字体大小（确保在单元格内完整显示）
+                                        val defaultFontSize = MaterialTheme.typography.labelSmall.fontSize
+                                        var amountFontSize by remember { mutableStateOf(defaultFontSize) }
                                         Text(
                                             text = String.format("%.2f", kotlin.math.abs(netAmount)),
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = amountFontSize
+                                            ),
                                             color = when {
                                                 netAmount > 0 -> IOSColors.SystemGreen
                                                 netAmount < 0 -> IOSColors.SystemRed
                                                 else -> MaterialTheme.colorScheme.onSurfaceVariant
                                             },
-                                            fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.9f
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier.onSizeChanged { size ->
+                                                if (size.width > 0) {
+                                                    val cellWidthPx = size.width.toFloat()
+                                                    val charCount = String.format("%.2f", kotlin.math.abs(netAmount)).length
+                                                    val estimatedCharWidthPx = amountFontSize.value * 0.6f
+                                                    val estimatedWidth = charCount * estimatedCharWidthPx
+                                                    if (estimatedWidth > cellWidthPx) {
+                                                        val ratio = cellWidthPx / estimatedWidth
+                                                        amountFontSize = (amountFontSize.value * ratio).coerceAtLeast(7f).sp
+                                                    }
+                                                }
+                                            }
                                         )
                                     }
                                 }

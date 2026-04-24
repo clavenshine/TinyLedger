@@ -4,6 +4,7 @@ import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.TransactionDao
 import com.tinyledger.app.data.local.entity.TransactionEntity
 import com.tinyledger.app.domain.model.Category
+import com.tinyledger.app.domain.model.ReimbursementStatus
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.TransactionRepository
@@ -242,6 +243,21 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    // 报销相关方法实现
+    override fun getTransactionsByReimbursementStatus(status: Int): Flow<List<Transaction>> {
+        return transactionDao.getTransactionsByReimbursementStatus(status).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun updateReimbursementStatus(transactionId: Long, status: Int) {
+        transactionDao.updateReimbursementStatus(transactionId, status)
+    }
+
+    override fun getTotalAmountByReimbursementStatus(status: Int): Flow<Double> {
+        return transactionDao.getTotalAmountByReimbursementStatus(status).map { it ?: 0.0 }
+    }
+
     override suspend fun getTransactionsByTopLevelCategorySync(categoryId: String): List<Transaction> {
         return transactionDao.getTransactionsByTopLevelCategory(categoryId).map { it.toDomain() }
     }
@@ -296,7 +312,8 @@ class TransactionRepositoryImpl @Inject constructor(
             date = date,
             accountId = accountId,
             relatedTransactionId = relatedTransactionId,
-            imagePath = imagePath
+            imagePath = imagePath,
+            reimbursementStatus = ReimbursementStatus.fromInt(reimbursementStatus)
         )
     }
 
@@ -311,6 +328,7 @@ class TransactionRepositoryImpl @Inject constructor(
             accountId = accountId,
             relatedTransactionId = relatedTransactionId,
             imagePath = imagePath,
+            reimbursementStatus = reimbursementStatus.value,
             updatedAt = System.currentTimeMillis()
         )
     }

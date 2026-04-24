@@ -15,6 +15,7 @@ data class TransactionEntity(
     val accountId: Long? = null,  // 关联账户ID
     val relatedTransactionId: Long? = null,  // 关联的另一笔交易ID（用于转账/借贷）
     val imagePath: String? = null,  // 图片附件路径
+    val reimbursementStatus: Int = 0,  // 报销状态：0=未标记, 1=待报销, 2=已报销
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

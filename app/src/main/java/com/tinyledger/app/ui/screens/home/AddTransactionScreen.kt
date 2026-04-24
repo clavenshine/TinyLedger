@@ -107,7 +107,7 @@ fun AddTransactionScreen(
         onResult = { success ->
             if (success) {
                 // 根据交易类型决定最大图片数量
-                val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
+                val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 9
                 // 将拍照的临时文件复制到应用私有目录
                 val sourcePath = pendingCameraPhotoPath
                 if (sourcePath != null) {
@@ -134,7 +134,7 @@ fun AddTransactionScreen(
         contract = ActivityResultContracts.GetMultipleContents(),
         onResult = { uris: List<Uri> ->
             // 根据交易类型决定最大图片数量
-            val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
+            val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 9
             val remaining = maxImages - uiState.imagePaths.size
             if (remaining > 0 && uris.isNotEmpty()) {
                 val urisToAdd = uris.take(remaining) // 只取剩余可添加的数量
@@ -652,7 +652,7 @@ fun AddTransactionScreen(
                 uiState.transactionType == TransactionType.LENDING) {
                 
                 // 借贷类型最多9张，其他类型最多3张
-                val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 3
+                val maxImages = if (uiState.transactionType == TransactionType.LENDING) 9 else 9
                 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -823,6 +823,37 @@ fun AddTransactionScreen(
                                 }
                                 innerTextField()
                             }
+                        )
+                    }
+                }
+            }
+
+            // 标记为待报销开关（仅在支出类型时显示）
+            if (uiState.transactionType == com.tinyledger.app.domain.model.TransactionType.EXPENSE) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "标记为待报销",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(
+                            checked = uiState.markAsReimbursement,
+                            onCheckedChange = { viewModel.setMarkAsReimbursement(it) }
                         )
                     }
                 }
@@ -2170,14 +2201,8 @@ private fun AccountItemModern(
             // 账户信息
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 类别前缀
-                    val categoryPrefix = when (account.attribute) {
-                        com.tinyledger.app.domain.model.AccountAttribute.CASH -> "【现金账户】"
-                        com.tinyledger.app.domain.model.AccountAttribute.CREDIT_ACCOUNT -> "【信用账户】"
-                        com.tinyledger.app.domain.model.AccountAttribute.CREDIT -> "【外部往来】"
-                    }
                     Text(
-                        text = "$categoryPrefix${account.name}",
+                        text = account.name,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
                     )
                     if (!account.cardNumber.isNullOrBlank()) {
@@ -2189,11 +2214,26 @@ private fun AccountItemModern(
                         )
                     }
                 }
-                Text(
-                    text = account.type.displayName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 账户类别
+                    val categoryPrefix = when (account.attribute) {
+                        com.tinyledger.app.domain.model.AccountAttribute.CASH -> "现金账户"
+                        com.tinyledger.app.domain.model.AccountAttribute.CREDIT_ACCOUNT -> "信用账户"
+                        com.tinyledger.app.domain.model.AccountAttribute.CREDIT -> "外部往来"
+                    }
+                    Text(
+                        text = "【$categoryPrefix】",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // 账户类型
+                    Text(
+                        text = account.type.displayName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             
             // 右侧：余额和选中状态

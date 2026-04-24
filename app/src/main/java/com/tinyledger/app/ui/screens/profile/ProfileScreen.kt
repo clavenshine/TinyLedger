@@ -65,6 +65,8 @@ fun ProfileScreen(
     onNavigateToAutoAccounting: () -> Unit = {},
     onNavigateToDarkModeSettings: () -> Unit = {},
     onNavigateToThemeColor: () -> Unit = {},
+    onNavigateToBackup: () -> Unit = {},
+    onNavigateToReimbursement: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -141,6 +143,43 @@ fun ProfileScreen(
             }
         }
 
+        // 固定区域：四个快捷入口（全部账户、预算管理、备份管理、报销管理）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SmallActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.AccountBalance,
+                label = "全部账户",
+                tint = IOSColors.Primary,
+                onClick = onNavigateToAccounts
+            )
+            SmallActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.AccountBalanceWallet,
+                label = "预算管理",
+                tint = IOSColors.SystemOrange,
+                onClick = onNavigateToBudget
+            )
+            SmallActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.CloudSync,
+                label = "报销管理",
+                tint = IOSColors.SystemGreen,
+                onClick = onNavigateToReimbursement
+            )
+            SmallActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.ReceiptLong,
+                label = "备份管理",
+                tint = IOSColors.SystemPurple,
+                onClick = onNavigateToBackup
+            )
+        }
+
         // 可滚动区域
         LazyColumn(
             modifier = Modifier
@@ -210,67 +249,6 @@ fun ProfileScreen(
                     )
                 }
             }
-        }
-
-        // Asset accounts section
-        item { Spacer(modifier = Modifier.height(20.dp)) }
-
-        item {
-            SectionTitle("账户管理")
-        }
-
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column {
-                    ProfileSettingsItem(
-                        icon = Icons.Default.AccountBalance,
-                        iconTint = IOSColors.Primary,
-                        title = "全部账户",
-                        subtitle = "管理现金账户和外部往来账户",
-                        onClick = onNavigateToAccounts
-                    )
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(20.dp)) }
-
-        // Budget management section
-        item {
-            SectionTitle("预算管理")
-        }
-
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column {
-                    ProfileSettingsItem(
-                        icon = Icons.Default.AccountBalanceWallet,
-                        iconTint = IOSColors.SystemOrange,
-                        title = "预算管理",
-                        subtitle = "设置月度/年度预算，控制支出",
-                        onClick = onNavigateToBudget
-                    )
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(20.dp)) }
-
-        // Data import section
-        item {
-            SectionTitle("数据导入")
         }
 
         item {
@@ -974,6 +952,45 @@ private fun CurrencyDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SmallActionCard(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(tint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null,
+                    tint = tint, modifier = Modifier.size(18.dp))
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium))
         }
     }
 }

@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
+import androidx.compose.ui.graphics.vector.ImageVector
+
 /**
  * 美化的删除确认对话框 - 与删除账户样式一致
  * 
@@ -38,12 +40,22 @@ import androidx.compose.ui.window.DialogProperties
  * @param title 标题（如"删除账单记录？"）
  * @param onDismiss 取消回调
  * @param onConfirm 确认删除回调
+ * @param message 提示消息，默认为删除提示
+ * @param icon 图标，默认为删除图标
+ * @param iconTint 图标颜色，默认为错误色
+ * @param confirmButtonColor 确认按钮颜色，默认为错误色
+ * @param confirmButtonText 确认按钮文字，默认为"确认删除"
  */
 @Composable
 fun DeleteConfirmationDialog(
     title: String,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    message: String = "删除后将无法恢复，请谨慎操作",
+    icon: ImageVector = Icons.Default.Delete,
+    iconTint: Color = MaterialTheme.colorScheme.error,
+    confirmButtonColor: Color = MaterialTheme.colorScheme.error,
+    confirmButtonText: String = "确认删除"
 ) {
     // 弹性抖动动画
     val scale = remember { Animatable(0f) }
@@ -94,17 +106,17 @@ fun DeleteConfirmationDialog(
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-                                        MaterialTheme.colorScheme.error.copy(alpha = 0.05f)
+                                        iconTint.copy(alpha = 0.2f),
+                                        iconTint.copy(alpha = 0.05f)
                                     )
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = icon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = iconTint,
                             modifier = Modifier.size(44.dp)
                         )
                     }
@@ -119,7 +131,7 @@ fun DeleteConfirmationDialog(
                     
                     // 消息
                     Text(
-                        text = "删除后将无法恢复，请谨慎操作",
+                        text = message,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -161,7 +173,7 @@ fun DeleteConfirmationDialog(
                                 .height(48.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
+                                containerColor = confirmButtonColor
                             ),
                             elevation = ButtonDefaults.buttonElevation(
                                 defaultElevation = 8.dp,
@@ -169,13 +181,13 @@ fun DeleteConfirmationDialog(
                             )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
+                                imageVector = icon,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "确认删除",
+                                text = confirmButtonText,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
