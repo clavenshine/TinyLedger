@@ -45,6 +45,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
+import com.tinyledger.app.domain.model.ReimbursementStatus
 import com.tinyledger.app.ui.components.DeleteConfirmationDialog
 import com.tinyledger.app.ui.components.TransactionCard
 import com.tinyledger.app.ui.theme.IOSColors
@@ -69,6 +70,7 @@ import kotlin.math.roundToInt
 fun BillsScreen(
     onEditTransaction: (Long) -> Unit,
     onViewTransactionDetail: (Long) -> Unit = {},
+    onNavigateToReimbursementDetail: (Long) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     viewModel: BillsViewModel = hiltViewModel()
 ) {
@@ -80,7 +82,8 @@ fun BillsScreen(
 
     if (uiState.viewMode == BillsViewMode.ALBUM) {
         AlbumView(
-            onViewTransactionDetail = onViewTransactionDetail
+            onViewTransactionDetail = onViewTransactionDetail,
+            onNavigateToReimbursementDetail = onNavigateToReimbursementDetail
         )
     } else {
     LazyColumn(
@@ -227,7 +230,13 @@ fun BillsScreen(
                             currencySymbol = uiState.currencySymbol,
                             onEdit = { onEditTransaction(transaction.id) },
                             onDelete = { showDeleteDialog = transaction.id },
-                            onViewDetail = { onViewTransactionDetail(transaction.id) },
+                            onViewDetail = {
+                                if (transaction.reimbursementStatus == ReimbursementStatus.PENDING) {
+                                    onNavigateToReimbursementDetail(transaction.id)
+                                } else {
+                                    onViewTransactionDetail(transaction.id)
+                                }
+                            },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
@@ -382,7 +391,13 @@ fun BillsScreen(
                         currencySymbol = uiState.currencySymbol,
                         onEdit = { onEditTransaction(transaction.id) },
                         onDelete = { showDeleteDialog = transaction.id },
-                        onViewDetail = { onViewTransactionDetail(transaction.id) },
+                        onViewDetail = {
+                            if (transaction.reimbursementStatus == ReimbursementStatus.PENDING) {
+                                onNavigateToReimbursementDetail(transaction.id)
+                            } else {
+                                onViewTransactionDetail(transaction.id)
+                            }
+                        },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
@@ -657,7 +672,8 @@ private fun SwipeableTransactionCard(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AlbumView(
-    onViewTransactionDetail: (Long) -> Unit
+    onViewTransactionDetail: (Long) -> Unit,
+    onNavigateToReimbursementDetail: (Long) -> Unit
 ) {
     val billsViewModel: BillsViewModel = hiltViewModel()
     val albumViewModel: PhotoAlbumViewModel = hiltViewModel()
@@ -830,7 +846,13 @@ private fun AlbumView(
                     items(transactions) { transaction ->
                         AlbumPhotoCard(
                             transaction = transaction,
-                            onClick = { onViewTransactionDetail(transaction.id) }
+                            onClick = {
+                                if (transaction.reimbursementStatus == ReimbursementStatus.PENDING) {
+                                    onNavigateToReimbursementDetail(transaction.id)
+                                } else {
+                                    onViewTransactionDetail(transaction.id)
+                                }
+                            }
                         )
                     }
                 }

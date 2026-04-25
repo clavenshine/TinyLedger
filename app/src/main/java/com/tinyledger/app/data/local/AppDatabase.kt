@@ -7,12 +7,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.BudgetCategoryDao
 import com.tinyledger.app.data.local.dao.BudgetDao
+import com.tinyledger.app.data.local.dao.CategoryDao
 import com.tinyledger.app.data.local.dao.NotificationSmsDao
 import com.tinyledger.app.data.local.dao.PendingTransactionDao
 import com.tinyledger.app.data.local.dao.TransactionDao
 import com.tinyledger.app.data.local.entity.AccountEntity
 import com.tinyledger.app.data.local.entity.BudgetCategoryEntity
 import com.tinyledger.app.data.local.entity.BudgetEntity
+import com.tinyledger.app.data.local.entity.CategoryEntity
 import com.tinyledger.app.data.local.entity.NotificationSmsEntity
 import com.tinyledger.app.data.local.entity.PendingTransactionEntity
 import com.tinyledger.app.data.local.entity.TransactionEntity
@@ -164,9 +166,32 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
     }
 }
 
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // 创建 categories 表
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                icon TEXT NOT NULL,
+                type INTEGER NOT NULL,
+                isDefault INTEGER NOT NULL DEFAULT 0,
+                parentId TEXT,
+                sortOrder INTEGER NOT NULL DEFAULT 0,
+                createdAt INTEGER NOT NULL DEFAULT 0,
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+        
+        // 创建索引
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_categories_type ON categories(type)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_categories_parentId ON categories(parentId)")
+    }
+}
+
 @Database(
-    entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class],
-    version = 16,
+    entities = [TransactionEntity::class, AccountEntity::class, NotificationSmsEntity::class, BudgetEntity::class, BudgetCategoryEntity::class, PendingTransactionEntity::class, CategoryEntity::class],
+    version = 17,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -176,4 +201,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
     abstract fun budgetCategoryDao(): BudgetCategoryDao
     abstract fun pendingTransactionDao(): PendingTransactionDao
+    abstract fun categoryDao(): CategoryDao
 }

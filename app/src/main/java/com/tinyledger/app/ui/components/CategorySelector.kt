@@ -241,7 +241,7 @@ private fun CategoryItem(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = getIconFromName(category.icon),
+                imageVector = getCategoryIcon(category.icon),
                 contentDescription = null,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -348,15 +348,17 @@ private fun CategoryManageButton(
 ) {
     Column(
         modifier = Modifier
+            .aspectRatio(0.85f)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .background(Color.Transparent)
+            .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(
                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
@@ -370,10 +372,12 @@ private fun CategoryManageButton(
                 modifier = Modifier.size(24.dp)
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = "分类管理",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 11.sp
+            ),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1
@@ -779,7 +783,7 @@ private fun SubCategoryList(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = getIconFromName(subCategory.icon),
+                                imageVector = getCategoryIcon(subCategory.icon),
                                 contentDescription = null,
                                 tint = if (subCategory == selectedCategory)
                                     MaterialTheme.colorScheme.primary

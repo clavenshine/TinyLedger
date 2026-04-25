@@ -159,7 +159,7 @@ data class Category(
         /**
          * 添加二级分类
          */
-        fun addSubCategory(name: String, type: TransactionType, parentId: String, icon: String? = null): Category {
+        fun addSubCategory(name: String, type: TransactionType, parentId: String, icon: String? = null, onSaveToDatabase: ((Category) -> Unit)? = null): Category {
             val id = "sub_${System.currentTimeMillis()}"
             val defaultIcon = when (type) {
                 TransactionType.EXPENSE -> "other"
@@ -175,6 +175,9 @@ data class Category(
                 TransactionType.TRANSFER -> customTransferCategories.add(category)
                 TransactionType.LENDING -> customLendingCategories.add(category)
             }
+
+            // 回调保存到数据库
+            onSaveToDatabase?.invoke(category)
 
             return category
         }
@@ -231,7 +234,7 @@ data class Category(
             }
         }
 
-        fun addCustomCategory(name: String, type: TransactionType, icon: String? = null): Category {
+        fun addCustomCategory(name: String, type: TransactionType, icon: String? = null, onSaveToDatabase: ((Category) -> Unit)? = null): Category {
             val id = "custom_${System.currentTimeMillis()}"
             val defaultIcon = when (type) {
                 TransactionType.EXPENSE -> "other"
@@ -247,6 +250,9 @@ data class Category(
                 TransactionType.TRANSFER -> customTransferCategories.add(category)
                 TransactionType.LENDING -> customLendingCategories.add(category)
             }
+            
+            // 回调保存到数据库
+            onSaveToDatabase?.invoke(category)
             
             return category
         }

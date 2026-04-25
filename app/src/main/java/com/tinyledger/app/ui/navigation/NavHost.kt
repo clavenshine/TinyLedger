@@ -43,6 +43,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tinyledger.app.ui.viewmodel.AddTransactionViewModel
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
 import com.tinyledger.app.ui.viewmodel.BillsViewModel
+import com.tinyledger.app.ui.viewmodel.CategoryViewModel
+import com.tinyledger.app.ui.viewmodel.ReimbursementViewModel
 import com.tinyledger.app.ui.screens.detail.TransactionDetailScreen
 import com.tinyledger.app.ui.screens.backup.BackupScreen
 import com.tinyledger.app.ui.screens.backup.BackupExportScreen
@@ -117,6 +119,9 @@ fun AppNavHost(
                 },
                 onViewTransactionDetail = { id ->
                     navController.navigate(Screen.TransactionDetail.createRoute(id))
+                },
+                onNavigateToReimbursementDetail = { id ->
+                    navController.navigate(Screen.ReimbursementDetail.createRoute(id))
                 },
                 onNavigateToSearch = {
                     navController.navigate(Screen.Search.route)
@@ -468,9 +473,13 @@ fun AppNavHost(
             } catch (e: Exception) {
                 com.tinyledger.app.domain.model.TransactionType.EXPENSE
             }
+            val categoryViewModel: CategoryViewModel = hiltViewModel()
             AddCategoryScreen(
                 transactionType = transactionType,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onSaveCategory = { category ->
+                    categoryViewModel.saveCategoryToDatabase(category)
+                }
             )
         }
 
@@ -512,6 +521,7 @@ fun AppNavHost(
             )
         ) { backStackEntry ->
             val addTxnViewModel: AddTransactionViewModel = hiltViewModel()
+            val categoryViewModel: CategoryViewModel = hiltViewModel()
             val scope = rememberCoroutineScope()
             val parentId = backStackEntry.arguments?.getString("parentId") ?: ""
             val transactionTypeStr = backStackEntry.arguments?.getString("transactionType") ?: "EXPENSE"
@@ -528,7 +538,7 @@ fun AppNavHost(
                     transactionType = transactionType,
                     onNavigateBack = { navController.popBackStack() },
                     onSaveSubCategory = { subCategory ->
-                        addTxnViewModel.saveSubCategory(subCategory)
+                        categoryViewModel.saveCategoryToDatabase(subCategory)
                     },
                     onAutoMatchTransactions = { newSubCategory ->
                         var matchedCount = 0

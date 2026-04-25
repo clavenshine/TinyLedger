@@ -58,6 +58,9 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.tinyledger.app.data.notification.TransactionNotificationService
 import com.tinyledger.app.domain.model.Account
@@ -87,6 +90,15 @@ fun AddTransactionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    
+    // 页面每次恢复时刷新分类列表（确保从分类管理页新建分类后能立即看到）
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.refreshCategories()
+        }
+    }
+    
     var showDatePicker by remember { mutableStateOf(false) }
     var showAccountSelector by remember { mutableStateOf(false) }
     var showFromAccountSelector by remember { mutableStateOf(false) }
@@ -1595,7 +1607,7 @@ fun AddTransactionScreen(
                         
                         // 说明文字
                         Text(
-                            text = "最多可添加${if (uiState.transactionType == TransactionType.LENDING) 9 else 3}张图片",
+                            text = "最多可添加9张图片",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,

@@ -1,5 +1,6 @@
 package com.tinyledger.app.ui.screens.category
 
+import android.util.Log
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -28,7 +29,8 @@ import com.tinyledger.app.ui.components.getCategoryIcon
 @Composable
 fun AddCategoryScreen(
     transactionType: TransactionType,
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onSaveCategory: ((com.tinyledger.app.domain.model.Category) -> Unit)? = null
 ) {
     var categoryName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<String?>(null) }
@@ -79,11 +81,17 @@ fun AddCategoryScreen(
                             return@Button
                         }
 
+                        Log.d("AddCategory", "Saving category: name=${categoryName.trim()}, type=${transactionType}, icon=${selectedIcon}")
                         Category.addCustomCategory(
                             name = categoryName.trim(),
                             type = transactionType,
-                            icon = selectedIcon!!
+                            icon = selectedIcon!!,
+                            onSaveToDatabase = { category ->
+                                Log.d("AddCategory", "onSaveToDatabase called for: ${category.id}")
+                                onSaveCategory?.invoke(category)
+                            }
                         )
+                        Log.d("AddCategory", "After addCustomCategory, categories count: ${Category.getCategoriesByType(transactionType).size}")
                         onNavigateBack()
                     },
                     modifier = Modifier

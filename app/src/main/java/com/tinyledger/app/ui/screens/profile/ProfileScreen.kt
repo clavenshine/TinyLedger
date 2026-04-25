@@ -74,6 +74,7 @@ fun ProfileScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showVersionInfoDialog by remember { mutableStateOf(false) }
+    var versionExpanded by remember { mutableStateOf(false) }
     var lastDownloadClickTime by remember { mutableLongStateOf(0L) }
 
     var soundEnabled by remember {
@@ -391,14 +392,52 @@ fun ProfileScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    ProfileSettingsItem(
-                        icon = Icons.Default.Numbers,
-                        iconTint = IOSColors.TextSecondary,
-                        title = "版本号",
-                        subtitle = "v${BuildConfig.VERSION_NAME}",
-                        showArrow = versionInfo != null,
-                        trailing = if (versionInfo != null) {
-                            {
+                    // 版本号 - 支持展开显示更新内容
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (versionInfo != null) {
+                                        versionExpanded = !versionExpanded
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        IOSColors.TextSecondary.copy(alpha = 0.1f),
+                                        RoundedCornerShape(8.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Numbers,
+                                    contentDescription = null,
+                                    tint = IOSColors.TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "版本号",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "v${BuildConfig.VERSION_NAME}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+
+                            if (versionInfo != null) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
                                     color = IOSColors.SystemRed
@@ -410,18 +449,68 @@ fun ProfileScreen(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
-                            }
-                        } else null,
-                        onClick = {
-                            versionInfo?.let { info ->
-                                val now = System.currentTimeMillis()
-                                if (now - lastDownloadClickTime >= 60_000L) {
-                                    lastDownloadClickTime = now
-                                    VersionCheckUtil.downloadAndInstall(context, info)
-                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = if (versionExpanded)
+                                        Icons.Default.KeyboardArrowUp
+                                    else
+                                        Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                    )
+
+                        // 展开的更新内容
+                        if (versionExpanded && versionInfo != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                                    .padding(bottom = 16.dp)
+                            ) {
+                                // "确认更新"按钮
+                                Button(
+                                    onClick = {
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastDownloadClickTime >= 60_000L) {
+                                            lastDownloadClickTime = now
+                                            VersionCheckUtil.downloadAndInstall(context, versionInfo!!)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF4CAF50)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text(
+                                        "确认更新",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider()
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "更新内容：",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Text(
+                                    text = versionInfo!!.updateLog.ifBlank { "暂无更新说明" },
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 20.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

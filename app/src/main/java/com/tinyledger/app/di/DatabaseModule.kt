@@ -8,6 +8,7 @@ import com.tinyledger.app.data.local.AppDatabase
 import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.BudgetCategoryDao
 import com.tinyledger.app.data.local.dao.BudgetDao
+import com.tinyledger.app.data.local.dao.CategoryDao
 import com.tinyledger.app.data.local.dao.NotificationSmsDao
 import com.tinyledger.app.data.local.dao.PendingTransactionDao
 import com.tinyledger.app.data.local.dao.TransactionDao
@@ -126,7 +127,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tinyledger_database"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8, com.tinyledger.app.data.local.MIGRATION_8_9, com.tinyledger.app.data.local.MIGRATION_9_10, com.tinyledger.app.data.local.MIGRATION_10_11, com.tinyledger.app.data.local.MIGRATION_11_12, com.tinyledger.app.data.local.MIGRATION_12_13, com.tinyledger.app.data.local.MIGRATION_13_14, com.tinyledger.app.data.local.MIGRATION_14_15, com.tinyledger.app.data.local.MIGRATION_15_16)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, com.tinyledger.app.data.local.MIGRATION_7_8, com.tinyledger.app.data.local.MIGRATION_8_9, com.tinyledger.app.data.local.MIGRATION_9_10, com.tinyledger.app.data.local.MIGRATION_10_11, com.tinyledger.app.data.local.MIGRATION_11_12, com.tinyledger.app.data.local.MIGRATION_12_13, com.tinyledger.app.data.local.MIGRATION_13_14, com.tinyledger.app.data.local.MIGRATION_14_15, com.tinyledger.app.data.local.MIGRATION_15_16, com.tinyledger.app.data.local.MIGRATION_16_17)
         .build()
     }
 
@@ -164,5 +165,11 @@ object DatabaseModule {
     @Singleton
     fun providePendingTransactionDao(database: AppDatabase): PendingTransactionDao {
         return database.pendingTransactionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCategoryDao(database: AppDatabase): CategoryDao {
+        return database.categoryDao()
     }
 }

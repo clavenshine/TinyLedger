@@ -79,7 +79,7 @@ class AddTransactionViewModel @Inject constructor(
     init {
         loadSettings()
         loadAccounts()
-        loadCustomCategories()
+        refreshCategories()
     }
 
     private fun loadSettings() {
@@ -98,7 +98,11 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
-    private fun loadCustomCategories() {
+    /**
+     * 从 DataStore 重新加载自定义分类并刷新 UI 分类列表
+     * 在页面每次恢复时调用，确保新建分类后立即显示
+     */
+    fun refreshCategories() {
         viewModelScope.launch {
             val customCategories = preferencesRepository.getCustomCategories()
             Category.loadCustomCategories(customCategories)
