@@ -40,7 +40,7 @@ object QianfanOcrEngine {
 
     private const val TAG = "QianfanOcrEngine"
     private const val API_URL = "https://qianfan.baidubce.com/v2/chat/completions"
-    private const val API_KEY = "bce-v3/ALTAK-B8vrkU5qjIScuPGVqMwLv/52762d7ad81ddda2ba76325bbe1d5c6719e05612"
+    private const val API_KEY = "********"
     private const val MODEL = "qianfan-ocr"
 
     private val client = OkHttpClient.Builder()
