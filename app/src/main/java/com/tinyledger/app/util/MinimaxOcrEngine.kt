@@ -42,9 +42,9 @@ object MinimaxOcrEngine {
     private const val API_URL_VLM = "https://api.minimaxi.com/v1/coding_plan/vlm"
     private const val API_URL_ANTHROPIC = "https://api.minimaxi.com/anthropic/v1/messages"
     /** 按量计费 Key — 用于 OpenAI 兼容 API（支持图片理解） */
-    private const val API_KEY_PAY_GO = "sk-api-HUB1oqtDqijys_nbjdd-fDmtkQoWJk-mo4Lf-WBuZuTIN0C5k7Jovlom7lUFXJlNi1GLk6to33d6VLGCIoRhhmoKUfaMd7l3k8eIupSB5R1NpgATvtVxp6k"
+    private const val API_KEY_PAY_GO = "********"
     /** Token Plan Key — 用于 Anthropic 兼容 API */
-    private const val API_KEY_TOKEN_PLAN = "sk-cp-Ys39GPKLfRrKbZZr9JE4JozVo7vlrYpgbSuxuCNLbIxst__0c6RgnmFWuq0cZ2zfstdtARzVGDEudEgPLrNLD1oEpQKmWK177SPTrocixdRWb_J-C3p_MNc"
+    private const val API_KEY_TOKEN_PLAN = "******"
     private const val MODEL = "MiniMax-M2.7"
 
     /** 最后一次API调用的错误信息，供UI展示 */
