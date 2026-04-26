@@ -108,6 +108,9 @@ fun AppNavHost(
                 },
                 onNavigateToReimbursement = {
                     navController.navigate(Screen.Reimbursement.route)
+                },
+                onNavigateToReimbursementDetail = { id ->
+                    navController.navigate(Screen.ReimbursementDetail.createRoute(id))
                 }
             )
         }
@@ -181,7 +184,7 @@ fun AppNavHost(
                 },
                 onNavigateToReimbursement = {
                     navController.navigate(Screen.Reimbursement.route)
-                }
+                },
             )
         }
 

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tinyledger.app.domain.model.Account
 import com.tinyledger.app.domain.model.Category
+import com.tinyledger.app.domain.model.ReimbursementStatus
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.domain.repository.AccountRepository
@@ -162,6 +163,7 @@ class AddTransactionViewModel @Inject constructor(
                         emptyList()
                     }
                     
+                    val isReimbursementPending = tx.reimbursementStatus == ReimbursementStatus.PENDING
                     _uiState.update { state ->
                         state.copy(
                             transactionType = tx.type,
@@ -173,7 +175,8 @@ class AddTransactionViewModel @Inject constructor(
                             isEditing = true,
                             selectedFromAccount = fromAccount,
                             selectedToAccount = toAccount,
-                            imagePaths = imagePaths
+                            imagePaths = imagePaths,
+                            markAsReimbursement = isReimbursementPending
                         )
                     }
                 } else {
@@ -190,6 +193,7 @@ class AddTransactionViewModel @Inject constructor(
                         emptyList()
                     }
                     
+                    val isReimbursementPending = tx.reimbursementStatus == ReimbursementStatus.PENDING
                     _uiState.update { state ->
                         state.copy(
                             transactionType = tx.type,
@@ -200,7 +204,8 @@ class AddTransactionViewModel @Inject constructor(
                             date = tx.date,
                             isEditing = true,
                             selectedAccount = selectedAccount,
-                            imagePaths = imagePaths
+                            imagePaths = imagePaths,
+                            markAsReimbursement = isReimbursementPending
                         )
                     }
                 }

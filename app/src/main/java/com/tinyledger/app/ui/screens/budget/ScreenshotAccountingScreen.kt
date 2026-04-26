@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,15 +39,24 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.tinyledger.app.domain.model.Account
+import com.tinyledger.app.domain.model.AccountAttribute
 import com.tinyledger.app.domain.model.AccountType
 import com.tinyledger.app.domain.model.Category
 import com.tinyledger.app.domain.model.Transaction
 import com.tinyledger.app.domain.model.TransactionType
 import com.tinyledger.app.ui.theme.IOSColors
+import com.tinyledger.app.util.ScreenshotTransactionParser
 import kotlinx.coroutines.launch
 import com.tinyledger.app.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import android.graphics.BitmapFactory
+import com.tinyledger.app.util.ImagePreprocessor
+import com.tinyledger.app.util.PaddleOcrEngine
+import com.tinyledger.app.util.QianfanOcrEngine
+import com.tinyledger.app.util.MinimaxOcrEngine
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /**
  * 单条识别记录（可编辑）- 包含分类、账户、日期信息
@@ -58,8 +68,31 @@ data class ParsedRecord(
     val category: Category? = null,
     val accountId: Long? = null,
     val date: Long = System.currentTimeMillis(),
-    val saved: Boolean = false
+    val balance: String = "",
+    val saved: Boolean = false,
+    val balanceValid: BalanceValidation = BalanceValidation.NO_BALANCE
 )
+
+/** 余额链式校验状态 */
+enum class BalanceValidation {
+    /** 无余额数据，无法校验 */
+    NO_BALANCE,
+    /** 余额与上一笔金额一致 ✓ */
+    VALID,
+    /** 余额与预期不符 ⚠ */
+    MISMATCH,
+    /** 余额链式已校正金额 ↻ */
+    CORRECTED
+}
+
+
+/** OCR引擎选项 */
+enum class OcrEngineOption(val label: String, val priority: Int) {
+    QIANFAN("\u5343\u5E06OCR", 1),     // "\u767E\u5EA6\u5343\u5E06OCR"
+    MINIMAX("MiniMax", 2),
+    PADDLE("Paddle", 3),
+    MLKIT("ML Kit", 4);
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -76,6 +109,152 @@ fun ScreenshotAccountingScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
+    // PaddleOCR 初始化状态
+    var paddleAvailable by remember { mutableStateOf(false) }
+    var paddleInitMsg by remember { mutableStateOf("") }
+    
+    // 千帆OCR 可用状态（网络API，默认可用）
+    var qianfanAvailable by remember { mutableStateOf(true) }
+
+    // ── OCR引擎选择（默认千帆OCR）
+    var selectedEngine by remember { mutableStateOf(OcrEngineOption.QIANFAN) }
+    var minimaxAvailable by remember { mutableStateOf(true) }
+    
+    // 初始化 PaddleOCR 引擎
+    LaunchedEffect(Unit) {
+        val success = PaddleOcrEngine.init(context)
+        paddleAvailable = success
+        paddleInitMsg = if (success) "PaddleOCR \u5c31\u7eea" else "PaddleOCR \u672a\u5c31\u7eea: ${PaddleOcrEngine.getInitError() ?: "\u672a\u77e5"}"
+        Log.d("ScreenshotOCR", "PaddleOCR \u521d\u59cb\u5316\u7ed3\u679c: $paddleInitMsg")
+    }
+    
+    /**
+     * \u6267\u884c OCR \u8bc6\u522b\uff08\u5343\u5e06OCR \u2192 PaddleOCR \u2192 ML Kit \u9010\u7ea7\u56de\u9000\uff09
+     */
+    /**
+     * 执行 OCR 识别（根据用户选择 + 优先级降级：千帆→MiniMax→Paddle→ML Kit）
+     */
+    suspend fun performOcr(bitmap: android.graphics.Bitmap): List<ParsedRecord> {
+        val engine = selectedEngine
+        Log.d("ScreenshotOCR", "用户选择引擎: ${engine.label}, 优先级=${engine.priority}")
+
+        // ── 按用户选择顺序 + 优先级降级尝试 ──
+        val attemptOrder = buildList {
+            add(engine)  // 用户选择优先
+            // 补充剩余引擎，按优先级排序
+            OcrEngineOption.entries
+                .filter { it != engine }
+                .sortedBy { it.priority }
+                .forEach { add(it) }
+        }
+
+        val failLog = StringBuilder()
+        for (attempt in attemptOrder) {
+            val result = when (attempt) {
+                OcrEngineOption.QIANFAN -> {
+                    Log.d("ScreenshotOCR", "  → 尝试千帆OCR...")
+                    val qianfanResult = QianfanOcrEngine.recognize(bitmap, homeState.accounts)
+                    if (qianfanResult.isNotEmpty()) {
+                        val prefix = if (selectedEngine != OcrEngineOption.QIANFAN) "已降级→千帆OCR" else "千帆OCR"
+                        val extraInfo = if (failLog.isNotEmpty()) " | ${failLog}" else ""
+                        recognizedText = "$prefix: ${qianfanResult.size}条$extraInfo"
+                    } else {
+                        failLog.append("千帆无结果; ")
+                        Log.d("ScreenshotOCR", "  ⚠ 千帆OCR 无结果")
+                    }
+                    qianfanResult
+                }
+                OcrEngineOption.MINIMAX -> {
+                    Log.d("ScreenshotOCR", "  → 尝试MiniMax (先OpenAI API, 后Anthropic API)...")
+                    val minimaxResult = MinimaxOcrEngine.recognize(bitmap, homeState.accounts)
+                    if (minimaxResult.isNotEmpty()) {
+                        recognizedText = MinimaxOcrEngine.lastMethod.ifBlank { "MiniMax: ${minimaxResult.size}条" }
+                    } else {
+                        val errInfo = MinimaxOcrEngine.lastError.ifBlank { "未响应" }
+                        failLog.append("MiniMax失败($errInfo); ")
+                        recognizedText = "MiniMax失败($errInfo)"
+                        Log.d("ScreenshotOCR", "  ⚠ MiniMax: $errInfo")
+                    }
+                    minimaxResult
+                }
+                OcrEngineOption.PADDLE -> {
+                    if (!paddleAvailable) {
+                        Log.d("ScreenshotOCR", "  ⚠ PaddleOCR 未就绪，跳过")
+                        emptyList()
+                    } else {
+                        Log.d("ScreenshotOCR", "  → 尝试PaddleOCR...")
+                        val processed = ImagePreprocessor.preprocess(bitmap)
+                        val elements = PaddleOcrEngine.recognize(processed)
+                        if (elements.isNotEmpty()) {
+                            recognizedText = elements.joinToString(" ") { it.text }
+                            ScreenshotTransactionParser.parseVisual(elements, homeState.accounts)
+                        } else {
+                            Log.d("ScreenshotOCR", "  ⚠ PaddleOCR 无结果")
+                            emptyList()
+                        }
+                    }
+                }
+                OcrEngineOption.MLKIT -> {
+                    Log.d("ScreenshotOCR", "  → 尝试ML Kit...")
+                    val processed = ImagePreprocessor.preprocess(bitmap)
+                    val image = com.google.mlkit.vision.common.InputImage.fromBitmap(processed, 0)
+                    val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+                        com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions.Builder().build()
+                    )
+                    val result = kotlinx.coroutines.suspendCancellableCoroutine<com.google.mlkit.vision.text.Text?> { cont ->
+                        recognizer.process(image)
+                            .addOnSuccessListener { cont.resume(it) }
+                            .addOnFailureListener { cont.resume(null) }
+                    }
+                    if (result == null) {
+                        recognizedText = "ML Kit 识别失败"
+                        emptyList()
+                    } else {
+                        recognizedText = result.text
+                        val ocrElements = extractOcrElements(result)
+                        if (ocrElements.isNotEmpty()) {
+                            ScreenshotTransactionParser.parseVisual(ocrElements, homeState.accounts)
+                        } else {
+                            ScreenshotTransactionParser.parse(result.text, homeState.accounts)
+                        }
+                    }
+                }
+            }
+            if (result.isNotEmpty()) {
+                Log.d("ScreenshotOCR", "\u2705 \u4F7F\u7528 ${attempt.label}: ${result.size} \u6761\u8BB0\u5F55")
+                return result
+            }
+        }
+
+        Log.w("ScreenshotOCR", "\u274C \u6240\u6709OCR\u5F15\u64CE\u5747\u5931\u8D25")
+        recognizedText = "\u6240\u6709OCR\u5F15\u64CE\u5747\u65E0\u7ED3\u679C"
+        return emptyList()
+    }
+        
+    /** 显示识别结果提示 */
+    fun showResultSnackbar(records: List<ParsedRecord>) {
+        if (records.isNotEmpty()) {
+            val expenseCount = records.count { it.type == TransactionType.EXPENSE }
+            val incomeCount = records.count { it.type == TransactionType.INCOME }
+            val mismatchCount = records.count { it.balanceValid == BalanceValidation.MISMATCH }
+            val correctedCount = records.count { it.balanceValid == BalanceValidation.CORRECTED }
+            val msg = buildString {
+                if (expenseCount > 0) append("$expenseCount 笔支出")
+                if (incomeCount > 0) {
+                    if (isNotEmpty()) append("，")
+                    append("$incomeCount 笔收入")
+                }
+                if (isNotEmpty()) append("，")
+                append("已自动填充")
+                if (correctedCount > 0) append("（${correctedCount}条已校正↻）")
+                else if (mismatchCount > 0) append("（${mismatchCount}条余额异常⚠）")
+            }
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+            }
+        }
+    }
+
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -83,41 +262,24 @@ fun ScreenshotAccountingScreen(
             isProcessing = true
             showResult = false
             parsedRecords = emptyList()
-            try {
-                val image = InputImage.fromFilePath(context, uri)
-                val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-                recognizer.process(image)
-                    .addOnSuccessListener { result ->
-                        recognizedText = result.text
-                        Log.d("ScreenshotOCR", "Recognized: ${result.text.take(200)}")
-                        parsedRecords = parseScreenshotTextMulti(result.text, homeState.accounts)
+            coroutineScope.launch {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val sourceBitmap = BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+                    if (sourceBitmap != null) {
+                        parsedRecords = performOcr(sourceBitmap)
                         showResult = true
-                        isProcessing = false
-                        if (parsedRecords.isNotEmpty()) {
-                            val expenseCount = parsedRecords.count { it.type == TransactionType.EXPENSE }
-                            val incomeCount = parsedRecords.count { it.type == TransactionType.INCOME }
-                            val msg = buildString {
-                                if (expenseCount > 0) append("识别到 $expenseCount 笔支出")
-                                if (incomeCount > 0) {
-                                    if (isNotEmpty()) append("，")
-                                    append("识别到 $incomeCount 笔收入")
-                                }
-                                append("，已自动填充")
-                            }
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
-                            }
-                        }
+                        showResultSnackbar(parsedRecords)
+                    } else {
+                        recognizedText = "图片解码失败"
                     }
-                    .addOnFailureListener { e ->
-                        Log.e("ScreenshotOCR", "Recognition failed", e)
-                        recognizedText = "识别失败: ${e.message}"
-                        isProcessing = false
-                    }
-            } catch (e: Exception) {
-                Log.e("ScreenshotOCR", "Error", e)
-                recognizedText = "处理失败: ${e.message}"
-                isProcessing = false
+                } catch (e: Exception) {
+                    Log.e("ScreenshotOCR", "Error", e)
+                    recognizedText = "处理失败: ${e.message}"
+                } finally {
+                    isProcessing = false
+                }
             }
         }
     }
@@ -129,37 +291,26 @@ fun ScreenshotAccountingScreen(
             isProcessing = true
             showResult = false
             parsedRecords = emptyList()
-            var allRecords = mutableListOf<ParsedRecord>()
-            var processed = 0
-            uris.forEach { uri ->
+            coroutineScope.launch {
+                var allRecords = mutableListOf<ParsedRecord>()
                 try {
-                    val image = InputImage.fromFilePath(context, uri)
-                    val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-                    recognizer.process(image)
-                        .addOnSuccessListener { result ->
-                            allRecords.addAll(parseScreenshotTextMulti(result.text, homeState.accounts))
-                            processed++
-                            if (processed == uris.size) {
-                                parsedRecords = allRecords
-                                showResult = true
-                                isProcessing = false
-                                if (allRecords.isNotEmpty()) {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("识别到 ${allRecords.size} 条记录，已自动填充", duration = SnackbarDuration.Short)
-                                    }
-                                }
-                            }
+                    for (uri in uris) {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val sourceBitmap = BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        if (sourceBitmap != null) {
+                            allRecords.addAll(performOcr(sourceBitmap))
                         }
-                        .addOnFailureListener {
-                            processed++
-                            if (processed == uris.size) {
-                                parsedRecords = allRecords
-                                showResult = true
-                                isProcessing = false
-                            }
-                        }
+                    }
+                    parsedRecords = allRecords
+                    showResult = true
+                    showResultSnackbar(allRecords)
                 } catch (e: Exception) {
-                    processed++
+                    Log.e("ScreenshotOCR", "Multi image error", e)
+                    parsedRecords = allRecords
+                    showResult = true
+                } finally {
+                    isProcessing = false
                 }
             }
         }
@@ -192,11 +343,12 @@ fun ScreenshotAccountingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(vertical = 16.dp)
         ) {
             // Instruction card - redesigned
+            if (!showResult) {
             item {
                 Card(
                     modifier = Modifier
@@ -280,6 +432,63 @@ fun ScreenshotAccountingScreen(
                     }
                 }
             }
+
+
+            }
+        // ── OCR引擎选择 ──
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    Text(
+                        "OCR\u8BC6\u522B\u65B9\u6848",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OcrEngineOption.entries.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { selectedEngine = option }
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedEngine == option,
+                                    onClick = { selectedEngine = option },
+                                    modifier = Modifier.size(16.dp),
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = if (selectedEngine == option) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selectedEngine == option)
+                                            MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
             // Select image button - enhanced
             item {
@@ -374,81 +583,287 @@ fun ScreenshotAccountingScreen(
                 }
             }
 
-            // Result cards - one per parsed record
+            // ── 数据表格展示 ──
             if (showResult && parsedRecords.isNotEmpty()) {
+                // 表头
                 item {
-                    Text(
-                        "识别到 ${parsedRecords.size} 条记录",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("#", modifier = Modifier.width(18.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Text("账户", modifier = Modifier.width(40.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Text("账号", modifier = Modifier.width(32.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Text("日期", modifier = Modifier.weight(0.9f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Text("类型", modifier = Modifier.width(16.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Text("金额", modifier = Modifier.weight(0.7f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.End)
+                        Text("余额", modifier = Modifier.weight(0.6f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.End)
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("备注", modifier = Modifier.weight(1.0f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.width(24.dp))
+                    }
                 }
 
+                // 数据行
                 itemsIndexed(parsedRecords) { index, record ->
-                    RecordEditCard(
-                        index = index,
-                        record = record,
-                        accounts = homeState.accounts,
-                        onUpdate = { updated ->
-                            parsedRecords = parsedRecords.toMutableList().also { it[index] = updated }
-                        },
-                        onSave = {
-                            val amount = record.amount.toDoubleOrNull()
-                            if (amount != null && amount > 0) {
-                                val category = record.category
-                                    ?: if (record.type == TransactionType.INCOME)
-                                        Category.fromId("redpacket", TransactionType.INCOME)
-                                    else
-                                        Category.fromId("other", TransactionType.EXPENSE)
+                    val bgColor = if (record.saved) IOSColors.SystemGreen.copy(alpha = 0.04f)
+                        else if (index % 2 == 0) MaterialTheme.colorScheme.surface
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    val lastRow = index == parsedRecords.lastIndex
+                    val dateStr = java.util.Calendar.getInstance().also { it.timeInMillis = record.date }.let { cal -> "${cal.get(java.util.Calendar.YEAR)}${String.format("%02d", cal.get(java.util.Calendar.MONTH) + 1)}${String.format("%02d", cal.get(java.util.Calendar.DAY_OF_MONTH))}" }
+                    val isExpense = record.type == TransactionType.EXPENSE
+                    // ★ 查找账户信息
+                    val account = homeState.accounts.find { it.id == record.accountId }
+                    val bankName = account?.name?.take(3) ?: "未指定"
+                    val last4 = account?.cardNumber?.takeIf { it.length >= 4 }?.takeLast(4) ?: ""
 
-                                val transaction = Transaction(
-                                    type = record.type,
-                                    category = category,
-                                    amount = amount,
-                                    note = record.note.ifBlank { "截屏数据导入" },
-                                    date = record.date,
-                                    accountId = record.accountId
-                                )
-                                viewModel.insertTransaction(transaction)
-                                parsedRecords = parsedRecords.toMutableList().also {
-                                    it[index] = record.copy(saved = true)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = if (lastRow) RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp)
+                            else RoundedCornerShape(0.dp),
+                        colors = CardDefaults.cardColors(containerColor = bgColor),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 序号
+                            Text(
+                                "${index + 1}",
+                                modifier = Modifier.width(18.dp),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            // 账户（银行简称）
+                            Text(
+                                bankName,
+                                modifier = Modifier.width(40.dp),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                            // 账号（卡号后4位）
+                            Text(
+                                last4.ifBlank { "-" },
+                                modifier = Modifier.width(32.dp),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
+                            // 日期
+                            Text(
+                                dateStr,
+                                modifier = Modifier.weight(0.9f),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
+                            // 类型
+                            Text(
+                                if (isExpense) "支" else "收",
+                                modifier = Modifier.width(16.dp),
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, fontSize = 10.sp),
+                                color = if (isExpense) MaterialTheme.colorScheme.error
+                                    else IOSColors.SystemGreen,
+                                textAlign = TextAlign.Center
+                            )
+                            // 金额（可收缩字体）
+                            Text(
+                                "¥${record.amount}",
+                                modifier = Modifier.weight(0.7f),
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = (-0.5).sp),
+                                color = if (isExpense) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            // 余额
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(0.6f),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                when (record.balanceValid) {
+                                    BalanceValidation.VALID -> Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = "余额正确",
+                                        tint = IOSColors.SystemGreen,
+                                        modifier = Modifier.size(8.dp)
+                                    )
+                                    BalanceValidation.CORRECTED -> Icon(
+                                        Icons.Default.Sync,
+                                        contentDescription = "余额已校正",
+                                        tint = Color(0xFF2196F3),
+                                        modifier = Modifier.size(8.dp)
+                                    )
+                                    BalanceValidation.MISMATCH -> Icon(
+                                        Icons.Default.Warning,
+                                        contentDescription = "余额不匹配",
+                                        tint = IOSColors.SystemOrange,
+                                        modifier = Modifier.size(8.dp)
+                                    )
+                                    BalanceValidation.NO_BALANCE -> { /* 无余额不显示 */ }
                                 }
+                                Spacer(modifier = Modifier.width(1.dp))
+                                Text(
+                                    if (record.balance.isNotBlank()) "¥${record.balance}" else "-",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                                    color = when (record.balanceValid) {
+                                        BalanceValidation.VALID -> IOSColors.SystemGreen
+                                        BalanceValidation.CORRECTED -> Color(0xFF2196F3)
+                                        BalanceValidation.MISMATCH -> IOSColors.SystemOrange
+                                        BalanceValidation.NO_BALANCE -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    maxLines = 1,
+                                    textAlign = TextAlign.End
+                                )
                             }
-                        },
-                        onDelete = {
-                            parsedRecords = parsedRecords.toMutableList().also { it.removeAt(index) }
+                            Spacer(modifier = Modifier.width(2.dp))
+                            // 备注
+                            Text(
+                                record.note,
+                                modifier = Modifier.weight(1.0f),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                            // 删除按钮
+                            if (!record.saved) {
+                                IconButton(
+                                    onClick = {
+                                        parsedRecords = parsedRecords.toMutableList().also { it.removeAt(index) }
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "删除",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "已保存",
+                                    tint = IOSColors.SystemGreen,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
-                    )
+                    }
+
+                    // 行间分隔线
+                    if (!lastRow) {
+                        HorizontalDivider(
+                            modifier = Modifier.fillMaxWidth(),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        )
+                    }
                 }
 
                 // 一键全部保存
                 val unsavedCount = parsedRecords.count { !it.saved && (it.amount.toDoubleOrNull() ?: 0.0) > 0 }
                 if (unsavedCount > 0) {
                     item {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Button(
                             onClick = {
+                                // ★ 获取现金账户ID集合（账单页仅显示现金账户的交易）
+                                val cashAccounts = homeState.accounts.filter { it.attribute == AccountAttribute.CASH }
+                                val cashAccountIds = cashAccounts.map { it.id }.toSet()
+                                val defaultCashAccountId = cashAccounts.firstOrNull()?.id
+                                Log.d("ScreenshotSave", "CASH账户: ${cashAccounts.map { it.name }}, IDs=$cashAccountIds, 默认=$defaultCashAccountId")
+
                                 parsedRecords = parsedRecords.mapIndexed { idx, record ->
-                                    val amount = record.amount.toDoubleOrNull()
-                                    if (!record.saved && amount != null && amount > 0) {
+                                    val rawAmount = record.amount.toDoubleOrNull()
+                                    if (!record.saved && rawAmount != null && rawAmount > 0) {
+                                        val signedAmount = if (record.type == TransactionType.EXPENSE) -rawAmount else rawAmount
+                                        // ★ 智能分类匹配：优先使用解析时推断的分类，其次用备注匹配
                                         val category = record.category
+                                            ?: ScreenshotTransactionParser.inferCategoryPublic(
+                                                text = record.note,
+                                                note = record.note,
+                                                type = record.type
+                                            )
                                             ?: if (record.type == TransactionType.INCOME)
                                                 Category.fromId("redpacket", TransactionType.INCOME)
                                             else
                                                 Category.fromId("other", TransactionType.EXPENSE)
 
+                                        // ★ 确保 accountId 为现金账户（否则账单页不显示）
+                                        val safeAccountId = when {
+                                            record.accountId != null && record.accountId in cashAccountIds -> {
+                                                Log.d("ScreenshotSave", "  [$idx] 账户匹配: id=${record.accountId} ✓")
+                                                record.accountId
+                                            }
+                                            record.accountId != null -> {
+                                                Log.w("ScreenshotSave", "  [$idx] 账户 ${record.accountId} 非CASH属性，改用默认 $defaultCashAccountId")
+                                                defaultCashAccountId
+                                            }
+                                            else -> {
+                                                Log.w("ScreenshotSave", "  [$idx] 无账户ID，使用默认 $defaultCashAccountId")
+                                                defaultCashAccountId
+                                            }
+                                        }
+
+                                        Log.d("ScreenshotSave", "  保存[$idx]: type=${record.type} amt=$signedAmount cat=${category.id} acct=$safeAccountId note='${record.note.take(30)}'")
+
                                         viewModel.insertTransaction(Transaction(
                                             type = record.type,
                                             category = category,
-                                            amount = amount,
+                                            amount = signedAmount,
                                             note = record.note.ifBlank { "截屏数据导入" },
                                             date = record.date,
-                                            accountId = record.accountId
+                                            accountId = safeAccountId
                                         ))
                                         record.copy(saved = true)
                                     } else record
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = IOSColors.SystemGreen)
                         ) {
@@ -457,6 +872,17 @@ fun ScreenshotAccountingScreen(
                             Text("全部保存 ($unsavedCount 条)")
                         }
                     }
+                }
+
+                // 识别统计
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "识别到 ${parsedRecords.size} 条记录",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
                 }
             }
 
@@ -475,7 +901,7 @@ fun ScreenshotAccountingScreen(
                         ) {
                             Text("未识别到有效金额记录", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "请确保截图中包含「XX元」格式的金额信息",
+                                "请确保截图中包含银行交易明细的有效金额信息",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -884,317 +1310,24 @@ private fun getAccountTypeIcon(type: AccountType): androidx.compose.ui.graphics.
     }
 }
 
-private fun String.containsAny(vararg keywords: String): Boolean =
-    keywords.any { this.contains(it) }
-
 /**
- * 从OCR文本智能识别日期
- * 支持：2024-01-15, 2024/01/15, 2024年1月15日, 01-15, 1月15日, etc.
+ * 从 ML Kit OCR 结果中提取所有带坐标的 TextElement
+ * Phase 2: 视觉解析所需的核心数据提取
  */
-private fun extractDateFromText(text: String): Long? {
-    // Full date: 2024-01-15 or 2024/01/15
-    val fullDatePattern = Regex("(20\\d{2})[/\\-](\\d{1,2})[/\\-](\\d{1,2})")
-    fullDatePattern.find(text)?.let { match ->
-        val year = match.groupValues[1].toIntOrNull() ?: return@let
-        val month = match.groupValues[2].toIntOrNull() ?: return@let
-        val day = match.groupValues[3].toIntOrNull() ?: return@let
-        if (month in 1..12 && day in 1..31) {
-            val cal = Calendar.getInstance()
-            cal.set(year, month - 1, day)
-            return cal.timeInMillis
-        }
-    }
-
-    // Chinese date: 2024年1月15日
-    val cnFullDatePattern = Regex("(20\\d{2})年(\\d{1,2})月(\\d{1,2})日")
-    cnFullDatePattern.find(text)?.let { match ->
-        val year = match.groupValues[1].toIntOrNull() ?: return@let
-        val month = match.groupValues[2].toIntOrNull() ?: return@let
-        val day = match.groupValues[3].toIntOrNull() ?: return@let
-        if (month in 1..12 && day in 1..31) {
-            val cal = Calendar.getInstance()
-            cal.set(year, month - 1, day)
-            return cal.timeInMillis
-        }
-    }
-
-    // Short date: 1月15日 or 01-15 or 01/15 (assume current year)
-    val cnShortDatePattern = Regex("(\\d{1,2})月(\\d{1,2})日")
-    cnShortDatePattern.find(text)?.let { match ->
-        val month = match.groupValues[1].toIntOrNull() ?: return@let
-        val day = match.groupValues[2].toIntOrNull() ?: return@let
-        if (month in 1..12 && day in 1..31) {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.MONTH, month - 1)
-            cal.set(Calendar.DAY_OF_MONTH, day)
-            return cal.timeInMillis
-        }
-    }
-
-    val shortDatePattern = Regex("(\\d{2})[/\\-](\\d{2})\\s")
-    shortDatePattern.find(text)?.let { match ->
-        val month = match.groupValues[1].toIntOrNull() ?: return@let
-        val day = match.groupValues[2].toIntOrNull() ?: return@let
-        if (month in 1..12 && day in 1..31) {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.MONTH, month - 1)
-            cal.set(Calendar.DAY_OF_MONTH, day)
-            return cal.timeInMillis
-        }
-    }
-
-    // Time pattern: HH:mm(:ss)
-    val timePattern = Regex("(\\d{1,2}):(\\d{2})(?::(\\d{2}))?")
-    timePattern.find(text)?.let { match ->
-        val hour = match.groupValues[1].toIntOrNull() ?: return@let
-        val minute = match.groupValues[2].toIntOrNull() ?: return@let
-        if (hour in 0..23 && minute in 0..59) {
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.HOUR_OF_DAY, hour)
-            cal.set(Calendar.MINUTE, minute)
-            return cal.timeInMillis
-        }
-    }
-
-    return null
-}
-
-/**
- * 从OCR文本智能识别分类（参考短信导入的智能识别模式）
- */
-private fun inferCategoryFromOcrText(text: String, type: TransactionType): Category? {
-    // 先尝试提取商户名
-    val merchantPatterns = listOf(
-        Regex("向(.+?)支付"),
-        Regex("在(.+?)消费"),
-        Regex("付款给(.+?)"),
-        Regex("支付给(.+?)[,，。]"),
-        Regex("(?:商户|商家|收款方|店铺)[：:]*\\s*(.+?)(?:\\n|$)")
-    )
-    var merchant: String? = null
-    for (pattern in merchantPatterns) {
-        val match = pattern.find(text)
-        if (match != null) {
-            merchant = match.groupValues[1].trim()
-            break
-        }
-    }
-
-    if (type == TransactionType.INCOME) {
-        return when {
-            text.containsAny("工资", "薪资", "薪酬", "代发", "发薪") -> Category.fromId("salary", TransactionType.INCOME)
-            text.containsAny("奖金", "绩效", "年终奖") -> Category.fromId("bonus", TransactionType.INCOME)
-            text.containsAny("分红", "股息") -> Category.fromId("dividend", TransactionType.INCOME)
-            text.containsAny("退款", "退还", "返还", "退货") -> Category.fromId("refund", TransactionType.INCOME)
-            text.containsAny("押金退", "退押金", "退保证金") -> Category.fromId("deposit_back", TransactionType.INCOME)
-            text.containsAny("报销", "报销款") -> Category.fromId("reimbursement", TransactionType.INCOME)
-            text.containsAny("红包") -> Category.fromId("redpacket", TransactionType.INCOME)
-            text.containsAny("收回借款", "还款", "还钱", "归还") -> Category.fromId("collect", TransactionType.LENDING)
-            text.containsAny("投资", "理财", "收益", "利息", "赎回") -> Category.fromId("investment", TransactionType.INCOME)
-            text.containsAny("转账", "汇款", "转入") -> Category.fromId("transfer", TransactionType.TRANSFER)
-            else -> null
-        }
-    }
-
-    // 支出 - 先匹配商户名
-    if (merchant != null) {
-        val merchantCategory = when {
-            merchant.containsAny("酒店", "宾馆", "民宿", "旅馆", "客栈", "公寓",
-                "如家", "汉庭", "全季", "亚朵", "希尔顿", "万豪", "洲际",
-                "锦江", "华住", "7天", "七天") ->
-                Category.fromId("accommodation", TransactionType.EXPENSE)
-            merchant.containsAny("基金", "慈善", "天使", "公益", "红十字",
-                "捐赠", "捐款", "希望工程", "壹基金") ->
-                Category.fromId("charity", TransactionType.EXPENSE)
-            merchant.containsAny("米线", "豆腐", "烧烤", "面馆", "饺子", "包子",
-                "粉丝", "麻辣", "串串", "炸鸡", "鸡排", "牛肉", "羊肉",
-                "拉面", "馄饨", "煲仔", "粥", "寿司", "料理", "火锅",
-                "餐厅", "饭店", "小吃", "快餐", "食堂", "茶餐厅",
-                "肯德基", "麦当劳", "海底捞", "瑞幸", "星巴克") ->
-                Category.fromId("food", TransactionType.EXPENSE)
-            merchant.containsAny("水果", "果", "蔬", "小卖部", "盒马", "零食",
-                "百货", "超市", "商店", "便利店", "杂货", "菜市场",
-                "沃尔玛", "永辉", "华润", "大润发", "物美",
-                "全家", "711", "罗森", "美宜佳") ->
-                Category.fromId("shopping", TransactionType.EXPENSE)
-            else -> null
-        }
-        if (merchantCategory != null) return merchantCategory
-    }
-
-    // 支出 - 关键词匹配
-    return when {
-        text.containsAny("酒店", "宾馆", "民宿", "旅馆", "客栈", "住宿",
-            "如家", "汉庭", "全季", "亚朵") -> Category.fromId("accommodation", TransactionType.EXPENSE)
-        text.containsAny("慈善", "捐赠", "捐款", "公益", "红十字",
-            "希望工程", "壹基金", "天使") -> Category.fromId("charity", TransactionType.EXPENSE)
-        text.containsAny("发红包", "派发红包", "发出红包") -> Category.fromId("send_redpacket", TransactionType.EXPENSE)
-        text.containsAny("餐", "饭", "食", "外卖", "美团", "饿了么", "肯德基", "麦当劳",
-            "海底捞", "奶茶", "咖啡", "瑞幸", "星巴克", "烧烤", "火锅", "小吃",
-            "早餐", "午餐", "晚餐", "食堂", "饮料", "甜品", "蛋糕",
-            "米线", "豆腐", "面馆", "饺子", "包子", "拉面") -> Category.fromId("food", TransactionType.EXPENSE)
-        text.containsAny("打车", "滴滴", "地铁", "公交", "高铁", "机票", "加油",
-            "停车", "高速", "出租", "曹操", "首汽", "T3出行", "花小猪",
-            "铁路", "12306", "航空", "ETC", "过路费", "充电桩") -> Category.fromId("transport", TransactionType.EXPENSE)
-        text.containsAny("购物", "京东", "淘宝", "天猫", "超市", "商场", "拼多多",
-            "唯品会", "苏宁", "当当", "亚马逊", "沃尔玛", "永辉",
-            "便利店", "全家", "711", "罗森",
-            "水果", "蔬", "小卖部", "盒马", "零食", "百货") -> Category.fromId("shopping", TransactionType.EXPENSE)
-        text.containsAny("水费", "电费", "燃气", "天然气", "煤气", "暖气", "宽带",
-            "网费", "物业费", "供暖", "电力", "自来水", "国网") -> Category.fromId("utilities", TransactionType.EXPENSE)
-        text.containsAny("娱乐", "电影", "游戏", "视频", "音乐", "KTV", "网吧",
-            "直播", "充值", "会员") -> Category.fromId("entertainment", TransactionType.EXPENSE)
-        text.containsAny("医院", "药店", "医疗", "诊所", "挂号", "门诊", "体检",
-            "药房", "药品", "看病") -> Category.fromId("medical", TransactionType.EXPENSE)
-        text.containsAny("房租", "物业", "租房") -> Category.fromId("housing", TransactionType.EXPENSE)
-        text.containsAny("话费", "流量", "通讯", "中国移动", "中国联通", "中国电信",
-            "充话费", "手机费") -> Category.fromId("communication", TransactionType.EXPENSE)
-        text.containsAny("学费", "培训", "教育", "书", "课程", "网课",
-            "学校", "考试", "辅导") -> Category.fromId("education", TransactionType.EXPENSE)
-        text.containsAny("保险", "保费", "社保", "医保", "车险", "人寿") -> Category.fromId("insurance", TransactionType.EXPENSE)
-        text.containsAny("旅游", "景区", "门票", "携程", "去哪儿", "飞猪", "途牛") -> Category.fromId("travel", TransactionType.EXPENSE)
-        text.containsAny("投资", "理财", "基金", "股票", "证券", "期货") -> Category.fromId("investment_expense", TransactionType.EXPENSE)
-        else -> null
-    }
-}
-
-/**
- * 从OCR文本智能识别账户
- */
-private fun inferAccountFromOcrText(text: String, accounts: List<Account>): Long? {
-    if (accounts.isEmpty()) return null
-
-    // 匹配银行卡尾号
-    val cardPattern = Regex("尾号(\\d{4})")
-    cardPattern.find(text)?.let { match ->
-        val lastFour = match.groupValues[1]
-        val matched = accounts.find { account ->
-            account.cardNumber?.endsWith(lastFour) == true ||
-                    account.cardNumber == lastFour
-        }
-        if (matched != null) return matched.id
-    }
-
-    // 匹配支付方式
-    return when {
-        text.containsAny("微信支付", "微信", "零钱", "微信红包") ->
-            accounts.find { it.type == AccountType.WECHAT }?.id
-        text.containsAny("支付宝", "余额宝", "花呗", "蚂蚁") ->
-            accounts.find { it.type == AccountType.CONSUMPTION_PLATFORM }?.id
-        text.containsAny("银行", "储蓄卡", "借记卡", "信用卡", "工商", "建设",
-            "农业", "中国银行", "招商", "交通", "邮储", "民生",
-            "光大", "兴业", "浦发", "中信") ->
-            accounts.filter { it.type == AccountType.BANK }.let { bankAccounts ->
-                // Try to match specific bank
-                bankAccounts.find { account ->
-                    text.contains(account.name.take(4))
-                } ?: bankAccounts.firstOrNull()
-            }?.id
-        else -> accounts.firstOrNull()?.id
-    }
-}
-
-/**
- * Parse screenshot OCR text to extract multiple records.
- * Each occurrence of "XX元" pattern becomes a separate record.
- * Now with smart recognition for date, category, and account.
- */
-private fun parseScreenshotTextMulti(text: String, accounts: List<Account>): List<ParsedRecord> {
-    val records = mutableListOf<ParsedRecord>()
-
-    // Determine default type from overall text
-    val incomeKeywords = listOf("收款", "到账", "转入", "收入", "退款", "红包")
-    val expenseKeywords = listOf("付款", "支付", "消费", "扣款", "转出", "转账", "充值", "缴费")
-
-    val isIncome = incomeKeywords.any { text.contains(it) }
-    val isExpense = expenseKeywords.any { text.contains(it) }
-    val defaultType = if (isIncome && !isExpense) TransactionType.INCOME else TransactionType.EXPENSE
-
-    // Extract global date from text
-    val globalDate = extractDateFromText(text) ?: System.currentTimeMillis()
-
-    // Extract global account
-    val globalAccountId = inferAccountFromOcrText(text, accounts)
-
-    // Find all "数字+元" patterns
-    val yuanPattern = Regex("([0-9]+(?:\\.[0-9]{1,2})?)\\s*元")
-    val matches = yuanPattern.findAll(text).toList()
-
-    if (matches.isEmpty()) return records
-
-    // Deduplicate amounts that appear at very close positions (within 20 chars)
-    val deduped = mutableListOf<MatchResult>()
-    for (match in matches) {
-        val value = match.groupValues[1].toDoubleOrNull() ?: continue
-        if (value <= 0 || value >= 10_000_000) continue
-        val isDup = deduped.any { prev ->
-            kotlin.math.abs(prev.range.first - match.range.first) < 20 &&
-                    prev.groupValues[1] == match.groupValues[1]
-        }
-        if (!isDup) deduped.add(match)
-    }
-
-    // Build a record for each match
-    for (match in deduped) {
-        val value = match.groupValues[1].toDoubleOrNull() ?: continue
-        val amountStr = String.format("%.2f", value)
-
-        // Look at surrounding context (100 chars before, 50 after)
-        val contextStart = (match.range.first - 100).coerceAtLeast(0)
-        val contextEnd = (match.range.last + 50).coerceAtMost(text.length)
-        val context = text.substring(contextStart, contextEnd)
-
-        val localIncome = incomeKeywords.any { context.contains(it) }
-        val localExpense = expenseKeywords.any { context.contains(it) }
-        val type = when {
-            localIncome && !localExpense -> TransactionType.INCOME
-            localExpense && !localIncome -> TransactionType.EXPENSE
-            else -> defaultType
-        }
-
-        // Smart category inference from context
-        val category = inferCategoryFromOcrText(context, type)
-
-        // Try to extract date from local context, fall back to global
-        val localDate = extractDateFromText(context) ?: globalDate
-
-        // Smart account inference from context, fall back to global
-        val localAccountId = inferAccountFromOcrText(context, accounts) ?: globalAccountId
-
-        // Try to extract note from context
-        var note = ""
-        val merchantPatterns = listOf(
-            Regex("(?:商户|商家|收款方|付款方|店铺)[：:]*\\s*(.+?)(?:\\n|$)"),
-            Regex("(?:备注|说明|用途)[：:]*\\s*(.+?)(?:\\n|$)")
-        )
-        for (pattern in merchantPatterns) {
-            val noteMatch = pattern.find(context)
-            if (noteMatch != null) {
-                note = noteMatch.groupValues[1].trim().take(30)
-                break
+private fun extractOcrElements(result: com.google.mlkit.vision.text.Text): List<ScreenshotTransactionParser.OcrElement> {
+    val elements = mutableListOf<ScreenshotTransactionParser.OcrElement>()
+    for (block in result.textBlocks) {
+        for (line in block.lines) {
+            for (element in line.elements) {
+                element.boundingBox?.let { box ->
+                    elements.add(ScreenshotTransactionParser.OcrElement(
+                        text = element.text,
+                        left = box.left, top = box.top,
+                        right = box.right, bottom = box.bottom
+                    ))
+                }
             }
         }
-        if (note.isBlank()) {
-            when {
-                context.contains("微信") -> note = "微信${if (type == TransactionType.INCOME) "收款" else "付款"}"
-                context.contains("支付宝") -> note = "支付宝${if (type == TransactionType.INCOME) "收款" else "消费"}"
-                context.contains("京东") -> note = "京东购物"
-                context.contains("淘宝") || context.contains("天猫") -> note = "淘宝购物"
-                context.contains("美团") -> note = "美团消费"
-                context.contains("抖音") -> note = "抖音消费"
-                else -> note = "截屏数据导入"
-            }
-        }
-
-        records.add(ParsedRecord(
-            amount = amountStr,
-            type = type,
-            note = note,
-            category = category,
-            accountId = localAccountId,
-            date = localDate
-        ))
     }
-
-    return records
+    return elements
 }

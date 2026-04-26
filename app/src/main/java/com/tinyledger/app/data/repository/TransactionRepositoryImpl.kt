@@ -1,5 +1,6 @@
 package com.tinyledger.app.data.repository
 
+import android.util.Log
 import com.tinyledger.app.data.local.dao.AccountDao
 import com.tinyledger.app.data.local.dao.TransactionDao
 import com.tinyledger.app.data.local.entity.TransactionEntity
@@ -66,6 +67,7 @@ class TransactionRepositoryImpl @Inject constructor(
     }
 
     override suspend fun insertTransaction(transaction: Transaction): Long {
+        Log.d("TxRepo", "insert: type=${transaction.type} amt=${transaction.amount} acctId=${transaction.accountId} date=${transaction.date}")
         // 校验交易日期不能早于已启用账户的期初余额日期
         transaction.accountId?.let { accountId ->
             val account = accountDao.getAccountById(accountId)
@@ -74,12 +76,14 @@ class TransactionRepositoryImpl @Inject constructor(
                     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                     val initialDate = sdf.parse(account.initialBalanceDate)
                     if (initialDate != null && transaction.date < initialDate.time) {
+                        Log.w("TxRepo", "  ⛔ 拒绝: 交易日期(${transaction.date})早于期初余额日期(${account.initialBalanceDate})")
                         return -1L // 日期早于期初余额日期，拒绝插入
                     }
                 } catch (_: Exception) {}
             }
         }
         val id = transactionDao.insertTransaction(transaction.toEntity())
+        Log.d("TxRepo", "  ✅ 已插入 id=$id")
         // 保存后立即更新账户余额
         transaction.accountId?.let { updateAccountBalanceById(it) }
         return id

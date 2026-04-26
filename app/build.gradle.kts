@@ -15,8 +15,8 @@ android {
         applicationId = "com.tinyledger.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 20515  // = 2*10000 + 5*100 + 15 (for v2.5.15)
-        versionName = "2.5.15"
+        versionCode = 20516  // = 2*10000 + 5*100 + 16 (for v2.5.16)
+        versionName = "2.5.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -71,6 +71,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // 排除 Paddle-Lite 的冲突 .so 文件（paddleocr4android 自带）
+        jniLibs {
+            pickFirsts += setOf("lib/arm64-v8a/libc++_shared.so", "lib/armeabi-v7a/libc++_shared.so")
+        }
     }
 
     applicationVariants.all {
@@ -122,8 +126,14 @@ dependencies {
     // Google ML Kit - Text Recognition (OCR for screenshot accounting)
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 
+    // PaddleOCR4Android - Paddle-Lite OCR (优先使用，更高精度)
+    implementation("com.github.equationl.paddleocr4android:paddleocr4android:v1.2.9")
+
     // Coil - Image loading library
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // OkHttp - 千帆OCR API 网络请求
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

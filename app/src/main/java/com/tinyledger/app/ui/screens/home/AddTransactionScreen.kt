@@ -902,29 +902,24 @@ fun AddTransactionScreen(
             if (uiState.isEditing) {
                 var showDeleteConfirm by remember { mutableStateOf(false) }
                 
-                OutlinedButton(
+                Button(
                     onClick = { showDeleteConfirm = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("删除", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
                 
                 Spacer(modifier = Modifier.height(12.dp))

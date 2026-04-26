@@ -205,7 +205,7 @@ private fun TransactionDetailContent(
                         .height(48.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF5B7FD6)
+                        containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
                     Text(

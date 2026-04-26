@@ -252,6 +252,13 @@ fun ProfileScreen(
             }
         }
 
+        item { Spacer(modifier = Modifier.height(20.dp)) }
+
+        // Data management section
+        item {
+            SectionTitle("数据管理")
+        }
+
         item {
             Card(
                 modifier = Modifier

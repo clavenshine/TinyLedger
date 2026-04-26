@@ -54,6 +54,7 @@ fun HomeScreen(
     onNavigateToAutoAccounting: () -> Unit = {},
     onNavigateToCreditAccounts: () -> Unit = {},
     onNavigateToReimbursement: () -> Unit = {},
+    onNavigateToReimbursementDetail: (Long) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -106,6 +107,7 @@ fun HomeScreen(
                 todayTransactions = uiState.todayTransactions,
                 currencySymbol = uiState.currencySymbol,
                 onViewTransactionDetail = onViewTransactionDetail,
+                onNavigateToReimbursementDetail = onNavigateToReimbursementDetail,
                 onEditTransaction = onEditTransaction
             )
         }
@@ -554,6 +556,7 @@ private fun TodayBillsCard(
     todayTransactions: List<com.tinyledger.app.domain.model.Transaction>,
     currencySymbol: String,
     onViewTransactionDetail: (Long) -> Unit,
+    onNavigateToReimbursementDetail: (Long) -> Unit,
     onEditTransaction: (Long) -> Unit
 ) {
     Card(
@@ -610,7 +613,7 @@ private fun TodayBillsCard(
                     TransactionCard(
                         transaction = transaction,
                         currencySymbol = currencySymbol,
-                        onClick = { onViewTransactionDetail(transaction.id) },
+                        onClick = { if (transaction.reimbursementStatus.value == 1) onNavigateToReimbursementDetail(transaction.id) else onViewTransactionDetail(transaction.id) },
                         flat = true
                     )
                     Spacer(modifier = Modifier.height(4.dp))

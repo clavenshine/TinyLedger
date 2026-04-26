@@ -3,12 +3,15 @@ package com.tinyledger.app.ui.screens.reimbursement
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -24,11 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -39,6 +46,11 @@ import com.tinyledger.app.domain.model.ReimbursementStatus
 import com.tinyledger.app.ui.components.DeleteConfirmationDialog
 import com.tinyledger.app.ui.viewmodel.ReimbursementViewModel
 import com.tinyledger.app.util.CurrencyUtils
+import com.tinyledger.app.util.QianfanOcrEngine
+import com.tinyledger.app.util.MinimaxOcrEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -70,6 +82,13 @@ fun ReimbursementDetailScreen(
 
     // 账户下拉框状态
     var accountDropdownExpanded by remember { mutableStateOf(false) }
+
+    // ★ 发票识别状态
+    var isInvoicing by remember { mutableStateOf(false) }
+    var invoiceResults by remember { mutableStateOf<List<QianfanOcrEngine.InvoiceResult>>(emptyList()) }
+    var showInvoiceResults by remember { mutableStateOf(false) }
+    var invoiceErrorMsg by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     val currencySymbol = uiState.currencySymbol
@@ -313,6 +332,256 @@ fun ReimbursementDetailScreen(
                                     text = "点击上传发票图片",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ★ 发票识别卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "发票识别",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+
+                    if (!showInvoiceResults) {
+                        if (imageList.isEmpty()) {
+                            Text(
+                                "暂无发票图片，请在发票管理中上传",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isInvoicing = true
+                                        invoiceErrorMsg = null
+                                        try {
+                                            var results = withContext(Dispatchers.IO) {
+                                                QianfanOcrEngine.recognizeInvoices(imageList)
+                                            }
+                                            // 千帆无结果则尝试MiniMax
+                                            if (results.isEmpty()) {
+                                                Log.d("ReimbursementInvoice", "千帆OCR无结果，尝试MiniMax...")
+                                                results = withContext(Dispatchers.IO) {
+                                                    MinimaxOcrEngine.recognizeInvoices(imageList)
+                                                }
+                                            }
+                                            invoiceResults = results
+                                            showInvoiceResults = true
+                                        } catch (e: Exception) {
+                                            invoiceErrorMsg = "识别失败: ${e.message}"
+                                            Log.e("ReimbursementInvoice", "发票识别失败", e)
+                                        } finally {
+                                            isInvoicing = false
+                                        }
+                                    }
+                                },
+                                enabled = !isInvoicing,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .shadow(4.dp, RoundedCornerShape(14.dp)),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFF6F00)
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(
+                                    defaultElevation = 4.dp,
+                                    pressedElevation = 1.dp
+                                )
+                            ) {
+                                if (isInvoicing) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        "正在识别 ${imageList.size} 张发票...",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.FactCheck,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        "发票识别",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 错误提示
+                    if (invoiceErrorMsg != null) {
+                        Text(
+                            invoiceErrorMsg!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    // 发票识别结果表
+                    if (showInvoiceResults && invoiceResults.isNotEmpty()) {
+                        val totalAmount = invoiceResults.sumOf { it.amountDouble }
+                        val reimbursementAmount = kotlin.math.abs(transaction?.amount ?: 0.0)
+                        val isMismatched = kotlin.math.abs(totalAmount - reimbursementAmount) > 0.01
+
+                        // 表头
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                    RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("#", modifier = Modifier.width(24.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center)
+                            Text("日期", modifier = Modifier.weight(0.9f),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center)
+                            Text("发票金额", modifier = Modifier.weight(0.8f),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.End)
+                            Text("交易事项", modifier = Modifier.weight(1.0f),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center)
+                        }
+
+                        // 数据行
+                        invoiceResults.forEachIndexed { index, item ->
+                            val bgColor = if (index % 2 == 0) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            val isLastRow = index == invoiceResults.lastIndex
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = if (isLastRow) RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
+                                    else RoundedCornerShape(0.dp),
+                                colors = CardDefaults.cardColors(containerColor = bgColor),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("${index + 1}",
+                                        modifier = Modifier.width(24.dp),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center)
+                                    Text(item.date,
+                                        modifier = Modifier.weight(0.9f),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center)
+                                    Text("¥${item.amount}",
+                                        modifier = Modifier.weight(0.8f),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.End)
+                                    Text(item.description,
+                                        modifier = Modifier.weight(1.0f),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center)
+                                }
+                            }
+
+                            if (!isLastRow) {
+                                HorizontalDivider(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // 汇总行 — 粗体
+                        if (transaction != null) {
+                            val matchColor = if (isMismatched) MaterialTheme.colorScheme.error
+                                else Color(0xFF2E7D32)
+                            val matchIcon = if (isMismatched) Icons.Default.Warning
+                                else Icons.Default.CheckCircle
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("发票合计",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(matchIcon, contentDescription = null,
+                                        tint = matchColor, modifier = Modifier.size(18.dp))
+                                }
+                                Text("$currencySymbol ${String.format("%.2f", totalAmount)}",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = matchColor)
+                            }
+
+                            if (isMismatched) {
+                                Text(
+                                    "⚠ 发票合计与报销金额不一致！\n" +
+                                        "   发票合计: $currencySymbol ${String.format("%.2f", totalAmount)}\n" +
+                                        "   报销金额: $currencySymbol ${String.format("%.2f", reimbursementAmount)}\n" +
+                                        "   差额: $currencySymbol ${String.format("%.2f", kotlin.math.abs(totalAmount - reimbursementAmount))}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    "✅ 发票合计与报销金额一致",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF2E7D32)
                                 )
                             }
                         }
